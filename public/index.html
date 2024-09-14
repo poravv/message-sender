@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chatbot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin-top: 50px;
+        }
+        #qr {
+            margin-top: 20px;
+        }
+        .tab {
+            display: none;
+        }
+        .tab.active {
+            display: block;
+        }
+        .tab-buttons {
+            margin-bottom: 20px;
+        }
+        .tab-buttons button {
+            margin: 0 10px;
+            padding: 10px 20px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>Envío de mensaje sobre lista.</h1>
+    <div class="tab-buttons">
+        <button onclick="showTab('link')">Enlazar Chatbot</button>
+        <button onclick="showTab('send')">Enviar Mensaje</button>
+    </div>
+
+    <div id="link" class="tab active">
+        <p>Escanea el QR en tu dispositivo para enlazar el chatbot</p>
+        <div id="qr">
+            <img id="qrImage" src="/qr" alt="QR Code">
+        </div>
+    </div>
+
+    <div id="send" class="tab">
+        <form id="messageForm" enctype="multipart/form-data">
+            <label for="csvFile">Cargar archivo CSV con números:</label>
+            <input type="file" id="csvFile" name="csvFile" accept=".csv">
+            <br><br>
+            <label for="message">Mensaje:</label>
+            <textarea id="message" name="message" rows="4" cols="50"></textarea>
+            <br>
+            <br>
+            
+            <button type="submit">Enviar Mensaje</button>
+        </form>
+    </div>
+
+    <script>
+        function showTab(tabId) {
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        async function fetchQR() {
+            const response = await fetch('/qr');
+            const qrImage = document.getElementById('qrImage');
+            qrImage.src = '/qr?' + new Date().getTime(); // Añadir un timestamp para evitar el caché
+        }
+
+        // Llamar a fetchQR cada cierto tiempo para actualizar el QR
+        setInterval(fetchQR, 60000); // Actualizar cada 60 segundos
+
+        document.getElementById('messageForm').addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const message = document.getElementById('message').value;
+            const csvFile = document.getElementById('csvFile').files[0];
+
+            const formData = new FormData();
+            formData.append('message', message);
+            formData.append('csvFile', csvFile);
+
+            const response = await fetch('/send-messages', {
+                method: 'POST',
+                body: formData
+            });
+            const result = await response.json();
+            alert(result.data);
+        });
+    </script>
+</body>
+</html>
