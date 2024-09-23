@@ -57,22 +57,62 @@ const main = async () => {
         database: adapterDB,
     });
 
-    app.post('/send-messages', upload.single('csvFile'), async (req, res) => {
+    app.post('/send-messages', upload.fields([{ name: 'csvFile', maxCount: 1 }, { name: 'images', maxCount: 10 }, { name: 'singleImage', maxCount: 1 }]), async (req, res) => {
         const { message } = req.body;
-        const csvFilePath = req.file.path; // Ruta del archivo CSV subido
-        const delay = 100; // 2000 milisegundos = 2 segundos
-
+    
+        // Verifica si el archivo CSV fue subido
+        if (!req.files || !req.files['csvFile']) {
+            return res.status(400).send({ error: 'Archivo CSV no proporcionado' });
+        }
+    
+        const csvFilePath = req.files['csvFile'][0].path; // Ruta del archivo CSV subido
+        const images = req.files['images']; // Varias imágenes subidas
+        const singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null; // Una sola imagen subida con comentario
+        const delay = 100; // 100 milisegundos
+    
         try {
             const numbers = await loadNumbersFromCSV(csvFilePath);
-            await sendMessagesWithDelay(numbers, message, delay);
+    
+            // Enviar mensajes e imágenes a cada número
+            for (const number of numbers) {
+                if (singleImage) {
+                    // Si hay una sola imagen, enviarla con el mensaje como pie de foto
+                    const imagePath = singleImage.path;
+                    await adapterProvider.sendImage(`${number}@c.us`, imagePath, message);
+                } else {
+                    // Si no, enviar el mensaje de texto primero
+                    await adapterProvider.sendText(`${number}@c.us`, message);
+    
+                    // Enviar varias imágenes si están presentes
+                    if (images && images.length > 0) {
+                        for (const image of images) {
+                            const imagePath = image.path;
+                            await adapterProvider.sendImage(`${number}@c.us`, imagePath);
+                        }
+                    }
+                }
+    
+                // Esperar el retraso definido entre cada envío
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+    
             res.send({ data: 'Mensajes enviados!' });
         } catch (error) {
-            res.status(500).send({ error: 'Error al procesar el archivo CSV' });
+            res.status(500).send({ error: 'Error al procesar el archivo CSV o las imágenes' });
         } finally {
-            // Borrar el archivo CSV después de procesarlo
+            // Borrar los archivos CSV e imágenes después de procesarlos
             fs.unlinkSync(csvFilePath);
+            if (images) {
+                images.forEach(image => fs.unlinkSync(image.path));
+            }
+            if (singleImage) {
+                fs.unlinkSync(singleImage.path);
+            }
         }
     });
+    
+    
+
 
     app.get('/qr', (req, res) => {
         const qrPath = path.join(__dirname, 'bot.qr.png'); // Ajusta la ruta según tu estructura de carpetas
