@@ -60,7 +60,7 @@ const main = async () => {
     app.post('/send-messages', upload.single('csvFile'), async (req, res) => {
         const { message } = req.body;
         const csvFilePath = req.file.path; // Ruta del archivo CSV subido
-        const delay = 10; // 2000 milisegundos = 2 segundos
+        const delay = 100; // 2000 milisegundos = 2 segundos
 
         try {
             const numbers = await loadNumbersFromCSV(csvFilePath);
