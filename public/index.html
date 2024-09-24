@@ -54,8 +54,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         #spinner {
@@ -211,7 +216,12 @@
                 alert(result.data || result.error); // Muestra mensaje de éxito o error
             } catch (error) {
                 console.error('Error:', error);
-                alert('Ocurrió un error al enviar los mensajes.');
+                if (error.message.includes("Closing open session in favor of incoming prekey bundle")) {
+                    console.warn("Se cerró la sesión, pero continuaré enviando mensajes.");
+                    //alert('La sesión se cerró, pero continuaré enviando mensajes.');
+                } else {
+                    alert('Ocurrió un error al enviar los mensajes.');
+                }
             } finally {
                 // Ocultar el spinner
                 spinner.style.display = 'none';
