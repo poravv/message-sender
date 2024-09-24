@@ -1,0 +1,13 @@
+
+# Construir la imagen Docker
+sudo docker build -t message-sender-laura .
+
+# Ejecutar el contenedor Docker
+sudo docker run -e RAILWAY_STATIC_URL=http://localhost -e PUBLIC_URL=http://localhost -e PORT=3009 -p 3009:3000 --name message-sender-laura01 message-sender-laura
+
+
+# Construir la imagen Docker
+sudo docker build -t message-sender-marita .
+
+# Ejecutar el contenedor Docker
+sudo docker run -e RAILWAY_STATIC_URL=http://localhost -e PUBLIC_URL=http://localhost -e PORT=3010 -p 3010:3000 --name message-sender-marita01 message-sender-marita

@@ -1,4 +1,4 @@
-const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot');
+const { createBot, createProvider, createFlow } = require('@bot-whatsapp/bot');
 require('dotenv').config();
 const express = require('express');
 const QRPortalWeb = require('@bot-whatsapp/portal');
@@ -48,8 +48,12 @@ const loadNumbersFromCSV = (filePath) => {
 // Función para enviar mensajes e imágenes en paralelo por lotes con manejo de errores
 const sendMessagesInBatches = async (numbers, message, images, singleImage, batchSize) => {
     const numberChunks = chunkArray(numbers, batchSize);
+    let totalSent = 0; // Contador de mensajes enviados
+    let totalErrors = 0; // Contador de errores
 
     for (const chunk of numberChunks) {
+        const chunkErrors = 0; // Contador de errores para el lote actual
+
         await Promise.all(
             chunk.map(async (number) => {
                 try {
@@ -65,13 +69,20 @@ const sendMessagesInBatches = async (numbers, message, images, singleImage, batc
                             }
                         }
                     }
+                    totalSent++; // Incrementar contador de mensajes enviados
                 } catch (error) {
                     console.error(`Error enviando mensaje a ${number}: ${error.message}`);
+                    totalErrors++; // Incrementar contador de errores
                 }
             })
         );
+
+        console.log(`Lote enviado: ${chunk.length} mensajes, Errores: ${chunkErrors}`);
         await new Promise(resolve => setTimeout(resolve, 100)); // Retraso opcional entre lotes
     }
+
+    console.log(`Total de mensajes enviados: ${totalSent}`);
+    console.log(`Total de errores: ${totalErrors}`);
 };
 
 // Función para dividir un array en partes más pequeñas
@@ -83,7 +94,6 @@ const chunkArray = (array, chunkSize) => {
     return results;
 };
 
-
 const main = async () => {
     const adapterDB = new MockAdapter();
     const adapterFlow = createFlow([]);
@@ -94,7 +104,6 @@ const main = async () => {
         provider: adapterProvider,
         database: adapterDB,
     });
-
 
     app.post('/send-messages', upload.fields([{ name: 'csvFile', maxCount: 1 }, { name: 'images', maxCount: 10 }, { name: 'singleImage', maxCount: 1 }]), async (req, res) => {
         const { message } = req.body;
@@ -130,8 +139,6 @@ const main = async () => {
             }
         }
     });
-
-
 
     app.get('/qr', (req, res) => {
         const qrPath = path.join(__dirname, 'bot.qr.png'); // Ajusta la ruta según tu estructura de carpetas

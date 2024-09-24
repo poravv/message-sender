@@ -41,6 +41,28 @@
         .hidden {
             display: none;
         }
+
+        /* Estilos para el spinner */
+        .loader {
+            border: 8px solid #f3f3f3; /* Color de fondo */
+            border-top: 8px solid #3498db; /* Color de la parte superior */
+            border-radius: 50%;
+            width: 40px; /* Tamaño del spinner */
+            height: 40px; /* Tamaño del spinner */
+            animation: spin 1s linear infinite; /* Animación */
+            display: inline-block; /* Muestra el spinner en línea */
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        #spinner {
+            text-align: center;
+            margin-top: 20px;
+            display: none; /* Ocultar spinner inicialmente */
+        }
     </style>
 </head>
 
@@ -71,9 +93,8 @@
                     <form id="messageForm" enctype="multipart/form-data">
 
                         <div class="mb-3">
-                            <label for="csvFile" class="form-label">Cargar archivo CSV con números: <b>5959xxxxxxxx</b>
-                            </label>
-                            <input type="file" id="csvFile" name="csvFile" class="form-control" accept=".csv">
+                            <label for="csvFile" class="form-label">Cargar archivo CSV con números: <b>5959xxxxxxxx</b></label>
+                            <input type="file" id="csvFile" name="csvFile" class="form-control" accept=".csv" required>
                         </div>
 
                         <!-- Selección entre imagen con comentario o múltiples imágenes -->
@@ -95,18 +116,24 @@
                         <!-- Campo para cargar una imagen con comentario -->
                         <div class="mb-3 hidden" id="singleImageField">
                             <b>
-                                <label for="singleImage" class="form-label">Cargar una imagen con comentario
-                                    (opcional):</label>
+                                <label for="singleImage" class="form-label">Cargar una imagen con comentario (opcional):</label>
                             </b>
                             <input type="file" id="singleImage" name="singleImage" class="form-control" accept="image/*">
                         </div>
 
                         <div class="mb-3">
                             <b><label for="message" class="form-label">Mensaje:</label></b>
-                            <textarea id="message" name="message" rows="4" class="form-control"></textarea>
+                            <textarea id="message" name="message" rows="4" class="form-control" required></textarea>
                         </div>
                         <button type="submit" class="btn btn-success">Enviar Mensaje</button>
                     </form>
+
+                    <!-- Spinner -->
+                    <div id="spinner">
+                        <p>Enviando mensajes, por favor espere...</p>
+                        <div class="loader"></div>
+                    </div>
+
                 </div>
             </div>
         </div>
@@ -170,13 +197,25 @@
                 formData.append('images', images[i]);
             }
 
-            const response = await fetch('/send-messages', {
-                method: 'POST',
-                body: formData
-            });
+            // Mostrar el spinner
+            const spinner = document.getElementById('spinner');
+            spinner.style.display = 'block';
 
-            const result = await response.json();
-            alert(result.data);
+            try {
+                const response = await fetch('/send-messages', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                alert(result.data || result.error); // Muestra mensaje de éxito o error
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Ocurrió un error al enviar los mensajes.');
+            } finally {
+                // Ocultar el spinner
+                spinner.style.display = 'none';
+            }
         });
 
     </script>
