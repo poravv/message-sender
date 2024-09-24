@@ -68,7 +68,7 @@ const main = async () => {
         const csvFilePath = req.files['csvFile'][0].path; // Ruta del archivo CSV subido
         const images = req.files['images']; // Varias imágenes subidas
         const singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null; // Una sola imagen subida con comentario
-        const delay = 100; // 100 milisegundos
+        const delay = 5; // 5 milisegundos
     
         try {
             const numbers = await loadNumbersFromCSV(csvFilePath);
