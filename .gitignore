@@ -49,7 +49,6 @@ bower_components/
 .DS_Store
 
 # Docker files
-docker-compose.yml
 .dockerignore
 
 # Build directories

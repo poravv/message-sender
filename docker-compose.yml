@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  whatsapp-sender:
+    build: .
+    container_name: whatsapp-sender
+    restart: always
+    ports:
+      - "${PORT}:3000"
+    environment:
+      - NODE_ENV=production
+      - RAILWAY_STATIC_URL=${RAILWAY_STATIC_URL}
+      - PUBLIC_URL=${PUBLIC_URL}
+      - PORT=${PORT}
+    volumes:
+      - ./uploads:/app/uploads
