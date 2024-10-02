@@ -5,7 +5,7 @@ services:
     container_name: whatsapp-sender
     restart: always
     ports:
-      - "${PORT}:3000"
+      - "${PORT}:${PORT}"
     environment:
       - NODE_ENV=production
       - RAILWAY_STATIC_URL=${RAILWAY_STATIC_URL}
