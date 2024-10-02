@@ -12,7 +12,6 @@ variables:
   IMAGE_TAG: "${CI_COMMIT_SHORT_SHA}"
   RAILWAY_STATIC_URL: "http://186.158.152.12"
   PUBLIC_URL: "http://186.158.152.12"
-  PORT: "3000"
 
 stages:
   - build
