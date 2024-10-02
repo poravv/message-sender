@@ -8,9 +8,8 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
-
 const app = express();
-const port = 3000;
+const port = process.env.PORT||3000;
 let adapterProvider;
 
 const activityMiddleware = (req, res, next) => {
