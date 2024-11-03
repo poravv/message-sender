@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 //const QRPortalWeb = require('@bot-whatsapp/portal');
 const BaileysProvider = require('@bot-whatsapp/provider/baileys');
-//const MockAdapter = require('@bot-whatsapp/database/mock');
+const MockAdapter = require('@bot-whatsapp/database/mock');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -100,7 +100,7 @@ const chunkArray = (array, chunkSize) => {
 };
 
 const main = async () => {
-    //const adapterDB = new MockAdapter();
+    const adapterDB = new MockAdapter();
     const adapterFlow = createFlow([]);
     adapterProvider = createProvider(BaileysProvider); // Inicializar aquí
 
@@ -114,7 +114,7 @@ const main = async () => {
                 main(); // Reintentar la conexión
             }
         } else if (connection === 'open') {
-            console.log('opened connection');
+            console.log('Conexion abierta');
         }
     });
 
@@ -177,4 +177,8 @@ const main = async () => {
     });
 };
 
-main();
+try {
+    main();
+} catch (error) {
+    console.log('Error en main ',error);
+}

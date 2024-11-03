@@ -10,47 +10,80 @@
     <style>
         body {
             font-family: Arial, sans-serif;
+            background-color: #e5ddd5;
+            /* WhatsApp background color */
             margin-top: 50px;
         }
 
-        #qr {
-            margin-top: 20px;
-        }
-
-        .tab {
-            display: none;
-        }
-
-        .tab.active {
-            display: block;
-        }
-
-        .tab-buttons {
-            margin-bottom: 20px;
-        }
-
         .tab-buttons button {
+            background-color: #25d366;
+            /* WhatsApp green */
+            color: white;
+            border: none;
+            border-radius: 5px;
             margin: 0 10px;
             padding: 10px 20px;
+            font-size: 16px;
         }
 
-        #images {
-            margin-top: 10px;
+        .tab-buttons button:hover {
+            background-color: #128c7e;
+            /* Darker green on hover */
         }
 
-        .hidden {
-            display: none;
+        .card {
+            background-color: #ffffff;
+            /* White card background */
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-body {
+            color: #075e54;
+            /* WhatsApp dark text color */
+        }
+
+        .form-label {
+            color: #128c7e;
+            /* WhatsApp form labels */
+        }
+
+        .btn-success {
+            background-color: #25d366;
+            border: none;
+        }
+
+        .btn-success:hover {
+            background-color: #128c7e;
+        }
+
+        /* Alert styling */
+        .alert {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         /* Estilos para el spinner */
         .loader {
-            border: 8px solid #f3f3f3; /* Color de fondo */
-            border-top: 8px solid #3498db; /* Color de la parte superior */
+            border: 8px solid #f3f3f3;
+            /* Color de fondo */
+            border-top: 8px solid #25d366;
+            /* WhatsApp green */
             border-radius: 50%;
-            width: 40px; /* Tamaño del spinner */
-            height: 40px; /* Tamaño del spinner */
-            animation: spin 1s linear infinite; /* Animación */
-            display: inline-block; /* Muestra el spinner en línea */
+            width: 40px;
+            /* Tamaño del spinner */
+            height: 40px;
+            /* Tamaño del spinner */
+            animation: spin 1s linear infinite;
+            /* Animación */
+            display: inline-block;
+            /* Muestra el spinner en línea */
         }
 
         @keyframes spin {
@@ -66,8 +99,28 @@
         #spinner {
             text-align: center;
             margin-top: 20px;
-            display: none; /* Ocultar spinner inicialmente */
+            display: none;
+            /* Ocultar spinner inicialmente */
         }
+        
+        /*------------*/
+
+        .tab {
+            display: none;
+        }
+
+        .tab.active {
+            display: block;
+        }
+
+        #images {
+            margin-top: 10px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
     </style>
 </head>
 
@@ -98,7 +151,8 @@
                     <form id="messageForm" enctype="multipart/form-data">
 
                         <div class="mb-3">
-                            <label for="csvFile" class="form-label">Cargar archivo CSV con números: <b>5959xxxxxxxx</b></label>
+                            <label for="csvFile" class="form-label">Cargar archivo CSV con números:
+                                <b>5959xxxxxxxx</b></label>
                             <input type="file" id="csvFile" name="csvFile" class="form-control" accept=".csv" required>
                         </div>
 
@@ -121,9 +175,11 @@
                         <!-- Campo para cargar una imagen con comentario -->
                         <div class="mb-3 hidden" id="singleImageField">
                             <b>
-                                <label for="singleImage" class="form-label">Cargar una imagen con comentario (opcional):</label>
+                                <label for="singleImage" class="form-label">Cargar una imagen con comentario
+                                    (opcional):</label>
                             </b>
-                            <input type="file" id="singleImage" name="singleImage" class="form-control" accept="image/*">
+                            <input type="file" id="singleImage" name="singleImage" class="form-control"
+                                accept="image/*">
                         </div>
 
                         <div class="mb-3">
