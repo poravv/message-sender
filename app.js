@@ -3,13 +3,13 @@ require('dotenv').config();
 const express = require('express');
 //const QRPortalWeb = require('@bot-whatsapp/portal');
 const BaileysProvider = require('@bot-whatsapp/provider/baileys');
-const MockAdapter = require('@bot-whatsapp/database/mock');
+//const MockAdapter = require('@bot-whatsapp/database/mock');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
 const app = express();
-const port = process.env.PORT||3000;
+const port = process.env.PORT || 3000;
 let adapterProvider;
 
 const activityMiddleware = (req, res, next) => {
@@ -100,21 +100,45 @@ const chunkArray = (array, chunkSize) => {
 };
 
 const main = async () => {
-    const adapterDB = new MockAdapter();
+    //const adapterDB = new MockAdapter();
     const adapterFlow = createFlow([]);
     adapterProvider = createProvider(BaileysProvider); // Inicializar aquí
 
     // Manejo de eventos de conexión y reconexión
+    let reconnecting = false; // Bandera de reconexión
+    let reconnectAttempts = 0; // Contador de intentos de reconexión
+    const maxReconnectAttempts = 5; // Máximo de intentos permitidos
+    const baseDelay = 5000; // Retraso inicial en milisegundos
+
     adapterProvider.on('connection.update', (update) => {
         const { connection, lastDisconnect } = update;
+
         if (connection === 'close') {
-            const shouldReconnect = lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('connection closed due to ', lastDisconnect.error, ', reconnecting ', shouldReconnect);
-            if (shouldReconnect) {
-                main(); // Reintentar la conexión
+            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+            console.log('Conexión cerrada. Intentando reconectar...');
+
+            if (shouldReconnect && !reconnecting && reconnectAttempts < maxReconnectAttempts) {
+                reconnecting = true; // Activa la bandera de reconexión
+                const delay = baseDelay * Math.pow(2, reconnectAttempts); // Retraso incremental
+
+                setTimeout(async () => {
+                    try {
+                        reconnectAttempts++;
+                        console.log(`Intento de reconexión ${reconnectAttempts} en ${delay / 1000} segundos`);
+                        await main(); // Reintenta la conexión
+                        reconnectAttempts = 0; // Reinicia los intentos si la reconexión es exitosa
+                    } catch (error) {
+                        console.error(`Error en el intento de reconexión ${reconnectAttempts}:`, error.message);
+                    } finally {
+                        reconnecting = false; // Libera la bandera de reconexión después del intento
+                    }
+                }, delay);
+            } else if (reconnectAttempts >= maxReconnectAttempts) {
+                console.log('Número máximo de intentos de reconexión alcanzado.');
             }
         } else if (connection === 'open') {
-            console.log('Conexion abierta');
+            console.log('Conexión abierta');
+            reconnectAttempts = 0; // Reinicia el contador si la conexión es establecida
         }
     });
 
@@ -180,5 +204,5 @@ const main = async () => {
 try {
     main();
 } catch (error) {
-    console.log('Error en main ',error);
+    console.log('Error en main ', error);
 }
