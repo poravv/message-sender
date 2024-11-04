@@ -9,7 +9,6 @@
     },
     "keywords": [],
     "dependencies": {
-        "@adiwajshing/baileys": "^5.0.0",
         "@bot-whatsapp/bot": "latest",
         "@bot-whatsapp/cli": "latest",
         "@bot-whatsapp/database": "latest",
@@ -20,11 +19,7 @@
         "csv-parser": "^3.0.0",
         "express": "^4.19.2",
         "fs": "^0.0.1-security",
-        "mime-types": "2.1.35",
-        "multer": "^1.4.5-lts.1",
-        "mysql": "^2.18.1",
-        "mysql2": "^3.11.0",
-        "wa-sticker-formatter": "4.4.4"
+        "multer": "^1.4.5-lts.1"
     },
     "devDependencies": {
         "@bot-whatsapp/bot": "latest",
@@ -34,9 +29,7 @@
         "@bot-whatsapp/provider": "latest",
         "@whiskeysockets/baileys": "6.5.0",
         "cache-manager": "5.2.4",
-        "fs": "^0.0.1-security",
-        "mime-types": "2.1.35",
-        "wa-sticker-formatter": "4.4.4"
+        "fs": "^0.0.1-security"
     },
     "author": "Andres Vera",
     "license": "ISC"
