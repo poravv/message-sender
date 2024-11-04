@@ -18,3 +18,8 @@ sudo docker build -t message-sender-marce .
 
 # Ejecutar el contenedor Docker
 sudo docker run -d -e RAILWAY_STATIC_URL=http://localhost -e PUBLIC_URL=http://localhost -e PORT=3011 -p 3011:3011 --name message-sender-marce01 message-sender-marce
+
+-----------------
+docker ps 
+
+sudo docker rm -f 9124d056d5a7
