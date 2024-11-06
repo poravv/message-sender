@@ -1,14 +1,14 @@
 
 # Construir la imagen Docker
-sudo docker build -t message-sender-laura .
+docker build -t message-sender .
 
 # Ejecutar el contenedor Docker
-sudo docker run -d \
+docker run -d \
     -e RAILWAY_STATIC_URL=http://localhost \
     -e PUBLIC_URL=http://localhost \
     -p 3009:3009 \
-    --name message-sender-laura01 \
-    message-sender-laura
+    --name message-sender \
+    message-sender
 
 
 
