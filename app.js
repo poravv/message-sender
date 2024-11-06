@@ -178,6 +178,7 @@ cron.schedule('0 */6 * * *', async () => { // cada 6 horas
         return;
     }
     
+     
     try {
         console.log(adapterProvider)
         if(adapterProvider) {
