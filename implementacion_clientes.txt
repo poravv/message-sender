@@ -3,16 +3,13 @@
 sudo docker build -t message-sender-laura .
 
 # Ejecutar el contenedor Docker
-sudo docker run -d -e RAILWAY_STATIC_URL=http://localhost -e PUBLIC_URL=http://localhost -e PORT=3009 -p 3009:3009 --name message-sender-laura01 message-sender-laura
-
 sudo docker run -d \
-  -e RAILWAY_STATIC_URL=http://localhost \
-  -e PUBLIC_URL=http://localhost \
-  -e PORT=3009 \
-  -p 3010:3009 \
-  --name message-sender-laura01 \
-  --restart always \
-  message-sender-laura
+    -e RAILWAY_STATIC_URL=http://localhost \
+    -e PUBLIC_URL=http://localhost \
+    -p 3009:3009 \
+    --name message-sender-laura01 \
+    message-sender-laura
+
 
 
 
