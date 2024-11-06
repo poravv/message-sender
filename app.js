@@ -9,6 +9,7 @@ const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
 
+let isSendingMessages = false;
 const app = express();
 const port = 3000;
 
@@ -45,11 +46,20 @@ const loadNumbersFromCSV = (filePath) => {
     });
 };
 
-// Función para enviar mensajes e imágenes en paralelo por lotes con manejo de errores
-const sendMessagesInBatches = async (numbers, message, images, singleImage, batchSize) => {
-    const numberChunks = chunkArray(numbers, batchSize);
 
-    for (const chunk of numberChunks) {
+// Función para enviar mensajes e imágenes en paralelo por lotes con manejo de errores y logs
+const sendMessagesInBatches = async (numbers, message, images, singleImage, batchSize) => {
+    isSendingMessages = true; // Marcar que el envío ha comenzado
+
+    const numberChunks = chunkArray(numbers, batchSize);
+    let totalSent = 0; // Total de mensajes enviados exitosamente
+
+    for (let i = 0; i < numberChunks.length; i++) {
+        const chunk = numberChunks[i];
+        let batchSent = 0; // Contador para cada lote
+
+        console.log(`Enviando lote ${i + 1} de ${numberChunks.length}, total números en este lote: ${chunk.length}`);
+
         await Promise.all(
             chunk.map(async (number) => {
                 try {
@@ -65,14 +75,23 @@ const sendMessagesInBatches = async (numbers, message, images, singleImage, batc
                             }
                         }
                     }
+                    batchSent += 1; // Incrementa el contador si el mensaje se envía exitosamente
                 } catch (error) {
                     console.error(`Error enviando mensaje a ${number}: ${error.message}`);
                 }
             })
         );
+
+        console.log(`Mensajes enviados exitosamente en lote ${i + 1}: ${batchSent} de ${chunk.length}`);
+        totalSent += batchSent; // Suma el número de mensajes enviados al total general
+
         await new Promise(resolve => setTimeout(resolve, 100)); // Retraso opcional entre lotes
     }
+
+    console.log(`Total de mensajes enviados exitosamente: ${totalSent} de ${numbers.length}`);
+    isSendingMessages = false; // Marcar que el envío ha finalizado
 };
+
 
 // Función para dividir un array en partes más pequeñas
 const chunkArray = (array, chunkSize) => {
@@ -88,6 +107,14 @@ const main = async () => {
     const adapterDB = new MockAdapter();
     const adapterFlow = createFlow([]);
     adapterProvider = createProvider(BaileysProvider); // Inicializar aquí
+
+
+    if(adapterProvider){
+        adapterProvider.on(EVENTS.CONNECTION_CLOSE, async () => {
+            console.log("Conexión cerrada. Intentando reconectar...");
+            await adapterProvider.reconnect();
+        });
+    }
 
     createBot({
         flow: adapterFlow,
@@ -142,5 +169,26 @@ const main = async () => {
         console.log(`Servidor escuchando en http://localhost:${port}`);
     });
 };
+
+// Configuración del cronjob con verificación de envío en curso
+const cron = require('node-cron');
+cron.schedule('0 */6 * * *', async () => { // cada 6 horas
+    if (isSendingMessages) {
+        console.log("Envio de mensajes en curso. Cronjob pospuesto.");
+        return;
+    }
+    
+    try {
+        console.log(adapterProvider)
+        if(adapterProvider) {
+            console.log("Reiniciando bot...");
+            await adapterProvider.reconnect();
+        } else {
+            console.log("No hay sesion...");
+        }
+    } catch (error) {
+        console.log(error)
+    }
+});
 
 main();
