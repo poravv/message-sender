@@ -1,24 +1,19 @@
-const { createBot, createProvider, createFlow } = require('@bot-whatsapp/bot');
+const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot');
 require('dotenv').config();
 const express = require('express');
-//const QRPortalWeb = require('@bot-whatsapp/portal');
+const QRPortalWeb = require('@bot-whatsapp/portal');
 const BaileysProvider = require('@bot-whatsapp/provider/baileys');
-//const MockAdapter = require('@bot-whatsapp/database/mock');
+const MockAdapter = require('@bot-whatsapp/database/mock');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
+
 const app = express();
-const port = process.env.PORT || 3000;
-let adapterProvider;
+const port = 3000;
 
-const activityMiddleware = (req, res, next) => {
-    lastActivity = Date.now();
-    next();
-};
+let adapterProvider; // Definir adapterProvider fuera del scope de main
 
-
-app.use(activityMiddleware);
 app.use(express.static('public'));
 app.use(express.json()); // Para poder parsear JSON en el cuerpo de la solicitud
 
@@ -53,12 +48,8 @@ const loadNumbersFromCSV = (filePath) => {
 // Función para enviar mensajes e imágenes en paralelo por lotes con manejo de errores
 const sendMessagesInBatches = async (numbers, message, images, singleImage, batchSize) => {
     const numberChunks = chunkArray(numbers, batchSize);
-    let totalSent = 0; // Contador de mensajes enviados
-    let totalErrors = 0; // Contador de errores
 
     for (const chunk of numberChunks) {
-        const chunkErrors = 0; // Contador de errores para el lote actual
-
         await Promise.all(
             chunk.map(async (number) => {
                 try {
@@ -74,20 +65,13 @@ const sendMessagesInBatches = async (numbers, message, images, singleImage, batc
                             }
                         }
                     }
-                    totalSent++; // Incrementar contador de mensajes enviados
                 } catch (error) {
                     console.error(`Error enviando mensaje a ${number}: ${error.message}`);
-                    totalErrors++; // Incrementar contador de errores
                 }
             })
         );
-
-        console.log(`Lote enviado: ${chunk.length} mensajes, Errores: ${chunkErrors}`);
         await new Promise(resolve => setTimeout(resolve, 100)); // Retraso opcional entre lotes
     }
-
-    console.log(`Total de mensajes enviados: ${totalSent}`);
-    console.log(`Total de errores: ${totalErrors}`);
 };
 
 // Función para dividir un array en partes más pequeñas
@@ -99,54 +83,18 @@ const chunkArray = (array, chunkSize) => {
     return results;
 };
 
+
 const main = async () => {
-    //const adapterDB = new MockAdapter();
+    const adapterDB = new MockAdapter();
     const adapterFlow = createFlow([]);
     adapterProvider = createProvider(BaileysProvider); // Inicializar aquí
-
-    // Manejo de eventos de conexión y reconexión
-    let reconnecting = false; // Bandera de reconexión
-    let reconnectAttempts = 0; // Contador de intentos de reconexión
-    const maxReconnectAttempts = 5; // Máximo de intentos permitidos
-    const baseDelay = 5000; // Retraso inicial en milisegundos
-
-    adapterProvider.on('connection.update', (update) => {
-        const { connection, lastDisconnect } = update;
-
-        if (connection === 'close') {
-            const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-            console.log('Conexión cerrada. Intentando reconectar...');
-
-            if (shouldReconnect && !reconnecting && reconnectAttempts < maxReconnectAttempts) {
-                reconnecting = true; // Activa la bandera de reconexión
-                const delay = baseDelay * Math.pow(2, reconnectAttempts); // Retraso incremental
-
-                setTimeout(async () => {
-                    try {
-                        reconnectAttempts++;
-                        console.log(`Intento de reconexión ${reconnectAttempts} en ${delay / 1000} segundos`);
-                        await main(); // Reintenta la conexión
-                        reconnectAttempts = 0; // Reinicia los intentos si la reconexión es exitosa
-                    } catch (error) {
-                        console.error(`Error en el intento de reconexión ${reconnectAttempts}:`, error.message);
-                    } finally {
-                        reconnecting = false; // Libera la bandera de reconexión después del intento
-                    }
-                }, delay);
-            } else if (reconnectAttempts >= maxReconnectAttempts) {
-                console.log('Número máximo de intentos de reconexión alcanzado.');
-            }
-        } else if (connection === 'open') {
-            console.log('Conexión abierta');
-            reconnectAttempts = 0; // Reinicia el contador si la conexión es establecida
-        }
-    });
 
     createBot({
         flow: adapterFlow,
         provider: adapterProvider,
-        //database: adapterDB,
+        database: adapterDB,
     });
+
 
     app.post('/send-messages', upload.fields([{ name: 'csvFile', maxCount: 1 }, { name: 'images', maxCount: 10 }, { name: 'singleImage', maxCount: 1 }]), async (req, res) => {
         const { message } = req.body;
@@ -183,13 +131,7 @@ const main = async () => {
         }
     });
 
-    app.get('/generate-qr', (req, res) => {
-        // Lógica para generar el QR
-        const qrPath = path.join(__dirname, 'bot.qr.png');
-        // Aquí deberías agregar la lógica para generar el QR y guardarlo en 'bot.qr.png'
-        qrCodeGenerated = true;
-        res.sendFile(qrPath);
-    });
+
 
     app.get('/qr', (req, res) => {
         const qrPath = path.join(__dirname, 'bot.qr.png'); // Ajusta la ruta según tu estructura de carpetas
@@ -201,8 +143,4 @@ const main = async () => {
     });
 };
 
-try {
-    main();
-} catch (error) {
-    console.log('Error en main ', error);
-}
+main();
