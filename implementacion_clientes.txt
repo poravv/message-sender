@@ -4,8 +4,6 @@ sudo docker build -t message-sender .
 
 # Ejecutar el contenedor Docker
 sudo docker run -d \
-    -e RAILWAY_STATIC_URL=http://localhost \
-    -e PUBLIC_URL=http://localhost \
     -p 3009:3000 \
     --name message-sender \
     message-sender
