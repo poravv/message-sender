@@ -1,24 +1,25 @@
-const { createBot, createProvider, createFlow, addKeyword, EVENTS } = require('@bot-whatsapp/bot');
+const { createBot, createProvider, createFlow, EVENTS } = require('@bot-whatsapp/bot');
 require('dotenv').config();
 const express = require('express');
-const QRPortalWeb = require('@bot-whatsapp/portal');
 const BaileysProvider = require('@bot-whatsapp/provider/baileys');
 const MockAdapter = require('@bot-whatsapp/database/mock');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
+const cron = require('node-cron');
 
 let isSendingMessages = false;
+let currentBatchIndex = 0;
 const app = express();
 const port = 3000;
 
-let adapterProvider; // Definir adapterProvider fuera del scope de main
+let adapterProvider;
 
 app.use(express.static('public'));
-app.use(express.json()); // Para poder parsear JSON en el cuerpo de la solicitud
+app.use(express.json());
 
-const upload = multer({ dest: 'uploads/' }); // Middleware para manejar archivos subidos
+const upload = multer({ dest: 'uploads/' });
 
 // Función para leer y cargar números del archivo CSV con validación
 const loadNumbersFromCSV = (filePath) => {
@@ -27,12 +28,11 @@ const loadNumbersFromCSV = (filePath) => {
         fs.createReadStream(filePath)
             .pipe(csv())
             .on('data', (row) => {
-                const number = Object.values(row)[0].trim(); // Eliminar espacios en blanco
-                // Validar que el número no esté vacío y que sea un valor numérico
+                const number = Object.values(row)[0].trim();
                 if (number && /^\d+$/.test(number)) {
                     numbers.push(number);
                 } else {
-                    console.error(`Número inválido encontrado: ${number}`); // Log de error para debugging
+                    console.error(`Número inválido encontrado: ${number}`);
                 }
             })
             .on('end', () => {
@@ -46,17 +46,16 @@ const loadNumbersFromCSV = (filePath) => {
     });
 };
 
-
 // Función para enviar mensajes e imágenes en paralelo por lotes con manejo de errores y logs
 const sendMessagesInBatches = async (numbers, message, images, singleImage, batchSize) => {
-    isSendingMessages = true; // Marcar que el envío ha comenzado
+    isSendingMessages = true;
 
     const numberChunks = chunkArray(numbers, batchSize);
-    let totalSent = 0; // Total de mensajes enviados exitosamente
+    let totalSent = 0;
 
-    for (let i = 0; i < numberChunks.length; i++) {
+    for (let i = currentBatchIndex; i < numberChunks.length; i++) {
         const chunk = numberChunks[i];
-        let batchSent = 0; // Contador para cada lote
+        let batchSent = 0;
 
         console.log(`Enviando lote ${i + 1} de ${numberChunks.length}, total números en este lote: ${chunk.length}`);
 
@@ -75,7 +74,7 @@ const sendMessagesInBatches = async (numbers, message, images, singleImage, batc
                             }
                         }
                     }
-                    batchSent += 1; // Incrementa el contador si el mensaje se envía exitosamente
+                    batchSent += 1;
                 } catch (error) {
                     console.error(`Error enviando mensaje a ${number}: ${error.message}`);
                 }
@@ -83,17 +82,18 @@ const sendMessagesInBatches = async (numbers, message, images, singleImage, batc
         );
 
         console.log(`Mensajes enviados exitosamente en lote ${i + 1}: ${batchSent} de ${chunk.length}`);
-        totalSent += batchSent; // Suma el número de mensajes enviados al total general
+        totalSent += batchSent;
+
+        currentBatchIndex = i + 1;  // Actualiza el índice del lote actual
 
         await new Promise(resolve => setTimeout(resolve, 100)); // Retraso opcional entre lotes
     }
 
     console.log(`Total de mensajes enviados exitosamente: ${totalSent} de ${numbers.length}`);
-    isSendingMessages = false; // Marcar que el envío ha finalizado
+    isSendingMessages = false;
+    currentBatchIndex = 0;  // Restablece el índice después de completar el envío
 };
 
-
-// Función para dividir un array en partes más pequeñas
 const chunkArray = (array, chunkSize) => {
     const results = [];
     for (let i = 0; i < array.length; i += chunkSize) {
@@ -102,17 +102,22 @@ const chunkArray = (array, chunkSize) => {
     return results;
 };
 
-
 const main = async () => {
     const adapterDB = new MockAdapter();
     const adapterFlow = createFlow([]);
-    adapterProvider = createProvider(BaileysProvider); // Inicializar aquí
+    adapterProvider = createProvider(BaileysProvider);
 
-
-    if(adapterProvider){
+    if (adapterProvider) {
         adapterProvider.on(EVENTS.CONNECTION_CLOSE, async () => {
             console.log("Conexión cerrada. Intentando reconectar...");
             await adapterProvider.reconnect();
+        });
+
+        adapterProvider.on(EVENTS.CONNECTION_OPEN, async () => {
+            console.log("Conexión restablecida. Continuando con el envío de mensajes.");
+            if (isSendingMessages) {
+                await sendMessagesInBatches(currentNumbers, currentMessage, currentImages, currentSingleImage, currentBatchSize);
+            }
         });
     }
 
@@ -121,7 +126,6 @@ const main = async () => {
         provider: adapterProvider,
         database: adapterDB,
     });
-
 
     app.post('/send-messages', upload.fields([{ name: 'csvFile', maxCount: 1 }, { name: 'images', maxCount: 10 }, { name: 'singleImage', maxCount: 1 }]), async (req, res) => {
         const { message } = req.body;
@@ -142,6 +146,13 @@ const main = async () => {
                 return res.status(400).send({ error: 'No se encontraron números válidos en el archivo CSV.' });
             }
 
+            // Almacena los parámetros actuales para continuar el envío después de la reconexión
+            global.currentNumbers = numbers;
+            global.currentMessage = message;
+            global.currentImages = images;
+            global.currentSingleImage = singleImage;
+            global.currentBatchSize = batchSize;
+
             await sendMessagesInBatches(numbers, message, images, singleImage, batchSize);
 
             res.send({ data: 'Mensajes enviados!' });
@@ -158,10 +169,8 @@ const main = async () => {
         }
     });
 
-
-
     app.get('/qr', (req, res) => {
-        const qrPath = path.join(__dirname, 'bot.qr.png'); // Ajusta la ruta según tu estructura de carpetas
+        const qrPath = path.join(__dirname, 'bot.qr.png');
         res.sendFile(qrPath);
     });
 
@@ -170,24 +179,21 @@ const main = async () => {
     });
 };
 
-// Configuración del cronjob con verificación de envío en curso
-const cron = require('node-cron');
 cron.schedule('0 */6 * * *', async () => { // cada 6 horas
     if (isSendingMessages) {
         console.log("Envio de mensajes en curso. Cronjob pospuesto.");
         return;
     }
-    
+
     try {
-        console.log(adapterProvider)
-        if(adapterProvider) {
+        if (adapterProvider) {
             console.log("Reiniciando bot...");
             await adapterProvider.reconnect();
         } else {
-            console.log("No hay sesion...");
+            console.log("No hay sesión...");
         }
     } catch (error) {
-        console.log(error)
+        console.error(error);
     }
 });
 
