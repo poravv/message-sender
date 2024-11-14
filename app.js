@@ -19,6 +19,7 @@ const fs = require('fs');
 const path = require('path'); 
 const multer = require('multer');
 const csv = require('csv-parser');
+const MockAdapter = require('@bot-whatsapp/database/mock');
 
 /**
  * Clase para gestionar la conexión del bot
@@ -380,6 +381,7 @@ const loadNumbersFromCSV = (filePath) => {
  */
 const main = async () => {
     const adapterFlow = createFlow([]);
+    const adapterDB = new MockAdapter();
     adapterProvider = createProvider(BaileysProvider);
 
     // Configura el gestor de conexiones
@@ -387,6 +389,7 @@ const main = async () => {
 
     createBot({
         flow: adapterFlow,
+        database: adapterDB,
         provider: adapterProvider,
     });
 
