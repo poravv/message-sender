@@ -5,19 +5,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Message-sender</title>
-    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
             font-family: Arial, sans-serif;
             background-color: #e5ddd5;
-            /* WhatsApp background color */
             margin-top: 50px;
         }
 
         .tab-buttons button {
             background-color: #25d366;
-            /* WhatsApp green */
             color: white;
             border: none;
             border-radius: 5px;
@@ -28,24 +25,20 @@
 
         .tab-buttons button:hover {
             background-color: #128c7e;
-            /* Darker green on hover */
         }
 
         .card {
             background-color: #ffffff;
-            /* White card background */
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         .card-body {
             color: #075e54;
-            /* WhatsApp dark text color */
         }
 
         .form-label {
             color: #128c7e;
-            /* WhatsApp form labels */
         }
 
         .btn-success {
@@ -57,33 +50,25 @@
             background-color: #128c7e;
         }
 
-        /* Alert styling */
         .alert {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 20px;
+            right: 20px;
             z-index: 9999;
-            padding: 20px;
-            border-radius: 10px;
+            padding: 15px;
+            border-radius: 5px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none;
         }
 
-        /* Estilos para el spinner */
         .loader {
             border: 8px solid #f3f3f3;
-            /* Color de fondo */
             border-top: 8px solid #25d366;
-            /* WhatsApp green */
             border-radius: 50%;
             width: 40px;
-            /* Tamaño del spinner */
             height: 40px;
-            /* Tamaño del spinner */
             animation: spin 1s linear infinite;
-            /* Animación */
             display: inline-block;
-            /* Muestra el spinner en línea */
         }
 
         @keyframes spin {
@@ -100,10 +85,7 @@
             text-align: center;
             margin-top: 20px;
             display: none;
-            /* Ocultar spinner inicialmente */
         }
-        
-        /*------------*/
 
         .tab {
             display: none;
@@ -121,10 +103,81 @@
             display: none;
         }
 
+        #connection-status {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            padding: 8px 15px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+
+        .status-connected {
+            background-color: #25d366;
+            color: white;
+        }
+
+        .status-disconnected {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        #messageStatus {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .progress {
+            height: 25px;
+        }
+
+        .status-table {
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .status-row-success {
+            background-color: #d4edda;
+        }
+
+        .status-row-error {
+            background-color: #f8d7da;
+        }
+
+        .status-badge {
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .badge-queued {
+            background-color: #ffc107;
+            color: black;
+        }
+
+        .badge-sending {
+            background-color: #17a2b8;
+            color: white;
+        }
+
+        .badge-sent {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .badge-error {
+            background-color: #dc3545;
+            color: white;
+        }
     </style>
 </head>
 
 <body>
+    <div id="connection-status"></div>
+    <div id="alert" class="alert"></div>
+
     <div class="container">
         <h1 class="text-center mb-4">Envío de mensaje sobre lista</h1>
 
@@ -149,14 +202,12 @@
                 <div class="card-body">
                     <h5 class="card-title">Formulario de Envío de Mensaje</h5>
                     <form id="messageForm" enctype="multipart/form-data">
-
                         <div class="mb-3">
                             <label for="csvFile" class="form-label">Cargar archivo CSV con números:
                                 <b>5959xxxxxxxx</b></label>
                             <input type="file" id="csvFile" name="csvFile" class="form-control" accept=".csv" required>
                         </div>
 
-                        <!-- Selección entre imagen con comentario o múltiples imágenes -->
                         <div class="mb-3">
                             <b><label for="imageOption" class="form-label">Selecciona tipo de imagen:</label></b>
                             <select id="imageOption" class="form-select" onchange="toggleImageFields()">
@@ -166,18 +217,14 @@
                             </select>
                         </div>
 
-                        <!-- Campo para cargar múltiples imágenes -->
                         <div class="mb-3 hidden" id="multipleImagesField">
                             <b><label for="images" class="form-label">Cargar múltiples imágenes (opcional):</label></b>
                             <input type="file" id="images" name="images" class="form-control" accept="image/*" multiple>
                         </div>
 
-                        <!-- Campo para cargar una imagen con comentario -->
                         <div class="mb-3 hidden" id="singleImageField">
-                            <b>
-                                <label for="singleImage" class="form-label">Cargar una imagen con comentario
-                                    (opcional):</label>
-                            </b>
+                            <b><label for="singleImage" class="form-label">Cargar una imagen con comentario
+                                    (opcional):</label></b>
                             <input type="file" id="singleImage" name="singleImage" class="form-control"
                                 accept="image/*">
                         </div>
@@ -189,21 +236,107 @@
                         <button type="submit" class="btn btn-success">Enviar Mensaje</button>
                     </form>
 
-                    <!-- Spinner -->
                     <div id="spinner">
                         <p>Enviando mensajes, por favor espere...</p>
                         <div class="loader"></div>
                     </div>
-
                 </div>
+
+
+                <!-- Nuevo componente de estado de mensajes -->
+                <div id="messageStatus" class="mt-4">
+                    <h5>Estado del Envío</h5>
+                    <div class="progress mb-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
+                            aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+                    </div>
+                    <div class="d-flex justify-content-between mb-3">
+                        <span>Enviados: <span id="sentCount">0</span>/<span id="totalCount">0</span></span>
+                        <span>Errores: <span id="errorCount">0</span></span>
+                    </div>
+                    <div class="status-table">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Número</th>
+                                    <th>Estado</th>
+                                    <th>Mensaje</th>
+                                </tr>
+                            </thead>
+                            <tbody id="statusTableBody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+
             </div>
         </div>
     </div>
 
-    <!-- Bootstrap JS (opcional) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
+        // Variables globales
+        let connectionCheckInterval;
+        let qrCheckInterval;
+
+        // Función para mostrar alertas
+        function showAlert(message, type = 'success') {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+
+        // Función para actualizar el estado de conexión
+        // Actualizar la función de estado de conexión
+        async function updateConnectionStatus() {
+            try {
+                const response = await fetch('/connection-status');
+                const data = await response.json();
+
+                const statusElement = document.getElementById('connection-status');
+
+                console.log('Estado de conexión recibido:', data); // Debug
+
+                if (data.status === 'connected') {
+                    statusElement.textContent = 'Conectado';
+                    statusElement.className = 'status-connected';
+                    clearInterval(qrCheckInterval);
+                    document.getElementById('qr').style.display = 'none';
+                } else {
+                    statusElement.textContent = 'Desconectado';
+                    statusElement.className = 'status-disconnected';
+                    document.getElementById('qr').style.display = 'block';
+                    if (!qrCheckInterval) {
+                        qrCheckInterval = setInterval(fetchQR, 60000);
+                    }
+                }
+            } catch (error) {
+                console.error('Error checking connection status:', error);
+                showAlert('Error al verificar el estado de conexión', 'danger');
+            }
+        }
+
+        // Función para obtener el QR
+        async function fetchQR() {
+            try {
+                const response = await fetch('/qr');
+                if (response.ok) {
+                    const qrImage = document.getElementById('qrImage');
+                    qrImage.src = '/qr?' + new Date().getTime();
+                }
+            } catch (error) {
+                console.error('Error fetching QR:', error);
+                showAlert('Error al actualizar el código QR', 'warning');
+            }
+        }
+
+        // Función para cambiar entre pestañas
         function showTab(tabId) {
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.remove('active');
@@ -211,13 +344,12 @@
             document.getElementById(tabId).classList.add('active');
         }
 
-        // Función para alternar entre los campos de imágenes
+        // Función para alternar campos de imagen
         function toggleImageFields() {
             const imageOption = document.getElementById('imageOption').value;
             const multipleImagesField = document.getElementById('multipleImagesField');
             const singleImageField = document.getElementById('singleImageField');
 
-            // Resetear campos
             multipleImagesField.classList.add('hidden');
             singleImageField.classList.add('hidden');
 
@@ -228,37 +360,29 @@
             }
         }
 
-        async function fetchQR() {
-            const response = await fetch('/qr');
-            const qrImage = document.getElementById('qrImage');
-            qrImage.src = '/qr?' + new Date().getTime(); // Añadir un timestamp para evitar el caché
-        }
-
-        // Llamar a fetchQR cada cierto tiempo para actualizar el QR
-        setInterval(fetchQR, 60000); // Actualizar cada 60 segundos
-
+        // Manejador del formulario
         document.getElementById('messageForm').addEventListener('submit', async (event) => {
             event.preventDefault();
-            const message = document.getElementById('message').value;
-            const csvFile = document.getElementById('csvFile').files[0];
-            const images = document.getElementById('images').files;
-            const singleImage = document.getElementById('singleImage').files[0];
+
+            const messageStatus = document.getElementById('messageStatus');
+            messageStatus.style.display = 'block';
+            document.getElementById('statusTableBody').innerHTML = '';
 
             const formData = new FormData();
-            formData.append('message', message);
-            formData.append('csvFile', csvFile);
+            formData.append('message', document.getElementById('message').value);
+            formData.append('csvFile', document.getElementById('csvFile').files[0]);
 
-            // Agregar la imagen única si fue seleccionada
-            if (singleImage) {
-                formData.append('singleImage', singleImage);
+            const imageOption = document.getElementById('imageOption').value;
+            if (imageOption === 'single') {
+                const singleImage = document.getElementById('singleImage').files[0];
+                if (singleImage) formData.append('singleImage', singleImage);
+            } else if (imageOption === 'multiple') {
+                const images = document.getElementById('images').files;
+                for (let i = 0; i < images.length; i++) {
+                    formData.append('images', images[i]);
+                }
             }
 
-            // Agregar múltiples imágenes si fueron seleccionadas
-            for (let i = 0; i < images.length; i++) {
-                formData.append('images', images[i]);
-            }
-
-            // Mostrar el spinner
             const spinner = document.getElementById('spinner');
             spinner.style.display = 'block';
 
@@ -269,21 +393,117 @@
                 });
 
                 const result = await response.json();
-                alert(result.data || result.error); // Muestra mensaje de éxito o error
+
+                if (response.ok) {
+                    // Mostrar estado inicial
+                    if (result.initialStats) {
+                        updateMessageStatus(result.initialStats);
+                    }
+
+                    let isCompleted = false;
+                    const pollInterval = setInterval(async () => {
+                        try {
+                            const statusResponse = await fetch('/message-status');
+                            if (!statusResponse.ok) throw new Error('Error al obtener estado');
+
+                            const statusData = await statusResponse.json();
+                            console.log('Estado actual:', statusData);
+
+                            updateMessageStatus(statusData);
+
+                            // Verificar si el proceso está completado
+                            if (statusData.completed) {
+                                if (!isCompleted) {
+                                    isCompleted = true;
+                                    showAlert('Envío completado exitosamente', 'success');
+                                    spinner.style.display = 'none';
+                                }
+                                clearInterval(pollInterval);
+                            }
+                        } catch (error) {
+                            console.error('Error en polling:', error);
+                            clearInterval(pollInterval);
+                            showAlert('Error al actualizar estado: ' + error.message, 'danger');
+                        }
+                    }, 1000);
+                } else {
+                    showAlert(result.error || 'Error al enviar los mensajes', 'danger');
+                    spinner.style.display = 'none';
+                }
             } catch (error) {
                 console.error('Error:', error);
-                if (error.message.includes("Closing open session in favor of incoming prekey bundle")) {
-                    console.warn("Se cerró la sesión, pero continuaré enviando mensajes.");
-                    //alert('La sesión se cerró, pero continuaré enviando mensajes.');
-                } else {
-                    alert('Ocurrió un error al enviar los mensajes.');
-                }
-            } finally {
-                // Ocultar el spinner
+                showAlert('Error al enviar los mensajes: ' + error.message, 'danger');
                 spinner.style.display = 'none';
             }
         });
 
+
+        // Inicialización
+        document.addEventListener('DOMContentLoaded', () => {
+            updateConnectionStatus();
+            connectionCheckInterval = setInterval(updateConnectionStatus, 5000);
+            qrCheckInterval = setInterval(fetchQR, 60000);
+        });
+
+        // Función para actualizar el estado de los mensajes
+        function updateMessageStatus(status) {
+            const { sent, total, errors, messages, completed } = status;
+
+            // Actualizar progreso
+            const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
+            const progressBar = document.querySelector('.progress-bar');
+            progressBar.style.width = `${progress}%`;
+            progressBar.textContent = `${progress}%`;
+
+            // Actualizar contadores
+            document.getElementById('sentCount').textContent = sent;
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('errorCount').textContent = errors;
+
+            // Actualizar tabla de estado
+            const statusTableBody = document.getElementById('statusTableBody');
+
+            if (messages && messages.length > 0) {
+                // Limpiar filas existentes si es necesario
+                if (completed) {
+                    statusTableBody.innerHTML = '';
+                }
+
+                messages.forEach(msg => {
+                    let row = statusTableBody.querySelector(`[data-number="${msg.number}"]`);
+                    if (!row) {
+                        row = document.createElement('tr');
+                        row.setAttribute('data-number', msg.number);
+                        statusTableBody.appendChild(row);
+                    }
+
+                    const statusClass = msg.status === 'error' ? 'status-row-error' : 'status-row-success';
+                    const badgeClass = {
+                        'queued': 'badge-queued',
+                        'sending': 'badge-sending',
+                        'sent': 'badge-sent',
+                        'error': 'badge-error'
+                    }[msg.status] || 'badge-queued';
+
+                    row.innerHTML = `
+                <td>${msg.number}</td>
+                <td><span class="status-badge ${badgeClass}">${msg.status}</span></td>
+                <td>${msg.message || ''}</td>
+            `;
+                    row.className = statusClass;
+                });
+            }
+
+            // Si está completado, actualizar la UI acordemente
+            if (completed) {
+                document.getElementById('spinner').style.display = 'none';
+                if (errors === 0) {
+                    showAlert('Todos los mensajes fueron enviados exitosamente', 'success');
+                } else {
+                    showAlert(`Envío completado con ${errors} errores`, 'warning');
+                }
+            }
+        }
     </script>
 </body>
 

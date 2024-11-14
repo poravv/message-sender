@@ -1,9 +1,9 @@
 
 # Construir la imagen Docker
-sudo docker build -t message-sender .
+docker build -t message-sender .
 
 # Ejecutar el contenedor Docker
-sudo docker run -d \
+docker run -d \
     -p 3009:3000 \
     --name message-sender \
     message-sender
