@@ -327,7 +327,7 @@ const connectionManager = new ConnectionManager();
 const messageQueue = new MessageQueue();
 let adapterProvider;
 const app = express();
-const port = 3009;
+const port = 3000;
 
 // Configuración de Express
 app.use(express.static('public'));
