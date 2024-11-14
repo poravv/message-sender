@@ -49,48 +49,102 @@ class ConnectionManager {
     setupEventListeners() {
         if (!this.provider) return;
 
-        const onConnectionClosed = async () => {
-            console.log("Conexión cerrada. Iniciando reconexión...");
+        this.provider.on(EVENTS.CONNECTION_CLOSE, async () => {
+            console.log("Conexión cerrada. Iniciando reconexión automática...");
             this.connectionState = 'disconnected';
             await this.handleReconnect();
-        };
+        });
 
-        const onConnectionOpened = () => {
-            console.log("Conexión establecida");
+        this.provider.on(EVENTS.AUTHENTICATION_FAILURE, async () => {
+            console.log("Fallo de autenticación detectado.");
+            this.connectionState = 'disconnected';
+            await this.handleReconnect();
+        });
+
+        this.provider.on(EVENTS.CONNECTION_OPEN, () => {
+            console.log("Conexión establecida exitosamente");
             this.connectionState = 'connected';
             this.reconnectAttempts = 0;
-        };
+        });
 
-        this.provider.on(EVENTS.CONNECTION_CLOSE, onConnectionClosed);
-        this.provider.on(EVENTS.AUTHENTICATION_FAILURE, onConnectionClosed);
-        this.provider.on(EVENTS.CONNECTION_OPEN, onConnectionOpened);
-
+        // Monitoreo de actualizaciones de conexión
         this.provider.on('connection.update', async (update) => {
-            if (update.connection === 'close' && update.lastDisconnect?.error?.output?.statusCode !== 403) {
-                await this.handleReconnect();
-            } else if (update.connection === 'open') {
-                onConnectionOpened();
+            const { connection, lastDisconnect } = update;
+
+            if (connection === 'close') {
+                this.connectionState = 'disconnected';
+                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 403;
+                if (shouldReconnect) {
+                    await this.handleReconnect();
+                }
+            } else if (connection === 'open') {
+                this.connectionState = 'connected';
+                console.log('Conexión establecida y actualizada a connected');
             }
         });
 
-        this.provider.on('send.message', this.updateMessageStats.bind(this));
+        // Agregar evento para actualización de mensajes
+        this.provider.on('send.message', (status) => {
+            this.updateMessageStats(status);
+        });
     }
 
-    updateMessageStats({ number, state, message }) {
-        this.messageStats.messages.push({ number, status: state, message: message || '' });
-        this.messageStats[state === 'sent' ? 'sent' : 'errors']++;
+    updateMessageStats(status) {
+        const { number, state, message } = status;
+        this.messageStats.messages.push({
+            number,
+            status: state,
+            message: message || ''
+        });
+
+        if (state === 'sent') {
+            this.messageStats.sent++;
+        } else if (state === 'error') {
+            this.messageStats.errors++;
+        }
+    }
+
+    getMessageStats() {
+        return this.messageStats;
+    }
+
+    getMessageStats() {
+        return this.messageStats;
+    }
+
+    resetMessageStats() {
+        this.messageStats = {
+            total: 0,
+            sent: 0,
+            errors: 0,
+            messages: []
+        };
+    }
+
+    async checkConnection() {
+        // Verificar el estado real de la conexión con el proveedor
+        const isConnected = this.provider?.state?.connection === 'open' || this.connectionState === 'connected';
+        return isConnected;
     }
 
     async handleReconnect() {
-        if (this.isReconnecting || this.reconnectAttempts >= this.maxReconnectAttempts) return;
+        if (this.isReconnecting) return;
         this.isReconnecting = true;
 
         try {
-            const delay = this.reconnectDelay * (1 << this.reconnectAttempts++);
-            console.log(`Intento de reconexión en ${delay / 1000} segundos`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+                const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
+                console.log(`Intento de reconexión ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts} en ${delay / 1000} segundos`);
 
-            if (this.provider) await this.provider.reconnect();
+                await new Promise(resolve => setTimeout(resolve, delay));
+
+                if (this.provider) {
+                    await this.provider.reconnect();
+                    this.reconnectAttempts++;
+                }
+            } else {
+                console.log("Máximo de intentos de reconexión alcanzado. Requiere reinicio manual.");
+            }
         } catch (error) {
             console.error('Error durante la reconexión:', error);
         } finally {
@@ -98,7 +152,7 @@ class ConnectionManager {
         }
     }
 
-    checkConnection() {
+    async checkConnection() {
         return this.connectionState === 'connected';
     }
 }
@@ -111,88 +165,151 @@ class MessageQueue {
     constructor() {
         this.queue = [];
         this.isProcessing = false;
-        this.retryQueue = [];
+        this.retryQueue = []; // Cola separada para reintentos
         this.maxRetries = 3;
         this.retryDelay = 5000;
         this.batchSize = 100;
+    }
+
+    /**
+     * Agrega nuevos mensajes a la cola
+     * @param {Array} numbers - Array de números de teléfono
+     * @param {string} message - Mensaje a enviar
+     * @param {Array} images - Array de imágenes (opcional)
+     * @param {Object} singleImage - Imagen única (opcional)
+     */
+    async add(numbers, message, images, singleImage) {
+        // Inicializar estadísticas
         this.messageStats = {
-            total: 0,
+            total: numbers.length,
             sent: 0,
             errors: 0,
             messages: [],
             completed: false
         };
+
+        // Crea elementos de cola con índice original
+        const queueItems = numbers.map((number, index) => ({
+            number,
+            message,
+            images,
+            singleImage,
+            attempts: 0,
+            originalIndex: index
+        }));
+
+        this.queue.push(...queueItems);
+
+        if (!this.isProcessing) {
+            await this.processQueue();
+        }
     }
 
-    async add(numbers, message, images, singleImage) {
-        this.messageStats = { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false };
-        this.queue.push(...numbers.map((number, index) => ({
-            number, message, images, singleImage, attempts: 0, originalIndex: index
-        })));
-
-        if (!this.isProcessing) await this.processQueue();
-    }
-
+    /**
+     * Procesa la cola principal y la cola de reintentos
+     */
     async processQueue() {
         if (this.isProcessing || this.queue.length === 0) return;
 
         this.isProcessing = true;
-        console.log(`Procesando cola de mensajes...`);
+        console.log(`Iniciando procesamiento de cola. Mensajes pendientes: ${this.queue.length}`);
 
-        while (this.queue.length > 0 || this.retryQueue.length > 0) {
-            const batch = (this.queue.length > 0 ? this.queue : this.retryQueue)
-                .splice(0, this.batchSize)
-                .sort((a, b) => a.originalIndex - b.originalIndex);
+        try {
+            while (this.queue.length > 0 || this.retryQueue.length > 0) {
+                if (this.queue.length > 0) {
+                    const batch = this.queue.splice(0, this.batchSize)
+                        .sort((a, b) => a.originalIndex - b.originalIndex);
+                    await this.processBatch(batch);
+                }
 
-            await this.processBatch(batch);
-            if (this.queue.length > 0 || this.retryQueue.length > 0) await new Promise(resolve => setTimeout(resolve, 1000));
+                if (this.retryQueue.length > 0) {
+                    const retryBatch = this.retryQueue.splice(0, this.batchSize);
+                    await this.processBatch(retryBatch);
+                }
+
+                if (this.queue.length > 0 || this.retryQueue.length > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+        } finally {
+            this.isProcessing = false;
+            this.messageStats.completed = true;
+            console.log('Cola procesada completamente');
         }
-
-        this.isProcessing = false;
-        this.messageStats.completed = true;
-        console.log('Cola procesada completamente');
     }
 
+    /**
+     * Procesa un lote de mensajes
+     * @param {Array} batch - Lote de mensajes a procesar
+     */
     async processBatch(batch) {
-        const results = await Promise.allSettled(batch.map(item => this.sendMessage(item)));
+        const results = await Promise.allSettled(
+            batch.map(item => this.sendMessage(item))
+        );
 
         results.forEach((result, index) => {
             const item = batch[index];
             if (result.status === 'fulfilled') {
                 this.messageStats.sent++;
-                this.messageStats.messages.push({ number: item.number, status: 'sent', message: 'Mensaje enviado' });
-            } else if (item.attempts < this.maxRetries) {
-                item.attempts++;
-                this.retryQueue.push(item);
+                this.messageStats.messages.push({
+                    number: item.number,
+                    status: 'sent',
+                    message: 'Mensaje enviado exitosamente'
+                });
             } else {
-                this.messageStats.errors++;
-                this.messageStats.messages.push({ number: item.number, status: 'error', message: result.reason?.message || 'Error desconocido' });
+                if (item.attempts < this.maxRetries) {
+                    item.attempts++;
+                    this.retryQueue.push(item);
+                } else {
+                    this.messageStats.errors++;
+                    this.messageStats.messages.push({
+                        number: item.number,
+                        status: 'error',
+                        message: `Error: ${result.reason?.message || 'Error desconocido'}`
+                    });
+                }
             }
         });
 
-        console.log(`Lote procesado: ${batch.length - this.messageStats.errors}/${batch.length} mensajes enviados`);
+        // Verificar si hemos completado todos los envíos
+        if (this.queue.length === 0 && this.retryQueue.length === 0) {
+            this.messageStats.completed = true;
+        }
+
+        // Log de progreso
+        const successful = batch.length - this.messageStats.errors;
+        console.log(`Lote procesado: ${successful}/${batch.length} mensajes enviados exitosamente`);
     }
 
-    async sendMessage({ number, message, images, singleImage }) {
-        console.log(`Enviando mensaje a ${number}`);
+    getStats() {
+        return this.messageStats;
+    }
+
+    /**
+     * Envía un mensaje individual
+     * @param {Object} item - Item de la cola a enviar
+     * @returns {Promise}
+     */
+    async sendMessage(item) {
+        const { number, message, images, singleImage, originalIndex } = item;
+        console.log(`Enviando mensaje a ${number} (posición original: ${originalIndex + 1})`);
+
         try {
             if (singleImage) {
                 await adapterProvider.sendImage(`${number}@c.us`, singleImage.path, message);
             } else {
                 await adapterProvider.sendText(`${number}@c.us`, message);
-                for (const image of images || []) {
-                    await adapterProvider.sendImage(`${number}@c.us`, image.path);
+                if (images && images.length > 0) {
+                    for (const image of images) {
+                        await adapterProvider.sendImage(`${number}@c.us`, image.path);
+                    }
                 }
             }
             return true;
         } catch (error) {
-            console.error(`Error enviando mensaje a ${number}: ${error.message}`);
+            console.error(`Error enviando mensaje a ${number} (posición original: ${originalIndex + 1}): ${error.message}`);
             throw error;
         }
-    }
-
-    getStats() {
-        return this.messageStats;
     }
 }
 
