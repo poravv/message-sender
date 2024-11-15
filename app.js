@@ -16,7 +16,7 @@ require('dotenv').config();
 const express = require('express');
 const BaileysProvider = require('@bot-whatsapp/provider/baileys');
 const fs = require('fs');
-const path = require('path'); 
+const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
 const MockAdapter = require('@bot-whatsapp/database/mock');
@@ -208,6 +208,9 @@ class MessageQueue {
     /**
      * Procesa la cola principal y la cola de reintentos
      */
+    /**
+ * Procesa la cola principal y la cola de reintentos
+ */
     async processQueue() {
         if (this.isProcessing || this.queue.length === 0) return;
 
@@ -220,15 +223,21 @@ class MessageQueue {
                     const batch = this.queue.splice(0, this.batchSize)
                         .sort((a, b) => a.originalIndex - b.originalIndex);
                     await this.processBatch(batch);
+
+                    // Agregar delay entre lotes
+                    const delayBetweenBatches = 5000; // Tiempo en milisegundos
+                    console.log(`Esperando ${delayBetweenBatches / 1000} segundos antes de procesar el siguiente lote...`);
+                    await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
                 }
 
                 if (this.retryQueue.length > 0) {
                     const retryBatch = this.retryQueue.splice(0, this.batchSize);
                     await this.processBatch(retryBatch);
-                }
 
-                if (this.queue.length > 0 || this.retryQueue.length > 0) {
-                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    // Agregar delay entre lotes de reintentos
+                    const retryDelay = 7000; // Tiempo en milisegundos
+                    console.log(`Esperando ${retryDelay / 1000} segundos antes de procesar el siguiente lote de reintentos...`);
+                    await new Promise(resolve => setTimeout(resolve, retryDelay));
                 }
             }
         } finally {
@@ -237,6 +246,7 @@ class MessageQueue {
             console.log('Cola procesada completamente');
         }
     }
+
 
     /**
      * Procesa un lote de mensajes
@@ -440,27 +450,27 @@ const main = async () => {
             if (!req.files || !req.files['csvFile']) {
                 return res.status(400).json({ error: 'Archivo CSV no proporcionado' });
             }
-    
+
             const csvFilePath = req.files['csvFile'][0].path;
             const images = req.files['images'];
             const singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
             const { message } = req.body;
-    
+
             const numbers = await loadNumbersFromCSV(csvFilePath);
-    
+
             if (numbers.length === 0) {
                 return res.status(400).json({ error: 'No se encontraron números válidos' });
             }
-    
+
             await messageQueue.add(numbers, message, images, singleImage);
-    
+
             res.json({
                 status: 'success',
                 message: 'Procesando mensajes',
                 totalNumbers: numbers.length,
                 initialStats: messageQueue.getStats()
             });
-    
+
         } catch (error) {
             console.error('Error en /send-messages:', error);
             res.status(500).json({ error: error.message });
