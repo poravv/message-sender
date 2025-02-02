@@ -394,7 +394,7 @@ const upload = multer({
 const connectionManager = new ConnectionManager();
 const messageQueue = new MessageQueue();
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
 // Configuración de Express
 app.use(express.static('public'));

@@ -10,7 +10,13 @@ Cuando el mensaje es texto con Imagen, envia 500 mensajes en 8 minutos
 
 #### Para rellenar el .env
 Crea el .env 
+
+```
 RESTART_PASSWORD=12345
+RAILWAY_STATIC_URL=http://localhost
+PUBLIC_URL=http://localhost
+PORT=3009
+```
 
 
 ### Instalamos pm2
