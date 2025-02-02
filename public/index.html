@@ -175,6 +175,7 @@
 </head>
 
 <body>
+    <div id="connection-status" class="status-disconnected">Desconectado</div>
     <div id="connection-status"></div>
     <div id="alert" class="alert"></div>
 
@@ -184,12 +185,13 @@
         <div class="tab-buttons text-center mb-4">
             <button class="btn btn-primary" onclick="showTab('link')">Enlazar Whatsapp</button>
             <button class="btn btn-secondary" onclick="showTab('send')">Enviar Mensaje</button>
+            <button id="toggleBaileys" class="" onclick="toggleBaileys()">Habilitar</button>
         </div>
 
         <div id="link" class="tab active">
             <div class="card text-center shadow-sm p-4">
                 <div class="card-body">
-                    <p class="card-text">Escanea el QR en tu dispositivo para enlazar el chatbot</p>
+                    <p class="card-text">Escanea el QR en tu dispositivo para enlazar el sender</p>
                     <div id="qr">
                         <img id="qrImage" src="/qr" alt="QR Code" class="img-fluid">
                     </div>
@@ -292,33 +294,39 @@
             }, 5000);
         }
 
-        // Función para actualizar el estado de conexión
-        // Actualizar la función de estado de conexión
-        async function updateConnectionStatus() {
-            try {
-                const response = await fetch('/connection-status');
-                const data = await response.json();
+        async function submitBaileys() {
+            const password = document.getElementById('adminPassword').value.trim();
+            if (!password) {
+                alert('Debe ingresar una clave.');
+                return;
+            }
 
+            const response = await fetch('/toggle-baileys', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enable: isEnablingBaileys, password })
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                const button = document.getElementById('toggleBaileys');
                 const statusElement = document.getElementById('connection-status');
 
-                console.log('Estado de conexión recibido:', data); // Debug
-
-                if (data.status === 'connected') {
+                if (isEnablingBaileys) {
+                    button.textContent = 'Deshabilitar';
                     statusElement.textContent = 'Conectado';
                     statusElement.className = 'status-connected';
-                    clearInterval(qrCheckInterval);
-                    document.getElementById('qr').style.display = 'none';
+                    localStorage.setItem('baileysStatus', 'enabled');
                 } else {
+                    button.textContent = 'Habilitar';
                     statusElement.textContent = 'Desconectado';
                     statusElement.className = 'status-disconnected';
-                    document.getElementById('qr').style.display = 'block';
-                    if (!qrCheckInterval) {
-                        qrCheckInterval = setInterval(fetchQR, 60000);
-                    }
+                    localStorage.setItem('baileysStatus', 'disabled');
                 }
-            } catch (error) {
-                console.error('Error checking connection status:', error);
-                showAlert('Error al verificar el estado de conexión', 'danger');
+
+                bootstrap.Modal.getInstance(document.getElementById('passwordModal')).hide();
+            } else {
+                alert(result.message);
             }
         }
 
@@ -342,6 +350,13 @@
                 tab.classList.remove('active');
             });
             document.getElementById(tabId).classList.add('active');
+        }
+
+        async function toggleBaileys() {
+            const button = document.getElementById('toggleBaileys');
+            isEnablingBaileys = button.textContent.includes('Habilitar'); // Determinar acción
+            const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
+            modal.show(); // Mostrar el modal
         }
 
         // Función para alternar campos de imagen
@@ -437,12 +452,21 @@
             }
         });
 
-
-        // Inicialización
+        // Verificar el estado de Baileys al cargar la página
         document.addEventListener('DOMContentLoaded', () => {
-            updateConnectionStatus();
-            connectionCheckInterval = setInterval(updateConnectionStatus, 5000);
-            qrCheckInterval = setInterval(fetchQR, 60000);
+            const status = localStorage.getItem('baileysStatus');
+            const statusElement = document.getElementById('connection-status');
+            const button = document.getElementById('toggleBaileys');
+
+            if (status === 'enabled') {
+                statusElement.textContent = 'Conectado';
+                statusElement.className = 'status-connected';
+                button.textContent = 'Deshabilitar';
+            } else {
+                statusElement.textContent = 'Desconectado';
+                statusElement.className = 'status-disconnected';
+                button.textContent = 'Habilitar';
+            }
         });
 
         // Función para actualizar el estado de los mensajes
@@ -505,6 +529,24 @@
             }
         }
     </script>
+
+    <div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="passwordModalLabel">Ingresar Clave</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="password" id="adminPassword" class="form-control" placeholder="Ingrese la clave" />
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="submitBaileys()">Confirmar</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

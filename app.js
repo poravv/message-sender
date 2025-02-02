@@ -20,6 +20,72 @@ const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
 const MockAdapter = require('@bot-whatsapp/database/mock');
+const { exec } = require('child_process');
+
+let adapterProvider;
+let isBaileysEnabled = false; // Estado de Baileys (habilitado/deshabilitado)
+let botInstance;
+
+const ADMIN_PASSWORD = process.env.RESTART_PASSWORD;
+
+const habilitar = async () => {
+    try {
+        if (!botInstance) {
+            const adapterFlow = createFlow([]);
+            adapterProvider = createProvider(BaileysProvider);
+            const adapterDB = new MockAdapter();
+
+            // Configura el gestor de conexiones
+            connectionManager.setProvider(adapterProvider);
+
+            createBot({
+                flow: adapterFlow,
+                database: adapterDB,
+                provider: adapterProvider,
+            });
+
+            // Iniciar el bot cuando se habilita
+            botInstance = createBot({
+                flow: adapterFlow,
+                provider: adapterProvider,
+            });
+
+            console.log('Baileys habilitado');
+        } else {
+            console.log('Baileys ya está habilitado');
+        }
+    } catch (error) {
+        console.error('Error al habilitar Baileys:', error);
+    }
+};
+
+const deshabilitar = async (req, res) => {
+    if (botInstance) {
+        try {
+            botInstance = null;
+            adapterProvider = null;
+            console.log('Baileys deshabilitado');
+            // 🔥 Comando para reiniciar el servidor con PM2
+            setTimeout(() => {
+                exec('pm2 restart mi-servidor', (err, stdout, stderr) => {
+                    if (err) {
+                        console.error('Error al reiniciar con PM2:', stderr);
+                    } else {
+                        console.log('Servidor reiniciado:', stdout);
+                    }
+                });
+            }, 10000);
+            res.json({ success: true, message: 'Servidor reiniciado correctamente' });
+        } catch (error) {
+            console.error('Error al deshabilitar Baileys:', error);
+            res.status(500).json({ success: false, message: 'Error al deshabilitar' });
+        }
+    } else {
+        console.log('Baileys no está habilitado');
+        res.json({ success: false, message: 'Baileys no estaba habilitado' });
+    }
+};
+
 
 /**
  * Clase para gestionar la conexión del bot
@@ -45,6 +111,7 @@ class ConnectionManager {
         this.provider = provider;
         this.setupEventListeners();
     }
+
 
     setupEventListeners() {
         if (!this.provider) return;
@@ -208,9 +275,6 @@ class MessageQueue {
     /**
      * Procesa la cola principal y la cola de reintentos
      */
-    /**
- * Procesa la cola principal y la cola de reintentos
- */
     async processQueue() {
         if (this.isProcessing || this.queue.length === 0) return;
 
@@ -223,21 +287,15 @@ class MessageQueue {
                     const batch = this.queue.splice(0, this.batchSize)
                         .sort((a, b) => a.originalIndex - b.originalIndex);
                     await this.processBatch(batch);
-
-                    // Agregar delay entre lotes
-                    const delayBetweenBatches = 5000; // Tiempo en milisegundos
-                    console.log(`Esperando ${delayBetweenBatches / 1000} segundos antes de procesar el siguiente lote...`);
-                    await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
                 }
 
                 if (this.retryQueue.length > 0) {
                     const retryBatch = this.retryQueue.splice(0, this.batchSize);
                     await this.processBatch(retryBatch);
+                }
 
-                    // Agregar delay entre lotes de reintentos
-                    const retryDelay = 7000; // Tiempo en milisegundos
-                    console.log(`Esperando ${retryDelay / 1000} segundos antes de procesar el siguiente lote de reintentos...`);
-                    await new Promise(resolve => setTimeout(resolve, retryDelay));
+                if (this.queue.length > 0 || this.retryQueue.length > 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
                 }
             }
         } finally {
@@ -246,7 +304,6 @@ class MessageQueue {
             console.log('Cola procesada completamente');
         }
     }
-
 
     /**
      * Procesa un lote de mensajes
@@ -336,7 +393,6 @@ const upload = multer({
 // Instancias principales
 const connectionManager = new ConnectionManager();
 const messageQueue = new MessageQueue();
-let adapterProvider;
 const app = express();
 const port = 3000;
 
@@ -390,17 +446,32 @@ const loadNumbersFromCSV = (filePath) => {
  * Función principal de inicialización
  */
 const main = async () => {
-    const adapterFlow = createFlow([]);
-    const adapterDB = new MockAdapter();
-    adapterProvider = createProvider(BaileysProvider);
 
-    // Configura el gestor de conexiones
-    connectionManager.setProvider(adapterProvider);
-
-    createBot({
-        flow: adapterFlow,
-        database: adapterDB,
-        provider: adapterProvider,
+    // Endpoint para habilitar/deshabilitar Baileys
+    app.post('/toggle-baileys', async (req, res) => {
+        const { enable, password } = req.body;
+        if (enable) {
+            try {
+                if (!password || password !== ADMIN_PASSWORD) {
+                    return res.json({ success: false, message: 'Clave incorrecta' });
+                }
+                await habilitar();
+                isBaileysEnabled = true;
+                res.json({ success: true, message: 'Baileys habilitado' });
+            } catch (error) {
+                console.error('Error al habilitar Baileys:', error);
+                res.json({ success: false, message: 'Error al habilitar Baileys' });
+            }
+        } else {
+            try {
+                await deshabilitar(req, res);
+                isBaileysEnabled = false;
+            } catch (error) {
+                console.error('Error al deshabilitar Baileys:', error);
+                res.json({ success: false, message: 'Error al deshabilitar Baileys' });
+            }
+        }
+        console.log(`Baileys ${enable ? 'habilitado' : 'deshabilitado'}`);
     });
 
     // Endpoint para verificar estado de conexión

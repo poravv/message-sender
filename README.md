@@ -1,4 +1,5 @@
-# Chatbot
+# Pasos para habilitar PM2 en el proyecto
+## El pm2 usamos para habilitar el reinicio del servicio
 
 Envio de mensajes masivos desde whatsapp web.
 
@@ -7,35 +8,16 @@ Como observacion, cuando el mensaje es solo textos, envia 500 mensajes en 10 seg
 Cuando el mensaje es texto con Imagen, envia 500 mensajes en 8 minutos
 
 
-
 #### Para rellenar el .env
-|  **NAME**                 | Value           |
-|-------------------------------|--------------------------|
+Crea el .env 
+RESTART_PASSWORD=12345
 
 
+### Instalamos pm2
+```
+npm install -g pm2
+```
+### inicializamos 
+pm2 start app.js --name mi-servidor
 
 
-
-## Para levantar con PM2
-```
-pm2 start app.js --name "sender"
-```
-
-## Ver el estado
-```
-pm2 status
-```
-
-##Ver los logs
-```
-pm2 logs sender
-```
-
-## Activar para que se reinicie y siga funcionando 
-```
-pm2 startup
-```
-
-```
-pm2 save
-```
