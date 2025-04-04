@@ -4,9 +4,10 @@
     },
     "restartable": "rs",
     "ignore": [
-        ".git",
-        "node_modules/**/node_modules",
-        "bot.qr.png"
+        "node_modules",
+        "bot_sessions",
+        "uploads",
+        "*.log"
     ],
     "verbose": true,
     "execMap": {
@@ -17,7 +18,8 @@
         "*.json"
     ],
     "env": {
-        "NODE_ENV": "development"
+        "NODE_ENV": "production"
     },
-    "ext": "js,json"
+    "ext": "js,json",
+    "signal": "SIGTERM"
 }

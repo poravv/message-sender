@@ -14,6 +14,7 @@
 const { createBot, createProvider, createFlow, EVENTS } = require('@bot-whatsapp/bot');
 require('dotenv').config();
 const express = require('express');
+const cors = require('cors');
 const BaileysProvider = require('@bot-whatsapp/provider/baileys');
 const fs = require('fs');
 const path = require('path');
@@ -475,6 +476,24 @@ const port = process.env.PORT || 3000;
 let server; // Variable global para el servidor HTTP
 
 // Configuración de Express
+const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
+app.use(cors({
+    origin: function(origin, callback) {
+        // Permitir peticiones sin origin (como Postman)
+        if (!origin) return callback(null, true);
+        
+        // Verificar si el origin está en la lista de permitidos
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error('No permitido por CORS'));
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.static('public'));
 app.use(express.json());
 
@@ -663,19 +682,30 @@ const main = async () => {
             message: 'Servidor reiniciando...' 
         });
 
-        // Esperar un momento para asegurar que la respuesta se envíe
-        setTimeout(() => {
-            const { spawn } = require('child_process');
-            // Iniciar un nuevo proceso antes de terminar este
-            const child = spawn(process.argv[0], process.argv.slice(1), {
-                detached: true,
-                stdio: 'inherit'
+        // Cerrar el servidor HTTP y limpiar recursos
+        if (server) {
+            server.close(() => {
+                console.log('Servidor HTTP cerrado');
+                
+                // Limpiar recursos de Baileys
+                if (baileysManager.getState().isEnabled) {
+                    try {
+                        baileysManager.disable();
+                    } catch (error) {
+                        console.error('Error al deshabilitar Baileys:', error);
+                    }
+                }
+
+                // Esperar un momento y terminar el proceso
+                setTimeout(() => {
+                    console.log('Terminando proceso Node.js...');
+                    // El código 143 es SIGTERM, que Docker interpreta como una señal para reiniciar
+                    process.exit(143);
+                }, 1000);
             });
-            
-            child.unref();
-            // Terminar el proceso actual
-            process.exit(0);
-        }, 1000);
+        } else {
+            process.exit(143);
+        }
     });
 
     // Inicia el servidor y guarda la referencia globalmente

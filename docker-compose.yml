@@ -3,7 +3,9 @@ services:
   whatsapp-sender:
     build: .
     container_name: whatsapp-sender
-    restart: always
+    init: true
+    restart: unless-stopped
+    stop_signal: SIGTERM
     ports:
       - "${PORT}:${PORT}"
     environment:
@@ -11,5 +13,13 @@ services:
       - RAILWAY_STATIC_URL=${RAILWAY_STATIC_URL}
       - PUBLIC_URL=${PUBLIC_URL}
       - PORT=${PORT}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
     volumes:
       - ./uploads:/app/uploads
+      - ./bot_sessions:/app/bot_sessions
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT}/baileys-status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

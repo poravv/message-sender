@@ -360,7 +360,7 @@
                     }
                 } else {
                     try {
-                        showAlert('Reiniciando servidor...', 'warning');
+                        showAlert('Deteniendo servidor...', 'warning');
                         
                         const response = await fetch('/restart-server', {
                             method: 'POST',
@@ -370,7 +370,7 @@
 
                         const result = await response.json();
                         if (result.success) {
-                            showAlert('El servidor se está reiniciando...', 'success');
+                            showAlert('El servidor se está deteniendo...', 'success');
                             // Esperar 3 segundos y recargar la página
                             setTimeout(() => {
                                 window.location.reload();
@@ -378,7 +378,7 @@
                         }
                     } catch (error) {
                         // Si hay un error de conexión, asumimos que el servidor se está reiniciando
-                        showAlert('El servidor se está reiniciando...', 'success');
+                        showAlert('El servidor se está deteniendo...', 'success');
                         setTimeout(() => {
                             window.location.reload();
                         }, 3000);
@@ -394,7 +394,7 @@
                 console.error('Error:', error);
                 // Si hay un error de conexión durante el reinicio, lo manejamos como éxito
                 if (!isEnabling) {
-                    showAlert('El servidor se está reiniciando...', 'success');
+                    showAlert('El servidor se está deteniendo...', 'success');
                     setTimeout(() => {
                         window.location.reload();
                     }, 3000);
