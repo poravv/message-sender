@@ -281,6 +281,42 @@
         // Variables globales
         let connectionCheckInterval;
         let qrCheckInterval;
+        let isEnablingBaileys = false;
+
+        // Función para actualizar el estado de la UI basado en el estado del backend
+        async function updateUIState() {
+            try {
+                const response = await fetch('/baileys-status');
+                const status = await response.json();
+
+                const statusElement = document.getElementById('connection-status');
+                const button = document.getElementById('toggleBaileys');
+
+                if (status.isEnabled) {
+                    button.textContent = 'Deshabilitar';
+                    statusElement.textContent = 'Conectado';
+                    statusElement.className = 'status-connected';
+                } else {
+                    button.textContent = 'Habilitar';
+                    statusElement.textContent = 'Desconectado';
+                    statusElement.className = 'status-disconnected';
+                }
+
+                // Si hay inactividad prolongada, mostrar alerta
+                const inactivityTime = (Date.now() - new Date(status.lastActivity)) / 1000;
+                if (inactivityTime > 1800 && status.isEnabled) { // 30 minutos
+                    showAlert('La conexión ha estado inactiva por mucho tiempo. Considere reiniciarla.', 'warning');
+                }
+            } catch (error) {
+                console.error('Error actualizando estado:', error);
+            }
+        }
+
+        // Iniciar verificación periódica del estado
+        function startStatusCheck() {
+            updateUIState(); // Verificación inicial
+            connectionCheckInterval = setInterval(updateUIState, 30000); // Cada 30 segundos
+        }
 
         // Función para mostrar alertas
         function showAlert(message, type = 'success') {
@@ -297,55 +333,90 @@
         async function submitBaileys() {
             const password = document.getElementById('adminPassword').value.trim();
             if (!password) {
-                alert('Debe ingresar una clave.');
+                showAlert('Debe ingresar una clave.', 'danger');
                 return;
             }
 
-            const response = await fetch('/toggle-baileys', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enable: isEnablingBaileys, password })
-            });
+            const button = document.getElementById('toggleBaileys');
+            const isEnabling = button.textContent.includes('Habilitar');
 
-            const result = await response.json();
-            if (result.success) {
-                const button = document.getElementById('toggleBaileys');
-                const statusElement = document.getElementById('connection-status');
+            try {
+                if (isEnabling) {
+                    const response = await fetch('/toggle-baileys', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            enable: true,
+                            password
+                        })
+                    });
 
-                if (isEnablingBaileys) {
-                    button.textContent = 'Deshabilitar';
-                    statusElement.textContent = 'Conectado';
-                    statusElement.className = 'status-connected';
-                    localStorage.setItem('baileysStatus', 'enabled');
+                    const result = await response.json();
+                    if (result.success) {
+                        showAlert('Servicio habilitado correctamente', 'success');
+                        await updateUIState();
+                    } else {
+                        showAlert(result.message || 'Error al habilitar el servicio', 'danger');
+                    }
                 } else {
-                    button.textContent = 'Habilitar';
-                    statusElement.textContent = 'Desconectado';
-                    statusElement.className = 'status-disconnected';
-                    localStorage.setItem('baileysStatus', 'disabled');
+                    try {
+                        showAlert('Reiniciando servidor...', 'warning');
+                        
+                        const response = await fetch('/restart-server', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ password })
+                        });
+
+                        const result = await response.json();
+                        if (result.success) {
+                            showAlert('El servidor se está reiniciando...', 'success');
+                            // Esperar 3 segundos y recargar la página
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 3000);
+                        }
+                    } catch (error) {
+                        // Si hay un error de conexión, asumimos que el servidor se está reiniciando
+                        showAlert('El servidor se está reiniciando...', 'success');
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 3000);
+                    }
                 }
 
-                bootstrap.Modal.getInstance(document.getElementById('passwordModal')).hide();
-            } else {
-                alert(result.message);
-            }
-        }
-
-        // Función para obtener el QR
-        async function fetchQR() {
-            try {
-                const response = await fetch('/qr');
-                if (response.ok) {
-                    const qrImage = document.getElementById('qrImage');
-                    qrImage.src = '/qr?' + new Date().getTime();
+                // Cerrar el modal
+                const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
+                if (modal) {
+                    modal.hide();
                 }
             } catch (error) {
-                console.error('Error fetching QR:', error);
-                showAlert('Error al actualizar el código QR', 'warning');
+                console.error('Error:', error);
+                // Si hay un error de conexión durante el reinicio, lo manejamos como éxito
+                if (!isEnabling) {
+                    showAlert('El servidor se está reiniciando...', 'success');
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 3000);
+                } else {
+                    showAlert('Error en la operación: ' + (error.message || 'Error desconocido'), 'danger');
+                }
             }
         }
 
-        // Función para cambiar entre pestañas
-        function showTab(tabId) {
+        // Función para cambiar entre pestañas con verificación de estado
+        async function showTab(tabId) {
+            if (tabId === 'send') {
+                // Verificar estado antes de cambiar a la pestaña de envío
+                const response = await fetch('/baileys-status');
+                const status = await response.json();
+
+                if (!status.isEnabled) {
+                    showAlert('Debe habilitar el servicio de WhatsApp primero', 'warning');
+                    return;
+                }
+            }
+
             document.querySelectorAll('.tab').forEach(tab => {
                 tab.classList.remove('active');
             });
@@ -354,9 +425,9 @@
 
         async function toggleBaileys() {
             const button = document.getElementById('toggleBaileys');
-            isEnablingBaileys = button.textContent.includes('Habilitar'); // Determinar acción
+            isEnablingBaileys = button.textContent.includes('Habilitar');
             const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
-            modal.show(); // Mostrar el modal
+            modal.show();
         }
 
         // Función para alternar campos de imagen
@@ -454,19 +525,13 @@
 
         // Verificar el estado de Baileys al cargar la página
         document.addEventListener('DOMContentLoaded', () => {
-            const status = localStorage.getItem('baileysStatus');
-            const statusElement = document.getElementById('connection-status');
-            const button = document.getElementById('toggleBaileys');
+            startStatusCheck();
+        });
 
-            if (status === 'enabled') {
-                statusElement.textContent = 'Conectado';
-                statusElement.className = 'status-connected';
-                button.textContent = 'Deshabilitar';
-            } else {
-                statusElement.textContent = 'Desconectado';
-                statusElement.className = 'status-disconnected';
-                button.textContent = 'Habilitar';
-            }
+        // Limpiar intervalos al salir
+        window.addEventListener('beforeunload', () => {
+            if (connectionCheckInterval) clearInterval(connectionCheckInterval);
+            if (qrCheckInterval) clearInterval(qrCheckInterval);
         });
 
         // Función para actualizar el estado de los mensajes

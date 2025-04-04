@@ -18,6 +18,7 @@
         "cache-manager": "5.2.4",
         "child_process": "^1.0.2",
         "csv-parser": "^3.0.0",
+        "dotenv": "^16.4.7",
         "express": "^4.19.2",
         "fs": "^0.0.1-security",
         "mime-types": "2.1.35",
@@ -37,6 +38,7 @@
         "@whiskeysockets/baileys": "6.5.0",
         "cache-manager": "5.2.4",
         "fs": "^0.0.1-security",
+        "nodemon": "^3.1.9",
         "wa-sticker-formatter": "4.4.4"
     },
     "author": "Andres Vera",

@@ -24,6 +24,25 @@ PORT=3009
 npm install -g pm2
 ```
 ### inicializamos 
+```
 pm2 start app.js --name mi-servidor
+```
 
+### Para ver logs
 
+```
+pm2 logs mi-servidor
+```
+
+### Borrar servidor
+
+```
+pm2 delete mi-servidor
+```
+
+### Guardar para que se inicie automatico
+
+```
+pm2 save
+pm2 startup
+```

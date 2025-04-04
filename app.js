@@ -28,64 +28,134 @@ let botInstance;
 
 const ADMIN_PASSWORD = process.env.RESTART_PASSWORD;
 
-const habilitar = async () => {
-    try {
-        if (!botInstance) {
+/**
+ * Gestor singleton de estado de Baileys
+ */
+class BaileysManager {
+    static instance;
+    
+    constructor() {
+        if (BaileysManager.instance) {
+            return BaileysManager.instance;
+        }
+        this.isEnabled = false;
+        this.botInstance = null;
+        this.adapterProvider = null;
+        this.lastActivity = Date.now();
+        this.inactivityTimeout = 30 * 60 * 1000; // 30 minutos de inactividad
+        this.checkInactivityInterval = null;
+        BaileysManager.instance = this;
+    }
+
+    static getInstance() {
+        if (!BaileysManager.instance) {
+            BaileysManager.instance = new BaileysManager();
+        }
+        return BaileysManager.instance;
+    }
+
+    updateActivity() {
+        this.lastActivity = Date.now();
+    }
+
+    startInactivityCheck() {
+        if (this.checkInactivityInterval) return;
+        
+        this.checkInactivityInterval = setInterval(() => {
+            const inactiveTime = Date.now() - this.lastActivity;
+            if (inactiveTime > this.inactivityTimeout && this.isEnabled) {
+                console.log('Deshabilitando Baileys por inactividad');
+                this.disable();
+            }
+        }, 60000); // Revisar cada minuto
+    }
+
+    stopInactivityCheck() {
+        if (this.checkInactivityInterval) {
+            clearInterval(this.checkInactivityInterval);
+            this.checkInactivityInterval = null;
+        }
+    }
+
+    async enable() {
+        if (this.isEnabled) return;
+
+        try {
             const adapterFlow = createFlow([]);
-            adapterProvider = createProvider(BaileysProvider);
+            this.adapterProvider = createProvider(BaileysProvider);
             const adapterDB = new MockAdapter();
 
-            // Configura el gestor de conexiones
-            connectionManager.setProvider(adapterProvider);
+            connectionManager.setProvider(this.adapterProvider);
 
-            createBot({
+            this.botInstance = createBot({
                 flow: adapterFlow,
                 database: adapterDB,
-                provider: adapterProvider,
+                provider: this.adapterProvider,
             });
 
-            // Iniciar el bot cuando se habilita
-            botInstance = createBot({
-                flow: adapterFlow,
-                provider: adapterProvider,
-            });
-
-            console.log('Baileys habilitado');
-        } else {
-            console.log('Baileys ya está habilitado');
+            this.isEnabled = true;
+            this.updateActivity();
+            this.startInactivityCheck();
+            
+            return true;
+        } catch (error) {
+            console.error('Error al habilitar Baileys:', error);
+            return false;
         }
-    } catch (error) {
-        console.error('Error al habilitar Baileys:', error);
     }
+
+    async disable() {
+        if (!this.isEnabled) return true;
+
+        try {
+            // Solo nos aseguramos de cambiar el estado
+            this.isEnabled = false;
+            
+            return true;
+        } catch (error) {
+            console.error('Error al deshabilitar Baileys:', error);
+            return false;
+        }
+    }
+
+    getState() {
+        return {
+            isEnabled: this.isEnabled,
+            lastActivity: this.lastActivity
+        };
+    }
+
+    getProvider() {
+        return this.adapterProvider;
+    }
+}
+
+// Instancia global
+const baileysManager = new BaileysManager();
+
+// Actualizar las funciones existentes para usar el nuevo gestor
+const habilitar = async () => {
+    return await baileysManager.enable();
 };
 
 const deshabilitar = async (req, res) => {
-    if (botInstance) {
-        try {
-            botInstance = null;
-            adapterProvider = null;
-            console.log('Baileys deshabilitado');
-            // 🔥 Comando para reiniciar el servidor con PM2
-            setTimeout(() => {
-                exec('pm2 restart mi-servidor', (err, stdout, stderr) => {
-                    if (err) {
-                        console.error('Error al reiniciar con PM2:', stderr);
-                    } else {
-                        console.log('Servidor reiniciado:', stdout);
-                    }
-                });
-            }, 10000);
-            res.json({ success: true, message: 'Servidor reiniciado correctamente' });
-        } catch (error) {
-            console.error('Error al deshabilitar Baileys:', error);
-            res.status(500).json({ success: false, message: 'Error al deshabilitar' });
-        }
+    if (await baileysManager.disable()) {
+        console.log('Baileys deshabilitado');
+        setTimeout(() => {
+            exec('pm2 restart mi-servidor', (err, stdout, stderr) => {
+                if (err) {
+                    console.error('Error al reiniciar con PM2:', stderr);
+                } else {
+                    console.log('Servidor reiniciado:', stdout);
+                }
+            });
+        }, 10000);
+        res.json({ success: true, message: 'Servidor reiniciado correctamente' });
     } else {
-        console.log('Baileys no está habilitado');
-        res.json({ success: false, message: 'Baileys no estaba habilitado' });
+        console.error('Error al deshabilitar Baileys');
+        res.status(500).json({ success: false, message: 'Error al deshabilitar' });
     }
 };
-
 
 /**
  * Clase para gestionar la conexión del bot
@@ -362,13 +432,20 @@ class MessageQueue {
         console.log(`Enviando mensaje a ${number} (posición original: ${originalIndex + 1})`);
 
         try {
+            const provider = baileysManager.getProvider();
+            if (!provider) {
+                throw new Error('Proveedor de WhatsApp no disponible');
+            }
+
+            baileysManager.updateActivity(); // Actualizar timestamp de actividad
+
             if (singleImage) {
-                await adapterProvider.sendImage(`${number}@c.us`, singleImage.path, message);
+                await provider.sendImage(`${number}@c.us`, singleImage.path, message);
             } else {
-                await adapterProvider.sendText(`${number}@c.us`, message);
+                await provider.sendText(`${number}@c.us`, message);
                 if (images && images.length > 0) {
                     for (const image of images) {
-                        await adapterProvider.sendImage(`${number}@c.us`, image.path);
+                        await provider.sendImage(`${number}@c.us`, image.path);
                     }
                 }
             }
@@ -395,6 +472,7 @@ const connectionManager = new ConnectionManager();
 const messageQueue = new MessageQueue();
 const app = express();
 const port = process.env.PORT || 3000;
+let server; // Variable global para el servidor HTTP
 
 // Configuración de Express
 app.use(express.static('public'));
@@ -446,40 +524,53 @@ const loadNumbersFromCSV = (filePath) => {
  * Función principal de inicialización
  */
 const main = async () => {
+    // Endpoint para obtener el estado actual de Baileys
+    app.get('/baileys-status', (req, res) => {
+        const state = baileysManager.getState();
+        res.json({
+            ...state,
+            lastActivityAgo: Math.round((Date.now() - state.lastActivity) / 1000) + ' segundos'
+        });
+    });
 
-    // Endpoint para habilitar/deshabilitar Baileys
+    // Endpoint para habilitar/deshabilitar Baileys con verificación de estado
     app.post('/toggle-baileys', async (req, res) => {
         const { enable, password } = req.body;
-        if (enable) {
-            try {
-                if (!password || password !== ADMIN_PASSWORD) {
-                    return res.json({ success: false, message: 'Clave incorrecta' });
-                }
-                await habilitar();
-                isBaileysEnabled = true;
-                res.json({ success: true, message: 'Baileys habilitado' });
-            } catch (error) {
-                console.error('Error al habilitar Baileys:', error);
-                res.json({ success: false, message: 'Error al habilitar Baileys' });
-            }
-        } else {
-            try {
-                await deshabilitar(req, res);
-                isBaileysEnabled = false;
-            } catch (error) {
-                console.error('Error al deshabilitar Baileys:', error);
-                res.json({ success: false, message: 'Error al deshabilitar Baileys' });
-            }
+        
+        if (!password || password !== ADMIN_PASSWORD) {
+            return res.json({ success: false, message: 'Clave incorrecta' });
         }
-        console.log(`Baileys ${enable ? 'habilitado' : 'deshabilitado'}`);
+
+        try {
+            if (enable) {
+                if (await baileysManager.enable()) {
+                    res.json({ success: true, message: 'Baileys habilitado correctamente' });
+                } else {
+                    res.json({ success: false, message: 'Error al habilitar Baileys' });
+                }
+            } else {
+                if (await baileysManager.disable()) {
+                    res.json({ success: true, message: 'Baileys deshabilitado correctamente' });
+                } else {
+                    res.json({ success: false, message: 'Error al deshabilitar Baileys' });
+                }
+            }
+        } catch (error) {
+            console.error('Error en toggle-baileys:', error);
+            res.status(500).json({ success: false, message: error.message });
+        }
     });
 
     // Endpoint para verificar estado de conexión
     app.get('/connection-status', async (req, res) => {
         try {
             const isConnected = await connectionManager.checkConnection();
+            const baileysState = baileysManager.getState();
+            
             res.json({
                 status: isConnected ? 'connected' : 'disconnected',
+                baileysEnabled: baileysState.isEnabled,
+                lastActivity: baileysState.lastActivity,
                 reconnectAttempts: connectionManager.reconnectAttempts,
                 isReconnecting: connectionManager.isReconnecting
             });
@@ -489,35 +580,20 @@ const main = async () => {
         }
     });
 
-    app.get('/message-status', (req, res) => {
-        const stats = messageQueue.getStats();
-        res.json({
-            sent: stats.sent,
-            total: stats.total,
-            errors: stats.errors,
-            messages: stats.messages,
-            completed: stats.completed,
-            isProcessing: messageQueue.isProcessing
-        });
-    });
-
-    // Endpoint para forzar reconexión
-    app.post('/force-reconnect', async (req, res) => {
-        try {
-            await connectionManager.handleReconnect();
-            res.json({ message: 'Reconexión iniciada' });
-        } catch (error) {
-            res.status(500).json({ error: error.message });
-        }
-    });
-
-    // Endpoint principal para envío de mensajes
+    // Endpoint principal para envío de mensajes con verificación de estado
     app.post('/send-messages', upload.fields([
         { name: 'csvFile', maxCount: 1 },
         { name: 'images', maxCount: 10 },
         { name: 'singleImage', maxCount: 1 }
     ]), async (req, res) => {
         try {
+            // Verificar si Baileys está habilitado
+            if (!baileysManager.getState().isEnabled) {
+                return res.status(400).json({ 
+                    error: 'El servicio de WhatsApp no está habilitado. Por favor, habilítelo primero.' 
+                });
+            }
+
             if (!req.files || !req.files['csvFile']) {
                 return res.status(400).json({ error: 'Archivo CSV no proporcionado' });
             }
@@ -533,6 +609,8 @@ const main = async () => {
                 return res.status(400).json({ error: 'No se encontraron números válidos' });
             }
 
+            // Actualizar actividad antes de comenzar el envío
+            baileysManager.updateActivity();
             await messageQueue.add(numbers, message, images, singleImage);
 
             res.json({
@@ -546,7 +624,6 @@ const main = async () => {
             console.error('Error en /send-messages:', error);
             res.status(500).json({ error: error.message });
         } finally {
-            // Limpieza de archivos
             if (req.files) {
                 Object.values(req.files).flat().forEach(file => {
                     if (fs.existsSync(file.path)) {
@@ -567,8 +644,42 @@ const main = async () => {
         }
     });
 
-    // Inicia el servidor
-    app.listen(port, () => {
+    // Endpoint para reiniciar el servidor
+    app.post('/restart-server', (req, res) => {
+        const { password } = req.body;
+
+        if (!password || password !== ADMIN_PASSWORD) {
+            return res.status(401).json({ 
+                success: false, 
+                message: 'Clave incorrecta' 
+            });
+        }
+
+        console.log('Reiniciando servidor Node.js...');
+
+        // Enviar respuesta antes de reiniciar
+        res.json({ 
+            success: true, 
+            message: 'Servidor reiniciando...' 
+        });
+
+        // Esperar un momento para asegurar que la respuesta se envíe
+        setTimeout(() => {
+            const { spawn } = require('child_process');
+            // Iniciar un nuevo proceso antes de terminar este
+            const child = spawn(process.argv[0], process.argv.slice(1), {
+                detached: true,
+                stdio: 'inherit'
+            });
+            
+            child.unref();
+            // Terminar el proceso actual
+            process.exit(0);
+        }, 1000);
+    });
+
+    // Inicia el servidor y guarda la referencia globalmente
+    server = app.listen(port, () => {
         console.log(`Servidor escuchando en http://localhost:${port}`);
     });
 };

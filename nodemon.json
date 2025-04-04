@@ -1,0 +1,23 @@
+{
+    "events": {
+        "restart": "osascript -e 'display notification \"Servidor reiniciado\" with title \"Message Sender\"'"
+    },
+    "restartable": "rs",
+    "ignore": [
+        ".git",
+        "node_modules/**/node_modules",
+        "bot.qr.png"
+    ],
+    "verbose": true,
+    "execMap": {
+        "js": "node"
+    },
+    "watch": [
+        "*.js",
+        "*.json"
+    ],
+    "env": {
+        "NODE_ENV": "development"
+    },
+    "ext": "js,json"
+}
