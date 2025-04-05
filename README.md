@@ -1,24 +1,25 @@
 # WhatsApp Message Sender
 
-Sistema de envío masivo de mensajes por WhatsApp con gestión de cola y soporte para imágenes.
+Sistema de envío masivo de mensajes por WhatsApp con gestión de cola, manejo de sesiones y reinicio seguro.
 
-## Características
+## Características Técnicas
 
-- Envío masivo de mensajes desde archivo CSV
-- Soporte para envío de imágenes (individual o múltiple)
-- Sistema de cola con reintentos automáticos
-- Interfaz web amigable
-- Gestión de sesiones de WhatsApp
+- Sistema de cola con procesamiento ordenado
+- Gestión de sesiones WhatsApp (Baileys)
+- Reinicio seguro del servidor
+- Manejo de conexiones persistentes
+- Sistema de reconexión automática
+- Monitoreo de estado en tiempo real
 - Despliegue con Docker
-- Monitoreo de estado de conexión
+- Gestión de inactividad automática
 
-## Requisitos Previos
+## Requisitos
 
 - Node.js >= 18
 - Docker y Docker Compose (para despliegue con contenedores)
 - NPM o Yarn
 
-## Instalación y Configuración
+## Instalación
 
 ### 1. Clonar el repositorio
 ```bash
@@ -27,27 +28,33 @@ cd message-sender
 ```
 
 ### 2. Configurar variables de entorno
-Copia el archivo `.env.example` a `.env`:
 ```bash
 cp .env.example .env
 ```
-Edita el archivo `.env` con tus configuraciones.
+
+Variables importantes en `.env`:
+```env
+PORT=3009                           # Puerto del servidor
+RAILWAY_STATIC_URL=http://localhost # URL base
+PUBLIC_URL=http://localhost         # URL pública
+RESTART_PASSWORD=tu_clave_secreta   # Clave para reinicio/deshabilitación
+ALLOWED_ORIGINS=http://dominio.com  # CORS permitidos
+NODE_ENV=production                 # Entorno
+```
 
 ### 3. Instalación de dependencias
 ```bash
-npm install
+npm install --legacy-peer-deps
 ```
 
-## Ejecución
-
-### Desarrollo
+### 4. Iniciar en desarrollo
 ```bash
 npm start
 ```
 
-### Producción con Docker
+## Despliegue con Docker
 
-1. Construir la imagen:
+1. Construir imagen:
 ```bash
 docker build -t message-sender .
 ```
@@ -57,96 +64,107 @@ docker build -t message-sender .
 docker-compose up -d
 ```
 
-## Configuración del Dominio
+## Sistema de Reinicio
 
-Para configurar el dominio de tu aplicación y asegurar que los endpoints funcionen correctamente:
+El sistema implementa un mecanismo de reinicio seguro que:
 
-1. Modifica las siguientes variables en tu archivo `.env`:
-```bash
-RAILWAY_STATIC_URL=https://tudominio.com   # URL base para recursos estáticos
-PUBLIC_URL=https://tudominio.com           # URL pública del servidor
-ALLOWED_ORIGINS=https://tudominio.com      # Dominios permitidos para CORS
+1. Cierra correctamente las conexiones HTTP
+2. Limpia los recursos de Baileys
+3. Desconecta WhatsApp de forma segura
+4. Reinicia el proceso completo
+
+Para reiniciar manualmente:
+1. Usar el botón "Deshabilitar" en la interfaz
+2. Ingresar la clave de administrador
+3. El sistema se reiniciará automáticamente
+
+## Características Funcionales
+
+### Gestión de Mensajes
+- Envío masivo desde CSV
+- Soporte para mensajes de texto
+- Envío de imágenes individuales con texto
+- Envío de múltiples imágenes
+- Cola de procesamiento ordenado
+- Sistema de reintentos automáticos
+- Monitoreo en tiempo real del progreso
+
+### Gestión de Conexión
+- Reconexión automática
+- Detección de inactividad (30 minutos)
+- Cierre seguro de sesiones
+- Monitoreo de estado de conexión
+- QR dinámico para reconexión
+
+### Interfaz de Usuario
+- Panel de control intuitivo
+- Visualización de estado de conexión
+- Progreso de envío en tiempo real
+- Estadísticas de envío
+- Gestión de sesión WhatsApp
+
+## Estructura de Archivos CSV
+
+El archivo debe contener una columna con números de teléfono:
+```csv
+5959XXXXXXXX
+5959XXXXXXXX
 ```
 
-2. Si necesitas permitir múltiples dominios o subdominios, puedes agregarlos en ALLOWED_ORIGINS separados por comas:
-```bash
-ALLOWED_ORIGINS=https://tudominio.com,https://api.tudominio.com,https://admin.tudominio.com
-```
+## Rendimiento y Límites
 
-3. Después de modificar las variables, reconstruye y reinicia el contenedor:
-```bash
-docker compose down
-docker compose up -d --build
-```
+- Mensajes de texto: ~500/10 segundos
+- Mensajes con imagen: ~500/8 minutos
+- Tamaño máximo de imagen: 10MB
+- Reconexiones automáticas: 5 intentos
+- Reintentos por mensaje: 3 intentos
+- Tamaño de lote: 100 mensajes
 
-### Propósito de cada variable
+## Logs y Monitoreo
 
-- `RAILWAY_STATIC_URL`: Define la URL base para cargar recursos estáticos
-- `PUBLIC_URL`: Define la URL base para las peticiones del frontend
-- `ALLOWED_ORIGINS`: Define los dominios permitidos para realizar peticiones (CORS)
+### Archivos de Log
+- `baileys.log`: Conexión WhatsApp
+- `core.class.log`: Núcleo del sistema 
+- `queue.class.log`: Cola de mensajes
 
-## Uso
+### Directorios Importantes
+- `/uploads`: Archivos temporales
+- `/bot_sessions`: Datos de sesión
+- `/public`: Interfaz web
 
-1. Accede a la interfaz web: `http://localhost:<PORT>`
-2. Escanea el código QR con WhatsApp
-3. Prepara tu archivo CSV con los números (formato: 5959XXXXXXXX)
-4. Envía tus mensajes
+## Seguridad
 
-## Estructura de archivos CSV
-
-El archivo CSV debe contener una columna con números de teléfono:
-```
-5959xxxxxxxx
-5959xxxxxxxx
-```
-
-## Estadísticas de Rendimiento
-
-- Mensajes de texto: ~500 mensajes/10 segundos
-- Mensajes con imagen: ~500 mensajes/8 minutos
-
-## Mantenimiento
-
-### Logs
-Los logs se encuentran en:
-- `baileys.log`: Logs de conexión WhatsApp
-- `core.class.log`: Logs del núcleo
-- `queue.class.log`: Logs de la cola de mensajes
-
-### Directorios importantes
-- `/uploads`: Archivos temporales de imágenes
-- `/bot_sessions`: Datos de sesión de WhatsApp
+- Protección con contraseña para reinicio
+- Validación de origen de peticiones (CORS)
+- Límite de tamaño de archivos
+- Limpieza automática de archivos temporales
+- Cierre seguro de sesiones
 
 ## Solución de Problemas
 
 1. Error de conexión:
-   - Verifica tu conexión a internet
-   - Asegúrate de que el QR esté actualizado
-   - Reinicia el servidor si es necesario
+   - Verificar conexión a internet
+   - Comprobar estado en panel de control
+   - Usar botón "Deshabilitar" y volver a habilitar
+   - Revisar logs para detalles
 
 2. Mensajes no enviados:
-   - Verifica el formato de los números
-   - Revisa los logs para más detalles
-   - Considera los límites de WhatsApp
+   - Verificar formato de números: 5959XXXXXXXX
+   - Comprobar estado de conexión WhatsApp
+   - Revisar límites de envío
+   - Consultar logs de errores
 
-## Seguridad
+## Mantenimiento
 
-- Cambia la contraseña de administrador en el .env
-- No compartas tus archivos de sesión
-- Mantén actualizadas las dependencias
+1. Monitoreo regular:
+   - Revisar logs periódicamente
+   - Verificar espacio en /uploads
+   - Monitorear uso de recursos
 
-## Limitaciones
-
-- Respeta las políticas de uso de WhatsApp
-- Evita envíos masivos agresivos
-- Considera los límites de la API
-
-## Contribuir
-
-1. Haz un Fork del repositorio
-2. Crea una rama para tu feature
-3. Haz commit de tus cambios
-4. Envía un pull request
+2. Reinicio preventivo:
+   - Recomendado cada 24-48 horas
+   - Usar botón "Deshabilitar" para reinicio seguro
+   - Verificar recuperación automática
 
 ## Licencia
 
