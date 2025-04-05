@@ -645,7 +645,7 @@ const main = async () => {
     });
 
     // Endpoint para reiniciar el servidor
-    app.post('/restart-server', (req, res) => {
+    app.post('/restart-server', async (req, res) => {
         const { password } = req.body;
 
         if (!password || password !== ADMIN_PASSWORD) {
@@ -665,27 +665,26 @@ const main = async () => {
 
         // Cerrar el servidor HTTP y limpiar recursos
         if (server) {
-            server.close(() => {
-                console.log('Servidor HTTP cerrado');
-                
-                // Limpiar recursos de Baileys
-                if (baileysManager.getState().isEnabled) {
-                    try {
-                        baileysManager.disable();
-                    } catch (error) {
-                        console.error('Error al deshabilitar Baileys:', error);
-                    }
-                }
-
-                // Esperar un momento y terminar el proceso
-                setTimeout(() => {
-                    console.log('Terminando proceso Node.js...');
-                    // El código 143 es SIGTERM, que Docker interpreta como una señal para reiniciar
-                    process.exit(143);
-                }, 1000);
+            await new Promise((resolve) => {
+                server.close(() => {
+                    console.log('Servidor HTTP cerrado');
+                    resolve();
+                });
             });
+            
+            // Limpiar recursos de Baileys
+            if (baileysManager.getState().isEnabled) {
+                try {
+                    await baileysManager.disable();
+                } catch (error) {
+                    console.error('Error al deshabilitar Baileys:', error);
+                }
+            }
+
+            // Forzar el cierre del proceso
+            process.kill(process.pid, 'SIGINT');
         } else {
-            process.exit(143);
+            process.kill(process.pid, 'SIGINT');
         }
     });
 

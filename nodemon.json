@@ -4,20 +4,20 @@
     },
     "restartable": "rs",
     "ignore": [
-        ".git",
-        "node_modules/**/node_modules",
-        "bot.qr.png"
+        "node_modules",
+        "bot_sessions",
+        "uploads",
+        "*.log"
     ],
     "verbose": true,
     "execMap": {
         "js": "node"
     },
-    "watch": [
-        "*.js",
-        "*.json"
-    ],
+    "watch": false,
     "env": {
-        "NODE_ENV": "development"
+        "NODE_ENV": "production"
     },
-    "ext": "js,json"
+    "ext": "js,json",
+    "signal": "SIGINT",
+    "exitcrash": true
 }
