@@ -14,7 +14,6 @@
 const { createBot, createProvider, createFlow, EVENTS } = require('@bot-whatsapp/bot');
 require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
 const BaileysProvider = require('@bot-whatsapp/provider/baileys');
 const fs = require('fs');
 const path = require('path');
@@ -476,24 +475,6 @@ const port = process.env.PORT || 3000;
 let server; // Variable global para el servidor HTTP
 
 // Configuración de Express
-const allowedOrigins = process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : [];
-app.use(cors({
-    origin: function(origin, callback) {
-        // Permitir peticiones sin origin (como Postman)
-        if (!origin) return callback(null, true);
-        
-        // Verificar si el origin está en la lista de permitidos
-        if (allowedOrigins.includes(origin)) {
-            callback(null, true);
-        } else {
-            callback(new Error('No permitido por CORS'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
 app.use(express.static('public'));
 app.use(express.json());
 

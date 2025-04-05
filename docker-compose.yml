@@ -3,23 +3,13 @@ services:
   whatsapp-sender:
     build: .
     container_name: whatsapp-sender
-    init: true
-    restart: unless-stopped
-    stop_signal: SIGTERM
-    network_mode: "host"  # Usar modo host para evitar problemas de red
+    restart: always
+    ports:
+      - "${PORT}:${PORT}"
     environment:
       - NODE_ENV=production
       - RAILWAY_STATIC_URL=${RAILWAY_STATIC_URL}
       - PUBLIC_URL=${PUBLIC_URL}
       - PORT=${PORT}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
-      - TINI_SUBREAPER=true
     volumes:
       - ./uploads:/app/uploads
-      - ./bot_sessions:/app/bot_sessions
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://127.0.0.1:${PORT}/baileys-status"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
