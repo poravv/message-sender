@@ -21,6 +21,103 @@ const multer = require('multer');
 const csv = require('csv-parser');
 const MockAdapter = require('@bot-whatsapp/database/mock');
 const { exec } = require('child_process');
+const ffmpeg = require('fluent-ffmpeg');
+const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+// Definir rutas de directorios
+const tempDir = path.join(__dirname, 'temp');
+const uploadsDir = path.join(__dirname, 'uploads');
+
+// Crear directorios si no existen
+[tempDir, uploadsDir].forEach(dir => {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+    }
+});
+
+/**
+ * Convierte un archivo de audio a formato OGG/OPUS
+ * @param {string} inputPath - Ruta del archivo de audio original
+ * @returns {Promise<string>} - Ruta del archivo convertido
+ */
+async function convertAudioToOgg(inputPath) {
+    if (!fs.existsSync(inputPath)) {
+        throw new Error(`Archivo de entrada no encontrado: ${inputPath}`);
+    }
+
+    // Asegurarse de que el directorio temporal exista
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const fileName = `audio_${Date.now()}.ogg`;
+    const outputPath = path.join(tempDir, fileName);
+    
+    return new Promise((resolve, reject) => {
+        ffmpeg(inputPath)
+            .toFormat('ogg')
+            .audioCodec('libopus')
+            .audioChannels(1) // Mono para mejor compatibilidad
+            .audioFrequency(48000) // Frecuencia estándar para WhatsApp
+            .on('start', () => {
+                console.log('Iniciando conversión de audio...');
+            })
+            .on('progress', (progress) => {
+                console.log('Progreso de conversión:', progress);
+            })
+            .on('end', () => {
+                console.log('Conversión completada:', outputPath);
+                if (fs.existsSync(outputPath)) {
+                    resolve(outputPath);
+                } else {
+                    reject(new Error('El archivo convertido no existe después de la conversión'));
+                }
+            })
+            .on('error', (err) => {
+                console.error('Error en la conversión:', err);
+                reject(err);
+            })
+            .save(outputPath);
+    });
+}
+
+const { toBuffer } = require('@whiskeysockets/baileys');
+const { Boom } = require('@hapi/boom');
+
+/**
+ * Envía un mensaje de audio usando Baileys
+ * @param {Object} provider - Proveedor de Baileys
+ * @param {string} jid - ID del chat (número@s.whatsapp.net)
+ * @param {string} audioPath - Ruta al archivo de audio
+ * @returns {Promise<boolean>}
+ */
+async function sendAudioMessage(provider, jid, audioPath) {
+    console.log(`Intentando enviar audio desde: ${audioPath}`);
+    
+    if (!fs.existsSync(audioPath)) {
+        throw new Error(`Archivo de audio no encontrado en: ${audioPath}`);
+    }
+
+    try {
+        // Leer el archivo como buffer
+        const audioBuffer = fs.readFileSync(audioPath);
+        const buffer = toBuffer(audioBuffer);
+        
+        // Enviar el audio usando el proveedor
+        await provider.sendMessage(jid, {
+            audio: buffer,
+            mimetype: 'audio/mp3',
+            ptt: true
+        });
+
+        console.log('Audio enviado exitosamente');
+        return true;
+    } catch (error) {
+        console.error('Error en sendAudioMessage:', error);
+        throw new Boom(error);
+    }
+}
 
 let adapterProvider;
 let isBaileysEnabled = false; // Estado de Baileys (habilitado/deshabilitado)
@@ -315,7 +412,7 @@ class MessageQueue {
      * @param {Array} images - Array de imágenes (opcional)
      * @param {Object} singleImage - Imagen única (opcional)
      */
-    async add(numbers, message, images, singleImage) {
+    async add(numbers, message, images, singleImage, audioFile) {
         // Inicializar estadísticas
         this.messageStats = {
             total: numbers.length,
@@ -331,6 +428,7 @@ class MessageQueue {
             message,
             images,
             singleImage,
+            audioFile,
             attempts: 0,
             originalIndex: index
         }));
@@ -428,43 +526,150 @@ class MessageQueue {
      * @returns {Promise}
      */
     async sendMessage(item) {
-        const { number, message, images, singleImage, originalIndex } = item;
+        const { number, message, images, singleImage, audioFile, originalIndex } = item;
         console.log(`Enviando mensaje a ${number} (posición original: ${originalIndex + 1})`);
-
+    
         try {
             const provider = baileysManager.getProvider();
             if (!provider) {
                 throw new Error('Proveedor de WhatsApp no disponible');
             }
+    
+            baileysManager.updateActivity();
+            
+            const jid = `${number}@s.whatsapp.net`;
 
-            baileysManager.updateActivity(); // Actualizar timestamp de actividad
+            if (audioFile) {
+                try {
+                    // Validar archivo de audio
+                    if (!fs.existsSync(audioFile.path)) {
+                        throw new Error('Archivo de audio no encontrado');
+                    }
+                    
+                    console.log(`Procesando audio: ${audioFile.path}`);
 
-            if (singleImage) {
-                await provider.sendImage(`${number}@c.us`, singleImage.path, message);
+                    // Convertir el audio a ogg/opus
+                    const convertedAudioPath = await convertAudioToOgg(audioFile.path);
+                    console.log(`Audio convertido a: ${convertedAudioPath}`);
+
+                    // Leer el archivo convertido como buffer
+                    const audioBuffer = await fs.promises.readFile(convertedAudioPath);
+
+                    // Obtener el socket activo de la sesión
+                    const sock = provider.getInstance();
+                    if (!sock) {
+                        throw new Error('No se pudo obtener la sesión activa de WhatsApp');
+                    }
+
+                    console.log('Usando sesión activa para enviar audio...');
+                    
+                    // Enviar audio usando el socket directamente
+                    await sendWithRetry(async () => {
+                        await sock.sendMessage(jid, {
+                            audio: audioBuffer,
+                            mimetype: 'audio/ogg; codecs=opus',
+                            ptt: true,
+                            fileName: 'audio.ogg'
+                        });
+                        console.log('Audio enviado exitosamente usando la sesión activa');
+                    }, 3);
+
+                    // Enviar mensaje de texto si existe
+                    if (message) {
+                        await provider.sendText(jid, message);
+                    }
+
+                    // Limpiar el archivo convertido pero mantener el original
+                    if (fs.existsSync(convertedAudioPath)) {
+                        fs.unlinkSync(convertedAudioPath);
+                    }
+
+                } catch (error) {
+                    console.error(`Error al procesar audio para ${number}:`, error);
+                    throw error;
+                }
+            } else if (singleImage) {
+                await provider.sendImage(jid, singleImage.path, message);
             } else {
-                await provider.sendText(`${number}@c.us`, message);
+                await provider.sendText(jid, message);
                 if (images && images.length > 0) {
                     for (const image of images) {
-                        await provider.sendImage(`${number}@c.us`, image.path);
+                        await provider.sendImage(jid, image.path);
                     }
                 }
             }
             return true;
         } catch (error) {
-            console.error(`Error enviando mensaje a ${number} (posición original: ${originalIndex + 1}): ${error.message}`);
+            console.error(`Error enviando mensaje a ${number} (posición original: ${originalIndex + 1}):`, error);
             throw error;
         }
     }
+    
+}
+
+async function sendWithRetry(operation, maxRetries = 3, baseDelay = 1000) {
+    let lastError;
+    
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            return await operation();
+        } catch (error) {
+            lastError = error;
+            if (i < maxRetries - 1) {
+                const delay = baseDelay * Math.pow(2, i);
+                console.log(`Intento ${i + 1} fallido. Reintentando en ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+    
+    throw lastError;
 }
 
 /**
  * Configuración de multer para manejo de archivos
  */
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        // Asegurarse de que el directorio uploads exista
+        if (!fs.existsSync('uploads')) {
+            fs.mkdirSync('uploads', { recursive: true });
+        }
+        cb(null, 'uploads/');
+    },
+    filename: function (req, file, cb) {
+        if (file.fieldname === 'audioFile') {
+            // Mantener la extensión original del archivo
+            const ext = path.extname(file.originalname);
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            cb(null, `audio_${uniqueSuffix}${ext}`);
+        } else {
+            // Para otros archivos, mantenemos el comportamiento actual
+            cb(null, file.originalname);
+        }
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    if (file.fieldname === 'audioFile') {
+        // Aceptar solo formatos de audio comunes
+        if (file.mimetype.startsWith('audio/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Formato de archivo no soportado. Solo se permiten archivos de audio.'));
+        }
+    } else {
+        // Para otros tipos de archivos, mantener el comportamiento actual
+        cb(null, true);
+    }
+};
+
 const upload = multer({
-    dest: 'uploads/',
+    storage: storage,
     limits: {
         fileSize: 10 * 1024 * 1024 // 10MB límite
-    }
+    },
+    fileFilter: fileFilter
 });
 
 // Instancias principales
@@ -584,7 +789,8 @@ const main = async () => {
     app.post('/send-messages', upload.fields([
         { name: 'csvFile', maxCount: 1 },
         { name: 'images', maxCount: 10 },
-        { name: 'singleImage', maxCount: 1 }
+        { name: 'singleImage', maxCount: 1 },
+        { name: 'audioFile', maxCount: 1 }
     ]), async (req, res) => {
         try {
             // Verificar si Baileys está habilitado
@@ -601,6 +807,7 @@ const main = async () => {
             const csvFilePath = req.files['csvFile'][0].path;
             const images = req.files['images'];
             const singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
+            const audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
             const { message } = req.body;
 
             const numbers = await loadNumbersFromCSV(csvFilePath);
@@ -611,7 +818,7 @@ const main = async () => {
 
             // Actualizar actividad antes de comenzar el envío
             baileysManager.updateActivity();
-            await messageQueue.add(numbers, message, images, singleImage);
+            await messageQueue.add(numbers, message, images, singleImage, audioFile);
 
             res.json({
                 status: 'success',
@@ -624,14 +831,25 @@ const main = async () => {
             console.error('Error en /send-messages:', error);
             res.status(500).json({ error: error.message });
         } finally {
+            // Limpiar solo archivos que no sean de audio
             if (req.files) {
-                Object.values(req.files).flat().forEach(file => {
-                    if (fs.existsSync(file.path)) {
-                        fs.unlinkSync(file.path);
+                Object.entries(req.files).forEach(([fieldName, files]) => {
+                    if (fieldName !== 'audioFile') {
+                        files.forEach(file => {
+                            if (fs.existsSync(file.path)) {
+                                fs.unlinkSync(file.path);
+                            }
+                        });
                     }
                 });
             }
         }
+    });
+
+    // Endpoint para obtener el estado de los mensajes
+    app.get('/message-status', (req, res) => {
+        const stats = messageQueue.getStats();
+        res.json(stats);
     });
 
     // Endpoint para obtener el QR

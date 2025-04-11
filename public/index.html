@@ -216,6 +216,7 @@
                                 <option value="none">Ninguna</option>
                                 <option value="multiple">Cargar múltiples imágenes</option>
                                 <option value="single">Cargar una imagen con comentario</option>
+                                <option value="audio">Enviar mensaje de audio</option>
                             </select>
                         </div>
 
@@ -229,6 +230,11 @@
                                     (opcional):</label></b>
                             <input type="file" id="singleImage" name="singleImage" class="form-control"
                                 accept="image/*">
+                        </div>
+
+                        <div class="mb-3 hidden" id="audioField">
+                            <b><label for="audioFile" class="form-label">Cargar archivo de audio:</label></b>
+                            <input type="file" id="audioFile" name="audioFile" class="form-control" accept="audio/*">
                         </div>
 
                         <div class="mb-3">
@@ -435,14 +441,18 @@
             const imageOption = document.getElementById('imageOption').value;
             const multipleImagesField = document.getElementById('multipleImagesField');
             const singleImageField = document.getElementById('singleImageField');
+            const audioField = document.getElementById('audioField');
 
             multipleImagesField.classList.add('hidden');
             singleImageField.classList.add('hidden');
+            audioField.classList.add('hidden');
 
             if (imageOption === 'multiple') {
                 multipleImagesField.classList.remove('hidden');
             } else if (imageOption === 'single') {
                 singleImageField.classList.remove('hidden');
+            } else if (imageOption === 'audio') {
+                audioField.classList.remove('hidden');
             }
         }
 
@@ -467,6 +477,9 @@
                 for (let i = 0; i < images.length; i++) {
                     formData.append('images', images[i]);
                 }
+            } else if (imageOption === 'audio') {
+                const audioFile = document.getElementById('audioFile').files[0];
+                if (audioFile) formData.append('audioFile', audioFile);
             }
 
             const spinner = document.getElementById('spinner');
