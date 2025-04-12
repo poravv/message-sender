@@ -119,10 +119,6 @@ async function sendAudioMessage(provider, jid, audioPath) {
     }
 }
 
-let adapterProvider;
-let isBaileysEnabled = false; // Estado de Baileys (habilitado/deshabilitado)
-let botInstance;
-
 const ADMIN_PASSWORD = process.env.RESTART_PASSWORD;
 
 /**
@@ -229,30 +225,6 @@ class BaileysManager {
 
 // Instancia global
 const baileysManager = new BaileysManager();
-
-// Actualizar las funciones existentes para usar el nuevo gestor
-const habilitar = async () => {
-    return await baileysManager.enable();
-};
-
-const deshabilitar = async (req, res) => {
-    if (await baileysManager.disable()) {
-        console.log('Baileys deshabilitado');
-        setTimeout(() => {
-            exec('pm2 restart mi-servidor', (err, stdout, stderr) => {
-                if (err) {
-                    console.error('Error al reiniciar con PM2:', stderr);
-                } else {
-                    console.log('Servidor reiniciado:', stdout);
-                }
-            });
-        }, 10000);
-        res.json({ success: true, message: 'Servidor reiniciado correctamente' });
-    } else {
-        console.error('Error al deshabilitar Baileys');
-        res.status(500).json({ success: false, message: 'Error al deshabilitar' });
-    }
-};
 
 /**
  * Clase para gestionar la conexión del bot
@@ -569,7 +541,7 @@ class MessageQueue {
                             audio: audioBuffer,
                             mimetype: 'audio/ogg; codecs=opus',
                             ptt: true,
-                            fileName: 'audio.ogg'
+                            fileName: `audio_${Date.now()}.ogg`,
                         });
                         console.log('Audio enviado exitosamente usando la sesión activa');
                     }, 3);
