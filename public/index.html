@@ -185,7 +185,7 @@
         <div class="tab-buttons text-center mb-4">
             <button class="btn btn-primary" onclick="showTab('link')">Enlazar Whatsapp</button>
             <button class="btn btn-secondary" onclick="showTab('send')">Enviar Mensaje</button>
-            <button id="toggleBaileys" class="" onclick="toggleBaileys()">Habilitar</button>
+            <button id="toggleWhatsApp" class="" onclick="toggleBaileys()">Habilitar</button>
         </div>
 
         <div id="link" class="tab active">
@@ -292,13 +292,13 @@
         // Función para actualizar el estado de la UI basado en el estado del backend
         async function updateUIState() {
             try {
-                const response = await fetch('/baileys-status');
+                const response = await fetch('/connection-status');
                 const status = await response.json();
 
                 const statusElement = document.getElementById('connection-status');
                 const button = document.getElementById('toggleBaileys');
 
-                if (status.isEnabled) {
+                if (status.isReady) {
                     button.textContent = 'Deshabilitar';
                     statusElement.textContent = 'Conectado';
                     statusElement.className = 'status-connected';
@@ -310,7 +310,7 @@
 
                 // Si hay inactividad prolongada, mostrar alerta
                 const inactivityTime = (Date.now() - new Date(status.lastActivity)) / 1000;
-                if (inactivityTime > 1800 && status.isEnabled) { // 30 minutos
+                if (inactivityTime > 1800 && status.isReady) { // 30 minutos
                     showAlert('La conexión ha estado inactiva por mucho tiempo. Considere reiniciarla.', 'warning');
                 }
             } catch (error) {
@@ -348,7 +348,7 @@
 
             try {
                 if (isEnabling) {
-                    const response = await fetch('/toggle-baileys', {
+                    const response = await fetch('/toggle-whatsapp', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -414,10 +414,10 @@
         async function showTab(tabId) {
             if (tabId === 'send') {
                 // Verificar estado antes de cambiar a la pestaña de envío
-                const response = await fetch('/baileys-status');
+                const response = await fetch('/connection-status');
                 const status = await response.json();
 
-                if (!status.isEnabled) {
+                if (!status.isReady) {
                     showAlert('Debe habilitar el servicio de WhatsApp primero', 'warning');
                     return;
                 }

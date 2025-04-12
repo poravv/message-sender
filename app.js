@@ -1,26 +1,25 @@
 /**
  * WhatsApp Bot con sistema de cola, gestión de conexión y procesamiento ordenado
- * Versión: 2.0
+ * Versión: 2.0 - whatsapp-web.js
  * 
  * Este bot permite:
  * - Envío masivo de mensajes desde archivo CSV
  * - Mantiene el orden de envío según el archivo
  * - Sistema de reintentos automáticos
  * - Gestión robusta de la conexión
- * - Manejo de imágenes múltiples
+ * - Manejo de audio PTT (Push to Talk)
  */
 
 // Importaciones necesarias
-const { createBot, createProvider, createFlow, EVENTS } = require('@bot-whatsapp/bot');
+const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 require('dotenv').config();
 const express = require('express');
-const BaileysProvider = require('@bot-whatsapp/provider/baileys');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
-const MockAdapter = require('@bot-whatsapp/database/mock');
-const { exec } = require('child_process');
+const qrcode = require('qrcode-terminal');
+const qrImage = require('qrcode'); // Para generar QR como imagen
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 ffmpeg.setFfmpegPath(ffmpegPath);
@@ -36,12 +35,21 @@ const uploadsDir = path.join(__dirname, 'uploads');
     }
 });
 
+// Configuración del servidor
+const app = express();
+const port = process.env.PORT || 3000;
+const ADMIN_PASSWORD = process.env.RESTART_PASSWORD;
+
+// Configuración de Express
+app.use(express.static('public'));
+app.use(express.json());
+
 /**
- * Convierte un archivo de audio a formato OGG/OPUS
+ * Convierte un archivo de audio a formato compatible con WhatsApp
  * @param {string} inputPath - Ruta del archivo de audio original
  * @returns {Promise<string>} - Ruta del archivo convertido
  */
-async function convertAudioToOgg(inputPath) {
+async function convertAudioToOpus(inputPath) {
     if (!fs.existsSync(inputPath)) {
         throw new Error(`Archivo de entrada no encontrado: ${inputPath}`);
     }
@@ -51,25 +59,35 @@ async function convertAudioToOgg(inputPath) {
         fs.mkdirSync(tempDir, { recursive: true });
     }
 
-    const fileName = `audio_${Date.now()}.ogg`;
+    // WhatsApp ahora prefiere MP3 para PTT (Push to Talk) en muchas plataformas
+    const fileName = `audio_${Date.now()}.mp3`;
     const outputPath = path.join(tempDir, fileName);
     
     return new Promise((resolve, reject) => {
         ffmpeg(inputPath)
-            .toFormat('ogg')
-            .audioCodec('libopus')
-            .audioChannels(1) // Mono para mejor compatibilidad
-            .audioFrequency(48000) // Frecuencia estándar para WhatsApp
-            .on('start', () => {
-                console.log('Iniciando conversión de audio...');
-            })
-            .on('progress', (progress) => {
-                console.log('Progreso de conversión:', progress);
-            })
+            .noVideo()
+            .audioCodec('libmp3lame')
+            .audioBitrate('128k')
+            .audioChannels(2)
+            .audioFrequency(44100)
+            .outputOptions([
+                '-write_xing 0',      // Mejorar compatibilidad
+                '-id3v2_version 0',   // Sin metadatos ID3
+                '-ar 44100',          // Asegurar frecuencia de muestreo
+            ])
+            .format('mp3')
+            .on('start', () => console.log('Iniciando conversión de audio...'))
+            .on('progress', (progress) => console.log('Progreso de conversión:', progress))
             .on('end', () => {
                 console.log('Conversión completada:', outputPath);
                 if (fs.existsSync(outputPath)) {
-                    resolve(outputPath);
+                    // Verificar que el archivo tenga contenido
+                    const stats = fs.statSync(outputPath);
+                    if (stats.size > 0) {
+                        resolve(outputPath);
+                    } else {
+                        reject(new Error('El archivo convertido está vacío'));
+                    }
                 } else {
                     reject(new Error('El archivo convertido no existe después de la conversión'));
                 }
@@ -82,310 +100,114 @@ async function convertAudioToOgg(inputPath) {
     });
 }
 
-const { toBuffer } = require('@whiskeysockets/baileys');
-const { Boom } = require('@hapi/boom');
+/**
+ * Configuración de multer para manejo de archivos
+ */
+const storage = multer.diskStorage({
+    destination: function (req, file, cb) {
+        if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        cb(null, uploadsDir);
+    },
+    filename: function (req, file, cb) {
+        if (file.fieldname === 'audioFile') {
+            const ext = path.extname(file.originalname);
+            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+            cb(null, `audio_${uniqueSuffix}${ext}`);
+        } else {
+            cb(null, file.originalname);
+        }
+    }
+});
+
+const fileFilter = (req, file, cb) => {
+    if (file.fieldname === 'audioFile') {
+        if (file.mimetype.startsWith('audio/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Formato de archivo no soportado. Solo se permiten archivos de audio.'));
+        }
+    } else {
+        cb(null, true);
+    }
+};
+
+const upload = multer({
+    storage: storage,
+    limits: {
+        fileSize: 10 * 1024 * 1024 // 10MB límite
+    },
+    fileFilter: fileFilter
+});
 
 /**
- * Envía un mensaje de audio usando Baileys
- * @param {Object} provider - Proveedor de Baileys
- * @param {string} jid - ID del chat (número@s.whatsapp.net)
- * @param {string} audioPath - Ruta al archivo de audio
- * @returns {Promise<boolean>}
+ * Lee y valida números desde un archivo CSV
+ * @param {string} filePath - Ruta al archivo CSV
+ * @returns {Promise<Array>} Array de números ordenados
  */
-async function sendAudioMessage(provider, jid, audioPath) {
-    console.log(`Intentando enviar audio desde: ${audioPath}`);
-    
-    if (!fs.existsSync(audioPath)) {
-        throw new Error(`Archivo de audio no encontrado en: ${audioPath}`);
-    }
+const loadNumbersFromCSV = (filePath) => {
+    return new Promise((resolve, reject) => {
+        const numbers = [];
+        let lineNumber = 0;
 
-    try {
-        // Leer el archivo como buffer
-        const audioBuffer = fs.readFileSync(audioPath);
-        const buffer = toBuffer(audioBuffer);
-        
-        // Enviar el audio usando el proveedor
-        await provider.sendMessage(jid, {
-            audio: buffer,
-            mimetype: 'audio/mp3',
-            ptt: true
-        });
-
-        console.log('Audio enviado exitosamente');
-        return true;
-    } catch (error) {
-        console.error('Error en sendAudioMessage:', error);
-        throw new Boom(error);
-    }
-}
-
-const ADMIN_PASSWORD = process.env.RESTART_PASSWORD;
-
-/**
- * Gestor singleton de estado de Baileys
- */
-class BaileysManager {
-    static instance;
-    
-    constructor() {
-        if (BaileysManager.instance) {
-            return BaileysManager.instance;
-        }
-        this.isEnabled = false;
-        this.botInstance = null;
-        this.adapterProvider = null;
-        this.lastActivity = Date.now();
-        this.inactivityTimeout = 30 * 60 * 1000; // 30 minutos de inactividad
-        this.checkInactivityInterval = null;
-        BaileysManager.instance = this;
-    }
-
-    static getInstance() {
-        if (!BaileysManager.instance) {
-            BaileysManager.instance = new BaileysManager();
-        }
-        return BaileysManager.instance;
-    }
-
-    updateActivity() {
-        this.lastActivity = Date.now();
-    }
-
-    startInactivityCheck() {
-        if (this.checkInactivityInterval) return;
-        
-        this.checkInactivityInterval = setInterval(() => {
-            const inactiveTime = Date.now() - this.lastActivity;
-            if (inactiveTime > this.inactivityTimeout && this.isEnabled) {
-                console.log('Deshabilitando Baileys por inactividad');
-                this.disable();
-            }
-        }, 60000); // Revisar cada minuto
-    }
-
-    stopInactivityCheck() {
-        if (this.checkInactivityInterval) {
-            clearInterval(this.checkInactivityInterval);
-            this.checkInactivityInterval = null;
-        }
-    }
-
-    async enable() {
-        if (this.isEnabled) return;
-
-        try {
-            const adapterFlow = createFlow([]);
-            this.adapterProvider = createProvider(BaileysProvider);
-            const adapterDB = new MockAdapter();
-
-            connectionManager.setProvider(this.adapterProvider);
-
-            this.botInstance = createBot({
-                flow: adapterFlow,
-                database: adapterDB,
-                provider: this.adapterProvider,
-            });
-
-            this.isEnabled = true;
-            this.updateActivity();
-            this.startInactivityCheck();
-            
-            return true;
-        } catch (error) {
-            console.error('Error al habilitar Baileys:', error);
-            return false;
-        }
-    }
-
-    async disable() {
-        if (!this.isEnabled) return true;
-
-        try {
-            // Solo nos aseguramos de cambiar el estado
-            this.isEnabled = false;
-            
-            return true;
-        } catch (error) {
-            console.error('Error al deshabilitar Baileys:', error);
-            return false;
-        }
-    }
-
-    getState() {
-        return {
-            isEnabled: this.isEnabled,
-            lastActivity: this.lastActivity
-        };
-    }
-
-    getProvider() {
-        return this.adapterProvider;
-    }
-}
-
-// Instancia global
-const baileysManager = new BaileysManager();
-
-/**
- * Clase para gestionar la conexión del bot
- * Maneja reconexiones automáticas y monitoreo del estado
- */
-class ConnectionManager {
-    constructor() {
-        this.provider = null;
-        this.reconnectAttempts = 0;
-        this.maxReconnectAttempts = 5;
-        this.reconnectDelay = 5000;
-        this.isReconnecting = false;
-        this.connectionState = 'disconnected';
-        this.messageStats = {
-            total: 0,
-            sent: 0,
-            errors: 0,
-            messages: []
-        };
-    }
-
-    setProvider(provider) {
-        this.provider = provider;
-        this.setupEventListeners();
-    }
-
-
-    setupEventListeners() {
-        if (!this.provider) return;
-
-        this.provider.on(EVENTS.CONNECTION_CLOSE, async () => {
-            console.log("Conexión cerrada. Iniciando reconexión automática...");
-            this.connectionState = 'disconnected';
-            await this.handleReconnect();
-        });
-
-        this.provider.on(EVENTS.AUTHENTICATION_FAILURE, async () => {
-            console.log("Fallo de autenticación detectado.");
-            this.connectionState = 'disconnected';
-            await this.handleReconnect();
-        });
-
-        this.provider.on(EVENTS.CONNECTION_OPEN, () => {
-            console.log("Conexión establecida exitosamente");
-            this.connectionState = 'connected';
-            this.reconnectAttempts = 0;
-        });
-
-        // Monitoreo de actualizaciones de conexión
-        this.provider.on('connection.update', async (update) => {
-            const { connection, lastDisconnect } = update;
-
-            if (connection === 'close') {
-                this.connectionState = 'disconnected';
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== 403;
-                if (shouldReconnect) {
-                    await this.handleReconnect();
+        fs.createReadStream(filePath)
+            .pipe(csv({
+                skipLines: 0,
+                headers: false
+            }))
+            .on('data', (row) => {
+                lineNumber++;
+                const number = Object.values(row)[0].trim();
+                if (number && /^\d+$/.test(number)) {
+                    numbers.push({
+                        number,
+                        index: lineNumber,
+                        originalRow: row
+                    });
+                } else {
+                    console.warn(`Línea ${lineNumber}: Número inválido encontrado: ${number}`);
                 }
-            } else if (connection === 'open') {
-                this.connectionState = 'connected';
-                console.log('Conexión establecida y actualizada a connected');
-            }
-        });
-
-        // Agregar evento para actualización de mensajes
-        this.provider.on('send.message', (status) => {
-            this.updateMessageStats(status);
-        });
-    }
-
-    updateMessageStats(status) {
-        const { number, state, message } = status;
-        this.messageStats.messages.push({
-            number,
-            status: state,
-            message: message || ''
-        });
-
-        if (state === 'sent') {
-            this.messageStats.sent++;
-        } else if (state === 'error') {
-            this.messageStats.errors++;
-        }
-    }
-
-    getMessageStats() {
-        return this.messageStats;
-    }
-
-    getMessageStats() {
-        return this.messageStats;
-    }
-
-    resetMessageStats() {
-        this.messageStats = {
-            total: 0,
-            sent: 0,
-            errors: 0,
-            messages: []
-        };
-    }
-
-    async checkConnection() {
-        // Verificar el estado real de la conexión con el proveedor
-        const isConnected = this.provider?.state?.connection === 'open' || this.connectionState === 'connected';
-        return isConnected;
-    }
-
-    async handleReconnect() {
-        if (this.isReconnecting) return;
-        this.isReconnecting = true;
-
-        try {
-            if (this.reconnectAttempts < this.maxReconnectAttempts) {
-                const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts);
-                console.log(`Intento de reconexión ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts} en ${delay / 1000} segundos`);
-
-                await new Promise(resolve => setTimeout(resolve, delay));
-
-                if (this.provider) {
-                    await this.provider.reconnect();
-                    this.reconnectAttempts++;
+            })
+            .on('end', () => {
+                if (numbers.length === 0) {
+                    reject(new Error('El archivo CSV no contiene números válidos.'));
+                } else {
+                    const orderedNumbers = numbers
+                        .sort((a, b) => a.index - b.index)
+                        .map(item => item.number);
+                    resolve(orderedNumbers);
                 }
-            } else {
-                console.log("Máximo de intentos de reconexión alcanzado. Requiere reinicio manual.");
-            }
-        } catch (error) {
-            console.error('Error durante la reconexión:', error);
-        } finally {
-            this.isReconnecting = false;
-        }
-    }
-
-    async checkConnection() {
-        return this.connectionState === 'connected';
-    }
-}
+            })
+            .on('error', reject);
+    });
+};
 
 /**
  * Clase para gestionar la cola de mensajes
- * Maneja el envío ordenado y los reintentos
  */
 class MessageQueue {
-    constructor() {
+    constructor(client) {
+        this.client = client;
         this.queue = [];
         this.isProcessing = false;
-        this.retryQueue = []; // Cola separada para reintentos
+        this.retryQueue = [];
         this.maxRetries = 3;
         this.retryDelay = 5000;
-        this.batchSize = 100;
+        this.batchSize = 5; // Tamaño de lote más pequeño para audios
+        this.messageStats = {
+            total: 0,
+            sent: 0,
+            errors: 0,
+            messages: [],
+            completed: false
+        };
     }
 
     /**
      * Agrega nuevos mensajes a la cola
-     * @param {Array} numbers - Array de números de teléfono
-     * @param {string} message - Mensaje a enviar
-     * @param {Array} images - Array de imágenes (opcional)
-     * @param {Object} singleImage - Imagen única (opcional)
      */
     async add(numbers, message, images, singleImage, audioFile) {
-        // Inicializar estadísticas
         this.messageStats = {
             total: numbers.length,
             sent: 0,
@@ -394,7 +216,6 @@ class MessageQueue {
             completed: false
         };
 
-        // Crea elementos de cola con índice original
         const queueItems = numbers.map((number, index) => ({
             number,
             message,
@@ -447,7 +268,6 @@ class MessageQueue {
 
     /**
      * Procesa un lote de mensajes
-     * @param {Array} batch - Lote de mensajes a procesar
      */
     async processBatch(batch) {
         const results = await Promise.allSettled(
@@ -464,6 +284,7 @@ class MessageQueue {
                     message: 'Mensaje enviado exitosamente'
                 });
             } else {
+                console.error(`Error enviando mensaje a ${item.number}:`, result.reason);
                 if (item.attempts < this.maxRetries) {
                     item.attempts++;
                     this.retryQueue.push(item);
@@ -478,39 +299,44 @@ class MessageQueue {
             }
         });
 
-        // Verificar si hemos completado todos los envíos
         if (this.queue.length === 0 && this.retryQueue.length === 0) {
             this.messageStats.completed = true;
         }
 
-        // Log de progreso
-        const successful = batch.length - this.messageStats.errors;
+        const successful = results.filter(r => r.status === 'fulfilled').length;
         console.log(`Lote procesado: ${successful}/${batch.length} mensajes enviados exitosamente`);
     }
 
+    /**
+     * Retorna las estadísticas de la cola
+     */
     getStats() {
         return this.messageStats;
     }
 
     /**
      * Envía un mensaje individual
-     * @param {Object} item - Item de la cola a enviar
-     * @returns {Promise}
      */
     async sendMessage(item) {
         const { number, message, images, singleImage, audioFile, originalIndex } = item;
         console.log(`Enviando mensaje a ${number} (posición original: ${originalIndex + 1})`);
     
         try {
-            const provider = baileysManager.getProvider();
-            if (!provider) {
-                throw new Error('Proveedor de WhatsApp no disponible');
-            }
-    
-            baileysManager.updateActivity();
+            // Formatear número para WhatsApp (agregar el sufijo @c.us)
+            const formattedNumber = `${number}@c.us`;
             
-            const jid = `${number}@s.whatsapp.net`;
+            // Validar que el cliente esté listo
+            if (!this.client.info) {
+                throw new Error('Cliente de WhatsApp no está listo');
+            }
+            
+            // Verificar si el número existe en WhatsApp
+            const isRegistered = await this.client.isRegisteredUser(formattedNumber);
+            if (!isRegistered) {
+                throw new Error(`El número ${number} no está registrado en WhatsApp`);
+            }
 
+            // Caso 1: Envío de audio
             if (audioFile) {
                 try {
                     // Validar archivo de audio
@@ -521,37 +347,27 @@ class MessageQueue {
                     console.log(`Procesando audio: ${audioFile.path}`);
 
                     // Convertir el audio a ogg/opus
-                    const convertedAudioPath = await convertAudioToOgg(audioFile.path);
+                    const convertedAudioPath = await convertAudioToOpus(audioFile.path);
                     console.log(`Audio convertido a: ${convertedAudioPath}`);
 
-                    // Leer el archivo convertido como buffer
-                    const audioBuffer = await fs.promises.readFile(convertedAudioPath);
-
-                    // Obtener el socket activo de la sesión
-                    const sock = provider.getInstance();
-                    if (!sock) {
-                        throw new Error('No se pudo obtener la sesión activa de WhatsApp');
-                    }
-
-                    console.log('Usando sesión activa para enviar audio...');
+                    // Crear MessageMedia desde el archivo con tipo MIME específico
+                    const audioMedia = MessageMedia.fromFilePath(convertedAudioPath);
+                    audioMedia.mimetype = 'audio/mp3';
                     
-                    // Enviar audio usando el socket directamente
-                    await sendWithRetry(async () => {
-                        await sock.sendMessage(jid, {
-                            audio: audioBuffer,
-                            mimetype: 'audio/ogg; codecs=opus',
-                            ptt: true,
-                            fileName: `audio_${Date.now()}.ogg`,
-                        });
-                        console.log('Audio enviado exitosamente usando la sesión activa');
-                    }, 3);
+                    // Enviar audio como mensaje de voz
+                    await this.client.sendMessage(formattedNumber, audioMedia, {
+                        sendAudioAsVoice: true,
+                        sendMediaAsDocument: false
+                    });
+                    
+                    console.log('Audio enviado exitosamente');
 
                     // Enviar mensaje de texto si existe
-                    if (message) {
-                        await provider.sendText(jid, message);
+                    if (message && message.trim()) {
+                        await this.client.sendMessage(formattedNumber, message);
                     }
 
-                    // Limpiar el archivo convertido pero mantener el original
+                    // Limpiar el archivo convertido
                     if (fs.existsSync(convertedAudioPath)) {
                         fs.unlinkSync(convertedAudioPath);
                     }
@@ -560,329 +376,426 @@ class MessageQueue {
                     console.error(`Error al procesar audio para ${number}:`, error);
                     throw error;
                 }
-            } else if (singleImage) {
-                await provider.sendImage(jid, singleImage.path, message);
-            } else {
-                await provider.sendText(jid, message);
-                if (images && images.length > 0) {
-                    for (const image of images) {
-                        await provider.sendImage(jid, image.path);
+            }
+            // Caso 2: Envío de imagen simple con comentario
+            else if (singleImage) {
+                try {
+                    // Validar archivo de imagen
+                    if (!fs.existsSync(singleImage.path)) {
+                        throw new Error('Archivo de imagen no encontrado');
                     }
+                    
+                    console.log(`Enviando imagen: ${singleImage.path}`);
+                    
+                    // Crear MessageMedia desde la imagen
+                    const media = MessageMedia.fromFilePath(singleImage.path);
+                    
+                    // Enviar la imagen con la descripción (mensaje)
+                    await this.client.sendMessage(formattedNumber, media, {
+                        caption: message || '',
+                        sendMediaAsDocument: false
+                    });
+                    
+                    console.log('Imagen con comentario enviada exitosamente');
+                } catch (error) {
+                    console.error(`Error al enviar imagen para ${number}:`, error);
+                    throw error;
                 }
             }
+            // Caso 3: Envío de múltiples imágenes
+            else if (images && images.length > 0) {
+                try {
+                    console.log(`Enviando ${images.length} imágenes a ${number}`);
+                    
+                    // Primero enviamos el mensaje de texto si existe
+                    if (message && message.trim()) {
+                        await this.client.sendMessage(formattedNumber, message);
+                    }
+                    
+                    // Luego enviamos cada imagen una por una
+                    for (const img of images) {
+                        if (!fs.existsSync(img.path)) {
+                            console.warn(`Imagen no encontrada: ${img.path}, omitiendo...`);
+                            continue;
+                        }
+                        
+                        const media = MessageMedia.fromFilePath(img.path);
+                        await this.client.sendMessage(formattedNumber, media);
+                        
+                        // Pequeña pausa entre imágenes para evitar bloqueos
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                    
+                    console.log('Todas las imágenes enviadas exitosamente');
+                } catch (error) {
+                    console.error(`Error al enviar múltiples imágenes para ${number}:`, error);
+                    throw error;
+                }
+            } 
+            // Caso 4: Solo mensaje de texto
+            else if (message && message.trim()) {
+                await this.client.sendMessage(formattedNumber, message);
+                console.log('Mensaje de texto enviado exitosamente');
+            } else {
+                throw new Error('No se proporcionó ningún contenido para enviar (mensaje, imagen o audio)');
+            }
+            
             return true;
         } catch (error) {
-            console.error(`Error enviando mensaje a ${number} (posición original: ${originalIndex + 1}):`, error);
+            console.error(`Error enviando mensaje a ${number}:`, error);
             throw error;
         }
     }
-    
-}
-
-async function sendWithRetry(operation, maxRetries = 3, baseDelay = 1000) {
-    let lastError;
-    
-    for (let i = 0; i < maxRetries; i++) {
-        try {
-            return await operation();
-        } catch (error) {
-            lastError = error;
-            if (i < maxRetries - 1) {
-                const delay = baseDelay * Math.pow(2, i);
-                console.log(`Intento ${i + 1} fallido. Reintentando en ${delay}ms...`);
-                await new Promise(resolve => setTimeout(resolve, delay));
-            }
-        }
-    }
-    
-    throw lastError;
 }
 
 /**
- * Configuración de multer para manejo de archivos
+ * Clase para gestionar el cliente de WhatsApp
  */
-const storage = multer.diskStorage({
-    destination: function (req, file, cb) {
-        // Asegurarse de que el directorio uploads exista
-        if (!fs.existsSync('uploads')) {
-            fs.mkdirSync('uploads', { recursive: true });
-        }
-        cb(null, 'uploads/');
-    },
-    filename: function (req, file, cb) {
-        if (file.fieldname === 'audioFile') {
-            // Mantener la extensión original del archivo
-            const ext = path.extname(file.originalname);
-            const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-            cb(null, `audio_${uniqueSuffix}${ext}`);
-        } else {
-            // Para otros archivos, mantenemos el comportamiento actual
-            cb(null, file.originalname);
-        }
+class WhatsAppManager {
+    constructor() {
+        this.client = null;
+        this.isReady = false;
+        this.qrCode = null;
+        this.connectionState = 'disconnected';
+        this.lastActivity = Date.now();
     }
-});
 
-const fileFilter = (req, file, cb) => {
-    if (file.fieldname === 'audioFile') {
-        // Aceptar solo formatos de audio comunes
-        if (file.mimetype.startsWith('audio/')) {
-            cb(null, true);
-        } else {
-            cb(new Error('Formato de archivo no soportado. Solo se permiten archivos de audio.'));
-        }
-    } else {
-        // Para otros tipos de archivos, mantener el comportamiento actual
-        cb(null, true);
-    }
-};
-
-const upload = multer({
-    storage: storage,
-    limits: {
-        fileSize: 10 * 1024 * 1024 // 10MB límite
-    },
-    fileFilter: fileFilter
-});
-
-// Instancias principales
-const connectionManager = new ConnectionManager();
-const messageQueue = new MessageQueue();
-const app = express();
-const port = process.env.PORT || 3000;
-let server; // Variable global para el servidor HTTP
-
-// Configuración de Express
-app.use(express.static('public'));
-app.use(express.json());
-
-/**
- * Lee y valida números desde un archivo CSV
- * @param {string} filePath - Ruta al archivo CSV
- * @returns {Promise<Array>} Array de números ordenados
- */
-const loadNumbersFromCSV = (filePath) => {
-    return new Promise((resolve, reject) => {
-        const numbers = [];
-        let lineNumber = 0;
-
-        fs.createReadStream(filePath)
-            .pipe(csv({
-                skipLines: 0,
-                headers: false
-            }))
-            .on('data', (row) => {
-                lineNumber++;
-                const number = Object.values(row)[0].trim();
-                if (number && /^\d+$/.test(number)) {
-                    numbers.push({
-                        number,
-                        index: lineNumber,
-                        originalRow: row
-                    });
-                } else {
-                    console.warn(`Línea ${lineNumber}: Número inválido encontrado: ${number}`);
-                }
-            })
-            .on('end', () => {
-                if (numbers.length === 0) {
-                    reject(new Error('El archivo CSV no contiene números válidos.'));
-                } else {
-                    const orderedNumbers = numbers
-                        .sort((a, b) => a.index - b.index)
-                        .map(item => item.number);
-                    resolve(orderedNumbers);
-                }
-            })
-            .on('error', reject);
-    });
-};
-
-/**
- * Función principal de inicialización
- */
-const main = async () => {
-    // Endpoint para obtener el estado actual de Baileys
-    app.get('/baileys-status', (req, res) => {
-        const state = baileysManager.getState();
-        res.json({
-            ...state,
-            lastActivityAgo: Math.round((Date.now() - state.lastActivity) / 1000) + ' segundos'
-        });
-    });
-
-    // Endpoint para habilitar/deshabilitar Baileys con verificación de estado
-    app.post('/toggle-baileys', async (req, res) => {
-        const { enable, password } = req.body;
-        
-        if (!password || password !== ADMIN_PASSWORD) {
-            return res.json({ success: false, message: 'Clave incorrecta' });
-        }
+    async initialize() {
+        if (this.client) return;
 
         try {
-            if (enable) {
-                if (await baileysManager.enable()) {
-                    res.json({ success: true, message: 'Baileys habilitado correctamente' });
-                } else {
-                    res.json({ success: false, message: 'Error al habilitar Baileys' });
+            // Crear cliente con autenticación local y configuración extendida de Puppeteer
+            this.client = new Client({
+                authStrategy: new LocalAuth(),
+                puppeteer: {
+                    headless: true,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-accelerated-2d-canvas',
+                        '--no-first-run',
+                        '--no-zygote',
+                        '--single-process',
+                        '--disable-gpu'
+                    ],
+                    executablePath: process.env.CHROME_BIN || undefined,
+                    timeout: 60000 // Aumentar timeout a 60 segundos
                 }
-            } else {
-                if (await baileysManager.disable()) {
-                    res.json({ success: true, message: 'Baileys deshabilitado correctamente' });
-                } else {
-                    res.json({ success: false, message: 'Error al deshabilitar Baileys' });
-                }
-            }
-        } catch (error) {
-            console.error('Error en toggle-baileys:', error);
-            res.status(500).json({ success: false, message: error.message });
-        }
-    });
-
-    // Endpoint para verificar estado de conexión
-    app.get('/connection-status', async (req, res) => {
-        try {
-            const isConnected = await connectionManager.checkConnection();
-            const baileysState = baileysManager.getState();
-            
-            res.json({
-                status: isConnected ? 'connected' : 'disconnected',
-                baileysEnabled: baileysState.isEnabled,
-                lastActivity: baileysState.lastActivity,
-                reconnectAttempts: connectionManager.reconnectAttempts,
-                isReconnecting: connectionManager.isReconnecting
-            });
-        } catch (error) {
-            console.error('Error checking connection:', error);
-            res.status(500).json({ error: error.message });
-        }
-    });
-
-    // Endpoint principal para envío de mensajes con verificación de estado
-    app.post('/send-messages', upload.fields([
-        { name: 'csvFile', maxCount: 1 },
-        { name: 'images', maxCount: 10 },
-        { name: 'singleImage', maxCount: 1 },
-        { name: 'audioFile', maxCount: 1 }
-    ]), async (req, res) => {
-        try {
-            // Verificar si Baileys está habilitado
-            if (!baileysManager.getState().isEnabled) {
-                return res.status(400).json({ 
-                    error: 'El servicio de WhatsApp no está habilitado. Por favor, habilítelo primero.' 
-                });
-            }
-
-            if (!req.files || !req.files['csvFile']) {
-                return res.status(400).json({ error: 'Archivo CSV no proporcionado' });
-            }
-
-            const csvFilePath = req.files['csvFile'][0].path;
-            const images = req.files['images'];
-            const singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
-            const audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
-            const { message } = req.body;
-
-            const numbers = await loadNumbersFromCSV(csvFilePath);
-
-            if (numbers.length === 0) {
-                return res.status(400).json({ error: 'No se encontraron números válidos' });
-            }
-
-            // Actualizar actividad antes de comenzar el envío
-            baileysManager.updateActivity();
-            await messageQueue.add(numbers, message, images, singleImage, audioFile);
-
-            res.json({
-                status: 'success',
-                message: 'Procesando mensajes',
-                totalNumbers: numbers.length,
-                initialStats: messageQueue.getStats()
             });
 
-        } catch (error) {
-            console.error('Error en /send-messages:', error);
-            res.status(500).json({ error: error.message });
-        } finally {
-            // Limpiar solo archivos que no sean de audio
-            if (req.files) {
-                Object.entries(req.files).forEach(([fieldName, files]) => {
-                    if (fieldName !== 'audioFile') {
-                        files.forEach(file => {
-                            if (fs.existsSync(file.path)) {
-                                fs.unlinkSync(file.path);
-                            }
-                        });
+            // Manejar evento de QR code
+            this.client.on('qr', (qr) => {
+                this.qrCode = qr;
+                console.log('QR Code recibido, escanea con WhatsApp:');
+                qrcode.generate(qr, { small: true }); // QR en terminal
+
+                // Guardar QR como imagen en formato PNG con mejor calidad
+                const qrPath = path.join(__dirname, 'public', 'qr.png');
+                qrImage.toFile(qrPath, qr, {
+                    color: {
+                        dark: '#128C7E', // Color verde de WhatsApp
+                        light: '#FFFFFF' // Fondo blanco
+                    },
+                    width: 300,
+                    margin: 1
+                }, (err) => {
+                    if (err) {
+                        console.error('Error al generar archivo QR:', err);
+                    } else {
+                        console.log('QR guardado en:', qrPath);
+                        this.lastQRUpdate = Date.now();
                     }
                 });
+
+                // Emitir evento de actualización de QR
+                this.onQRUpdated && this.onQRUpdated(qr);
+            });
+
+            // Manejar evento de autenticación
+            this.client.on('authenticated', () => {
+                console.log('Cliente autenticado!');
+                this.connectionState = 'authenticated';
+                
+                // Limpiar QR cuando ya está autenticado
+                this.qrCode = null;
+                const qrPath = path.join(__dirname, 'public', 'qr.png');
+                try {
+                    if (fs.existsSync(qrPath)) {
+                        fs.unlinkSync(qrPath);
+                    }
+                } catch (error) {
+                    console.error('Error al eliminar imagen QR:', error);
+                }
+            });
+
+            // Manejar evento de listo
+            this.client.on('ready', () => {
+                console.log('Cliente WhatsApp listo!');
+                this.isReady = true;
+                this.connectionState = 'connected';
+                this.lastActivity = Date.now();
+            });
+
+            // Manejar evento de desconexión con estrategia de reintento mejorada
+            this.client.on('disconnected', async (reason) => {
+                console.log('Cliente desconectado:', reason);
+                this.isReady = false;
+                this.connectionState = 'disconnected';
+                
+                // Liberar recursos del cliente actual
+                if (this.client) {
+                    try {
+                        await this.client.destroy();
+                    } catch (e) {
+                        console.log('Error al destruir cliente:', e);
+                    }
+                    this.client = null;
+                }
+                
+                // Reiniciar cliente con nueva instancia después de un tiempo
+                setTimeout(() => {
+                    console.log('Creando nueva instancia y reconectando...');
+                    this.initialize().catch(err => {
+                        console.error('Error en reconexión automática:', err);
+                    });
+                }, 10000);  // Esperar 10 segundos antes de reconectar
+            });
+
+            // Inicializar cliente
+            await this.client.initialize();
+            
+            // Crear instancia de MessageQueue
+            this.messageQueue = new MessageQueue(this.client);
+            
+            return true;
+        } catch (error) {
+            console.error('Error inicializando cliente WhatsApp:', error);
+            return false;
+        }
+    }
+
+    getState() {
+        return {
+            isReady: this.isReady,
+            connectionState: this.connectionState,
+            lastActivity: this.lastActivity,
+            lastQRUpdate: this.lastQRUpdate || null,
+            hasQR: !!this.qrCode
+        };
+    }
+
+    updateActivity() {
+        this.lastActivity = Date.now();
+    }
+    
+    /**
+     * Refresca el QR forzando un restablecimiento del estado del cliente
+     * @returns {Promise<boolean>} Resultado del refresco
+     */
+    async refreshQR() {
+        console.log('Solicitando refrescar QR...');
+        
+        if (!this.client || this.isReady) {
+            console.log('No se puede refrescar el QR: cliente no está en estado de autenticación o ya está autenticado');
+            return false;
+        }
+        
+        try {
+            // Restablecer estado para forzar generación de nuevo QR
+            await this.client.resetState();
+            console.log('Estado restablecido, esperando nuevo QR...');
+            return true;
+        } catch (error) {
+            console.error('Error al refrescar QR:', error);
+            return false;
+        }
+    }
+}
+
+// Instancia de WhatsAppManager
+const whatsappManager = new WhatsAppManager();
+
+// Configurar rutas de API
+app.get('/connection-status', (req, res) => {
+    const state = whatsappManager.getState();
+    res.json({
+        status: state.connectionState,
+        isReady: state.isReady,
+        lastActivity: state.lastActivity,
+        lastActivityAgo: Math.round((Date.now() - state.lastActivity) / 1000) + ' segundos'
+    });
+});
+
+app.post('/toggle-whatsapp', async (req, res) => {
+    const { enable, password } = req.body;
+    
+    if (!password || password !== ADMIN_PASSWORD) {
+        return res.json({ success: false, message: 'Clave incorrecta' });
+    }
+
+    try {
+        if (enable) {
+            if (await whatsappManager.initialize()) {
+                res.json({ success: true, message: 'WhatsApp inicializado correctamente' });
+            } else {
+                res.json({ success: false, message: 'Error al inicializar WhatsApp' });
             }
-        }
-    });
-
-    // Endpoint para obtener el estado de los mensajes
-    app.get('/message-status', (req, res) => {
-        const stats = messageQueue.getStats();
-        res.json(stats);
-    });
-
-    // Endpoint para obtener el QR
-    app.get('/qr', (req, res) => {
-        const qrPath = path.join(__dirname, 'bot.qr.png');
-        if (fs.existsSync(qrPath)) {
-            res.sendFile(qrPath);
         } else {
-            res.status(404).json({ error: 'QR no disponible' });
+            res.json({ success: false, message: 'La desconexión manual no está implementada para esta librería' });
         }
-    });
+    } catch (error) {
+        console.error('Error en toggle-whatsapp:', error);
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
 
-    // Endpoint para reiniciar el servidor
-    app.post('/restart-server', async (req, res) => {
-        const { password } = req.body;
-
-        if (!password || password !== ADMIN_PASSWORD) {
-            return res.status(401).json({ 
-                success: false, 
-                message: 'Clave incorrecta' 
+app.post('/send-messages', upload.fields([
+    { name: 'csvFile', maxCount: 1 },
+    { name: 'images', maxCount: 10 },
+    { name: 'singleImage', maxCount: 1 },
+    { name: 'audioFile', maxCount: 1 }
+]), async (req, res) => {
+    try {
+        // Verificar si el cliente está listo
+        if (!whatsappManager.isReady) {
+            return res.status(400).json({ 
+                error: 'El cliente de WhatsApp no está listo. Por favor, escanea el código QR primero.' 
             });
         }
 
-        console.log('Reiniciando servidor Node.js...');
+        if (!req.files || !req.files['csvFile']) {
+            return res.status(400).json({ error: 'Archivo CSV no proporcionado' });
+        }
 
-        // Enviar respuesta antes de reiniciar
-        res.json({ 
-            success: true, 
-            message: 'Servidor reiniciando...' 
+        const csvFilePath = req.files['csvFile'][0].path;
+        const images = req.files['images'];
+        const singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
+        const audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
+        const { message } = req.body;
+
+        const numbers = await loadNumbersFromCSV(csvFilePath);
+
+        if (numbers.length === 0) {
+            return res.status(400).json({ error: 'No se encontraron números válidos' });
+        }
+
+        // Actualizar actividad
+        whatsappManager.updateActivity();
+        await whatsappManager.messageQueue.add(numbers, message, images, singleImage, audioFile);
+
+        res.json({
+            status: 'success',
+            message: 'Procesando mensajes',
+            totalNumbers: numbers.length,
+            initialStats: whatsappManager.messageQueue.getStats()
         });
 
-        // Cerrar el servidor HTTP y limpiar recursos
-        if (server) {
-            await new Promise((resolve) => {
-                server.close(() => {
-                    console.log('Servidor HTTP cerrado');
-                    resolve();
-                });
-            });
-            
-            // Limpiar recursos de Baileys
-            if (baileysManager.getState().isEnabled) {
-                try {
-                    await baileysManager.disable();
-                } catch (error) {
-                    console.error('Error al deshabilitar Baileys:', error);
+    } catch (error) {
+        console.error('Error en /send-messages:', error);
+        res.status(500).json({ error: error.message });
+    } finally {
+        // Limpiar archivos excepto de audio
+        if (req.files) {
+            Object.entries(req.files).forEach(([fieldName, files]) => {
+                if (fieldName !== 'audioFile') {
+                    files.forEach(file => {
+                        if (fs.existsSync(file.path)) {
+                            fs.unlinkSync(file.path);
+                        }
+                    });
                 }
-            }
-
-            // Forzar el cierre del proceso
-            process.kill(process.pid, 'SIGINT');
-        } else {
-            process.kill(process.pid, 'SIGINT');
+            });
         }
+    }
+});
+
+app.get('/message-status', (req, res) => {
+    if (!whatsappManager.messageQueue) {
+        return res.json({
+            total: 0,
+            sent: 0,
+            errors: 0,
+            messages: [],
+            completed: true
+        });
+    }
+    
+    const stats = whatsappManager.messageQueue.getStats();
+    res.json(stats);
+});
+
+app.get('/qr', (req, res) => {
+    const qrPath = path.join(__dirname, 'public', 'qr.png');
+    if (fs.existsSync(qrPath)) {
+        res.sendFile(qrPath);
+    } else {
+        res.status(404).json({ error: 'QR no disponible' });
+    }
+});
+
+app.post('/refresh-qr', async (req, res) => {
+    try {
+        // Verificar si el cliente está desconectado o en espera de autenticación
+        if (whatsappManager.isReady) {
+            return res.status(400).json({
+                success: false,
+                message: 'No se puede actualizar el QR si ya estás conectado'
+            });
+        }
+        
+        const result = await whatsappManager.refreshQR();
+        if (result) {
+            res.json({
+                success: true,
+                message: 'Solicitando nuevo código QR...'
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                message: 'No se pudo refrescar el QR en este momento'
+            });
+        }
+    } catch (error) {
+        console.error('Error en refresh-qr:', error);
+        res.status(500).json({
+            success: false,
+            message: error.message || 'Error al refrescar QR'
+        });
+    }
+});
+
+app.post('/restart-server', async (req, res) => {
+    const { password } = req.body;
+
+    if (!password || password !== ADMIN_PASSWORD) {
+        return res.status(401).json({ 
+            success: false, 
+            message: 'Clave incorrecta' 
+        });
+    }
+
+    console.log('Reiniciando servidor Node.js...');
+
+    res.json({ 
+        success: true, 
+        message: 'Servidor reiniciando...' 
     });
 
-    // Inicia el servidor y guarda la referencia globalmente
-    server = app.listen(port, () => {
-        console.log(`Servidor escuchando en http://localhost:${port}`);
-    });
-};
+    // Cerrar servidor y reiniciar
+    setTimeout(() => {
+        process.exit(0);
+    }, 1000);
+});
 
-// Inicia la aplicación
-main().catch(console.error);
+// Iniciar servidor
+app.listen(port, async () => {
+    console.log(`Servidor escuchando en http://localhost:${port}`);
+    
+    // Inicializar WhatsApp automáticamente al iniciar
+    try {
+        await whatsappManager.initialize();
+    } catch (error) {
+        console.error('Error inicializando WhatsApp:', error);
+    }
+});
