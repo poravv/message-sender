@@ -1,2 +1,3 @@
-2025/04/13-14:09:46.381 a103 Creating DB /Users/andresvera/Desktop/Proyectos/chatbot-2/message-sender/.wwebjs_auth/session/Default/Session Storage since it was missing.
-2025/04/13-14:09:46.396 a103 Reusing MANIFEST /Users/andresvera/Desktop/Proyectos/chatbot-2/message-sender/.wwebjs_auth/session/Default/Session Storage/MANIFEST-000001
+2025/04/13-14:21:03.154 f903 Reusing MANIFEST /Users/andresvera/Desktop/Proyectos/chatbot-2/message-sender/.wwebjs_auth/session/Default/Session Storage/MANIFEST-000001
+2025/04/13-14:21:03.155 f903 Recovering log #3
+2025/04/13-14:21:03.155 f903 Reusing old log /Users/andresvera/Desktop/Proyectos/chatbot-2/message-sender/.wwebjs_auth/session/Default/Session Storage/000003.log 

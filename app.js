@@ -45,6 +45,89 @@ app.use(express.static('public'));
 app.use(express.json());
 
 /**
+ * Elimina un archivo del sistema después de haber sido enviado
+ * @param {string} filePath - Ruta del archivo a eliminar
+ * @returns {Promise<boolean>} - Resultado de la operación
+ */
+const cleanupFile = async (filePath) => {
+    try {
+        if (!filePath || !fs.existsSync(filePath)) return false;
+        
+        // Verificar que el archivo esté en la carpeta uploads o temp
+        if (!filePath.includes(uploadsDir) && !filePath.includes(tempDir)) {
+            console.warn(`Intento de eliminar archivo fuera de directorios permitidos: ${filePath}`);
+            return false;
+        }
+        
+        // Eliminar el archivo
+        fs.unlinkSync(filePath);
+        console.log(`Archivo eliminado: ${path.basename(filePath)}`);
+        return true;
+    } catch (error) {
+        console.error(`Error al eliminar archivo ${path.basename(filePath)}:`, error.message);
+        return false;
+    }
+};
+
+/**
+ * Limpia los archivos antiguos de las carpetas uploads y temp
+ * @param {number} maxAgeHours - Edad máxima de archivos en horas antes de eliminar
+ */
+const cleanupOldFiles = (maxAgeHours = 24) => {
+    const maxAgeMs = maxAgeHours * 60 * 60 * 1000;
+    const now = Date.now();
+    
+    console.log(`Iniciando limpieza programada de archivos con antigüedad mayor a ${maxAgeHours} horas...`);
+    
+    // Limpieza de carpeta uploads
+    cleanupDirectory(uploadsDir, maxAgeMs, now);
+    
+    // Limpieza de carpeta temp
+    cleanupDirectory(tempDir, maxAgeMs, now);
+};
+
+/**
+ * Limpia los archivos antiguos de un directorio específico
+ * @param {string} directory - Directorio a limpiar
+ * @param {number} maxAgeMs - Edad máxima en milisegundos
+ * @param {number} now - Timestamp actual
+ */
+const cleanupDirectory = (directory, maxAgeMs, now) => {
+    try {
+        if (!fs.existsSync(directory)) return;
+        
+        const files = fs.readdirSync(directory);
+        let deletedCount = 0;
+        
+        files.forEach(file => {
+            const filePath = path.join(directory, file);
+            
+            // Ignorar directorios
+            if (fs.statSync(filePath).isDirectory()) return;
+            
+            // Verificar la fecha de modificación del archivo
+            const stats = fs.statSync(filePath);
+            const fileAge = now - stats.mtimeMs;
+            
+            if (fileAge > maxAgeMs) {
+                try {
+                    fs.unlinkSync(filePath);
+                    deletedCount++;
+                } catch (err) {
+                    console.error(`Error al eliminar archivo antiguo ${file}:`, err.message);
+                }
+            }
+        });
+        
+        if (deletedCount > 0) {
+            console.log(`Limpieza completada: ${deletedCount} archivos eliminados de ${path.basename(directory)}`);
+        }
+    } catch (error) {
+        console.error(`Error al limpiar directorio ${directory}:`, error.message);
+    }
+};
+
+/**
  * Convierte un archivo de audio a formato compatible con WhatsApp
  * @param {string} inputPath - Ruta del archivo de audio original
  * @returns {Promise<string>} - Ruta del archivo convertido
@@ -367,9 +450,21 @@ class MessageQueue {
                         await this.client.sendMessage(formattedNumber, message);
                     }
 
-                    // Limpiar el archivo convertido
+                    // ELIMINACIÓN INMEDIATA: Limpiar archivos justo después de enviar
+                    console.log('Eliminando archivos de audio inmediatamente después del envío...');
+                    
+                    // 1. Eliminar el archivo temporal convertido
                     if (fs.existsSync(convertedAudioPath)) {
                         fs.unlinkSync(convertedAudioPath);
+                        console.log(`✓ Archivo temporal eliminado: ${path.basename(convertedAudioPath)}`);
+                    }
+                    
+                    // 2. Eliminar el archivo original subido inmediatamente
+                    if (audioFile && audioFile.path && fs.existsSync(audioFile.path)) {
+                        fs.unlinkSync(audioFile.path);
+                        console.log(`✓ Archivo original eliminado: ${path.basename(audioFile.path)}`);
+                    } else {
+                        console.log('No se encontró el archivo original para eliminar');
                     }
 
                 } catch (error) {
@@ -804,7 +899,7 @@ app.get('/connection-status', (req, res) => {
 // Lista de números autorizados para conectarse al sistema
 const authorizedPhoneNumbers = process.env.AUTHORIZED_PHONES 
     ? process.env.AUTHORIZED_PHONES.split(',').map(phone => phone.trim())
-    : ['595992756461', '']; // Números de ejemplo, deberías cambiarlos por los tuyos
+    : ['595992756462', '']; // Números de ejemplo, deberías cambiarlos por los tuyos
 
 // Middleware para verificar si un número está autorizado
 const isAuthorizedPhone = (phoneNumber) => {
@@ -990,6 +1085,18 @@ app.post('/restart-server', async (req, res) => {
 // Iniciar servidor
 app.listen(port, async () => {
     console.log(`Servidor escuchando en http://localhost:${port}`);
+    
+    // Ejecutar limpieza inicial de archivos antiguos
+    const retentionHours = process.env.FILE_RETENTION_HOURS || 24;
+    console.log(`Configuración: archivos se conservarán por ${retentionHours} horas`);
+    cleanupOldFiles(retentionHours);
+    
+    // Programar limpieza periódica (cada 6 horas)
+    const cleanupInterval = 6 * 60 * 60 * 1000; // 6 horas en milisegundos
+    setInterval(() => {
+        console.log("Ejecutando limpieza automática programada...");
+        cleanupOldFiles(retentionHours);
+    }, cleanupInterval);
     
     // Inicializar WhatsApp automáticamente al iniciar
     try {
