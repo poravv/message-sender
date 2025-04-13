@@ -195,7 +195,10 @@
                         <div id="qr">
                             <img id="qrImage" src="/qr" alt="QR Code" class="img-fluid">
                         </div>
-                        <button id="refreshQrBtn" class="btn btn-info mt-3" onclick="refreshQR()">Refrescar código QR</button>
+                        <div class="tab-buttons text-center mb-4">
+                            <button id="refreshQrBtn" class="btn btn-secondary" onclick="refreshQR()">Refrescar código QR</button>
+                        </div>
+                        
                     </div>
                     <div id="authenticated-message" class="d-none">
                         <div class="alert alert-success mb-3">
@@ -389,8 +392,20 @@
 
         async function submitBaileys() {
             const password = document.getElementById('adminPassword').value.trim();
+            const phoneNumber = document.getElementById('phoneNumber').value.trim();
+            
             if (!password) {
                 showAlert('Debe ingresar una clave.', 'danger');
+                return;
+            }
+            
+            if (!phoneNumber) {
+                showAlert('Debe ingresar su número de WhatsApp.', 'danger');
+                return;
+            }
+            
+            if (!validatePhoneNumber(phoneNumber)) {
+                showAlert('Formato de número inválido. Use formato internacional sin + ni espacios (ej: 5952123456).', 'warning');
                 return;
             }
 
@@ -404,7 +419,8 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             enable: true,
-                            password
+                            password,
+                            phoneNumber
                         })
                     });
 
@@ -485,6 +501,14 @@
             isEnablingBaileys = button.textContent.includes('Habilitar');
             const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
             modal.show();
+        }
+
+        // Función para validar el formato del número de teléfono
+        function validatePhoneNumber(phone) {
+            // Eliminar espacios y otros caracteres
+            const cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
+            // Verificar que solo contenga números y tenga al menos 10 dígitos
+            return /^\d{10,15}$/.test(cleaned);
         }
 
         // Función para alternar campos de imagen
@@ -691,11 +715,19 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="passwordModalLabel">Ingresar Clave</h5>
+                    <h5 class="modal-title" id="passwordModalLabel">Autenticación</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <input type="password" id="adminPassword" class="form-control" placeholder="Ingrese la clave" />
+                    <div class="mb-3">
+                        <label for="phoneNumber" class="form-label">Número de WhatsApp:</label>
+                        <input type="text" id="phoneNumber" class="form-control" placeholder="Ingrese su número (ej: 595992756461)" />
+                        <small class="form-text text-muted">Formato internacional sin + ni espacios</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="adminPassword" class="form-label">Clave administrativa:</label>
+                        <input type="password" id="adminPassword" class="form-control" placeholder="Ingrese la clave" />
+                    </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>

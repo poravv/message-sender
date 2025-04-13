@@ -487,8 +487,8 @@ class WhatsAppManager {
             // Manejar evento de QR code
             this.client.on('qr', (qr) => {
                 this.qrCode = qr;
-                console.log('QR Code recibido, escanea con WhatsApp:');
-                qrcode.generate(qr, { small: true }); // QR en terminal
+                console.log('QR Code recibido');
+                // Eliminado: qrcode.generate(qr, { small: true }); // Ya no imprimimos QR en terminal
 
                 // Guardar QR como imagen en formato PNG con mejor calidad
                 const qrPath = path.join(__dirname, 'public', 'qr.png');
@@ -530,11 +530,85 @@ class WhatsAppManager {
             });
 
             // Manejar evento de listo
-            this.client.on('ready', () => {
-                console.log('Cliente WhatsApp listo!');
-                this.isReady = true;
-                this.connectionState = 'connected';
-                this.lastActivity = Date.now();
+            this.client.on('ready', async () => {
+                try {
+                    // Verificar si el número conectado está autorizado
+                    // Obtener el número de teléfono del cliente conectado usando client.info.wid
+                    if (!this.client.info || !this.client.info.wid) {
+                        throw new Error('No se pudo obtener información del cliente conectado');
+                    }
+                    
+                    const connectedNumber = this.client.info.wid.user; // Obtiene el número de teléfono conectado
+                    console.log('Número de teléfono conectado:', connectedNumber);
+                    
+                    if (!isAuthorizedPhone(connectedNumber)) {
+                        // Crear mensajes de alerta detallados
+                        const alertMsg1 = `¡ALERTA DE SEGURIDAD! Número no autorizado intentando conectarse: ${connectedNumber}`;
+                        const alertMsg2 = 'Desconectando cliente no autorizado y eliminando sesión...';
+                        
+                        console.log(alertMsg1);
+                        console.log(alertMsg2);
+                        
+                        // Guardar los mensajes de alerta para mostrarlos en el frontend
+                        this.securityAlert = {
+                            timestamp: Date.now(),
+                            messages: [
+                                alertMsg1,
+                                alertMsg2
+                            ],
+                            phoneNumber: connectedNumber
+                        };
+                        
+                        // Mostrar mensaje al cliente no autorizado antes de desconectar
+                        try {
+                            await this.client.sendMessage(this.client.info.wid._serialized, 
+                                'Este número no está autorizado para usar este sistema. La conexión será cerrada.');
+                        } catch (e) {
+                            console.log('No se pudo enviar mensaje de advertencia:', e);
+                        }
+                        
+                        // Cambiar estado inmediatamente
+                        this.isReady = false;
+                        this.connectionState = 'unauthorized';
+                        
+                        // Forzar desconexión y eliminación de sesión
+                        setTimeout(async () => {
+                            try {
+                                console.log('Cerrando cliente no autorizado...');
+                                await this.client.logout();
+                                console.log('Sesión cerrada mediante logout');
+                            } catch (logoutError) {
+                                console.log('Error en logout, usando método alternativo:', logoutError.message);
+                            }
+                            
+                            try {
+                                await this.client.destroy();
+                                console.log('Cliente destruido correctamente');
+                            } catch (destroyError) {
+                                console.error('Error al destruir cliente:', destroyError);
+                            }
+                            
+                            // Eliminar archivos de sesión
+                            this.deleteSessionFiles();
+                            
+                            // Limpiar cliente
+                            this.client = null;
+                            
+                            // Reiniciar después de una pausa para mostrar adecuadamente el estado no autorizado
+                            setTimeout(() => this.initialize(), 8000);
+                        }, 3000);
+                        
+                        return;
+                    }
+                    
+                    console.log('Cliente WhatsApp listo! Número autorizado:', connectedNumber);
+                    this.isReady = true;
+                    this.connectionState = 'connected';
+                    this.lastActivity = Date.now();
+                } catch (error) {
+                    console.error('Error al verificar el número conectado:', error);
+                    this.connectionState = 'error';
+                }
             });
 
             // Manejar evento de desconexión con estrategia de reintento mejorada
@@ -581,7 +655,8 @@ class WhatsAppManager {
             connectionState: this.connectionState,
             lastActivity: this.lastActivity,
             lastQRUpdate: this.lastQRUpdate || null,
-            hasQR: !!this.qrCode
+            hasQR: !!this.qrCode,
+            securityAlert: this.securityAlert || null
         };
     }
 
@@ -593,18 +668,114 @@ class WhatsAppManager {
      * Refresca el QR forzando un restablecimiento del estado del cliente
      * @returns {Promise<boolean>} Resultado del refresco
      */
+    /**
+     * Elimina los archivos de sesión para forzar una nueva autenticación
+     */
+    deleteSessionFiles() {
+        try {
+            console.log('Eliminando archivos de sesión...');
+            const sessionDir = path.join(__dirname, 'bot_sessions');
+            
+            if (fs.existsSync(sessionDir)) {
+                const files = fs.readdirSync(sessionDir);
+                let filesDeleted = 0;
+                
+                files.forEach(file => {
+                    const filePath = path.join(sessionDir, file);
+                    try {
+                        if (fs.lstatSync(filePath).isDirectory()) {
+                            // Es un directorio, borrar su contenido recursivamente
+                            fs.readdirSync(filePath).forEach(subFile => {
+                                const subFilePath = path.join(filePath, subFile);
+                                fs.unlinkSync(subFilePath);
+                                filesDeleted++;
+                            });
+                            // Intentar eliminar el directorio vacío
+                            fs.rmdirSync(filePath);
+                        } else {
+                            // Es un archivo, borrarlo directamente
+                            fs.unlinkSync(filePath);
+                            filesDeleted++;
+                        }
+                    } catch (err) {
+                        console.error(`Error al eliminar ${filePath}:`, err.message);
+                    }
+                });
+                
+                console.log(`${filesDeleted} archivos de sesión eliminados`);
+            } else {
+                console.log('Directorio de sesiones no encontrado');
+            }
+        } catch (error) {
+            console.error('Error al eliminar archivos de sesión:', error);
+        }
+    }
+    
+    /**
+     * Refresca el QR forzando una nueva autenticación
+     * @returns {Promise<boolean>} Resultado del refresco
+     */
     async refreshQR() {
         console.log('Solicitando refrescar QR...');
         
-        if (!this.client || this.isReady) {
-            console.log('No se puede refrescar el QR: cliente no está en estado de autenticación o ya está autenticado');
+        if (this.isReady) {
+            console.log('No se puede refrescar el QR: el cliente ya está autenticado');
             return false;
         }
         
         try {
-            // Restablecer estado para forzar generación de nuevo QR
-            await this.client.resetState();
-            console.log('Estado restablecido, esperando nuevo QR...');
+            console.log('Preparando generación de nuevo QR...');
+            
+            // 1. Cerrar cliente existente si lo hay
+            if (this.client) {
+                console.log('Cerrando cliente actual...');
+                try {
+                    // Intentar logout primero (cierra sesión en WhatsApp Web)
+                    await this.client.logout().catch(e => 
+                        console.log('Error en logout (ignorable):', e.message)
+                    );
+                } catch (e) {
+                    console.log('Error al hacer logout:', e);
+                }
+                
+                try {
+                    await this.client.destroy().catch(e => 
+                        console.log('Error al destruir cliente (ignorable):', e.message)
+                    );
+                } catch (e) {
+                    console.log('Error al destruir cliente:', e);
+                }
+                
+                this.client = null;
+            }
+            
+            // 2. Eliminar archivo QR existente
+            const qrPath = path.join(__dirname, 'public', 'qr.png');
+            try {
+                if (fs.existsSync(qrPath)) {
+                    fs.unlinkSync(qrPath);
+                    console.log('Archivo QR anterior eliminado');
+                }
+            } catch (fileError) {
+                console.warn('Error al eliminar archivo QR anterior:', fileError);
+            }
+            
+            // 3. Limpiar estados
+            this.isReady = false;
+            this.qrCode = null;
+            this.connectionState = 'disconnected';
+            
+            // 4. Eliminar archivos de sesión para forzar nueva autenticación
+            this.deleteSessionFiles();
+            
+            // 5. Esperar un momento para que todo se limpie adecuadamente
+            console.log('Esperando limpieza de recursos...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            // 6. Crear un cliente completamente nuevo
+            console.log('Inicializando nuevo cliente...');
+            await this.initialize();
+            console.log('Nuevo cliente inicializado, esperando generación de QR...');
             return true;
         } catch (error) {
             console.error('Error al refrescar QR:', error);
@@ -630,11 +801,36 @@ app.get('/connection-status', (req, res) => {
     });
 });
 
+// Lista de números autorizados para conectarse al sistema
+const authorizedPhoneNumbers = process.env.AUTHORIZED_PHONES 
+    ? process.env.AUTHORIZED_PHONES.split(',').map(phone => phone.trim())
+    : ['595992756461', '']; // Números de ejemplo, deberías cambiarlos por los tuyos
+
+// Middleware para verificar si un número está autorizado
+const isAuthorizedPhone = (phoneNumber) => {
+    // Normalizar el número eliminando espacios, guiones y símbolos
+    const normalizedPhone = phoneNumber.replace(/[\s\-\+]/g, '');
+    return authorizedPhoneNumbers.some(authPhone => normalizedPhone.includes(authPhone));
+};
+
 app.post('/toggle-whatsapp', async (req, res) => {
-    const { enable, password } = req.body;
+    const { enable, password, phoneNumber } = req.body;
     
+    // Verificar contraseña
     if (!password || password !== ADMIN_PASSWORD) {
         return res.json({ success: false, message: 'Clave incorrecta' });
+    }
+    
+    // Si está habilitando, verificar que el número esté autorizado
+    if (enable && phoneNumber) {
+        if (!isAuthorizedPhone(phoneNumber)) {
+            console.log(`Intento de conexión no autorizado desde: ${phoneNumber}`);
+            return res.json({ 
+                success: false, 
+                message: 'Este número no está autorizado para usar el sistema.' 
+            });
+        }
+        console.log(`Acceso autorizado para el número: ${phoneNumber}`);
     }
 
     try {
