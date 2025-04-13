@@ -40,7 +40,6 @@ Variables importantes en `.env`:
 PORT=3009                           # Puerto del servidor
 RAILWAY_STATIC_URL=http://localhost # URL base
 PUBLIC_URL=http://localhost         # URL pública
-RESTART_PASSWORD=tu_clave_secreta   # Clave para reinicio/deshabilitación
 ALLOWED_ORIGINS=http://dominio.com  # CORS permitidos
 NODE_ENV=production                 # Entorno
 AUTHORIZED_PHONES=595992756462     # Números telefónicos autorizados (sin +)

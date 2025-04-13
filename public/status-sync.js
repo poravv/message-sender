@@ -53,6 +53,23 @@ function updateInterface(status) {
         authMessage.style.display = 'block';
         authMessage.classList.remove('d-none');
         
+        // Actualizar la información del usuario si está disponible
+        if (status.userInfo) {
+            log('Información de usuario recibida:', status.userInfo);
+            const nicknameElement = document.getElementById('user-nickname');
+            const phoneElement = document.getElementById('user-phone');
+            
+            if (nicknameElement) {
+                nicknameElement.textContent = status.userInfo.pushname || 'No disponible';
+            }
+            
+            if (phoneElement) {
+                phoneElement.textContent = status.userInfo.phoneNumber || 'No disponible';
+            }
+        } else {
+            log('No se recibió información de usuario');
+        }
+        
         // Actualizar botón
         if (toggleBtn) {
             toggleBtn.textContent = 'Deshabilitar';

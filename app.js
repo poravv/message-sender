@@ -18,7 +18,6 @@ const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
 const csv = require('csv-parser');
-const qrcode = require('qrcode-terminal');
 const qrImage = require('qrcode'); // Para generar QR como imagen
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
@@ -38,7 +37,6 @@ const uploadsDir = path.join(__dirname, 'uploads');
 // Configuración del servidor
 const app = express();
 const port = process.env.PORT || 3000;
-const ADMIN_PASSWORD = process.env.RESTART_PASSWORD;
 
 // Configuración de Express
 app.use(express.static('public'));
@@ -886,14 +884,27 @@ const whatsappManager = new WhatsAppManager();
 app.get('/connection-status', (req, res) => {
     const state = whatsappManager.getState();
     // Añadimos un console.log para depuración
-    res.json({
+    
+    // Crear objeto de respuesta con información básica
+    const responseData = {
         status: state.connectionState,
         isReady: state.isReady,
         lastActivity: state.lastActivity,
         lastActivityAgo: Math.round((Date.now() - state.lastActivity) / 1000),
         hasQR: !!state.qrCode || false, // Asegurar que se envíe el estado del QR
         connectionState: state.connectionState // Estado explícito de conexión
-    });
+    };
+    
+    // Si está conectado, incluir información del usuario
+    if (state.isReady && whatsappManager.client && whatsappManager.client.info) {
+        responseData.userInfo = {
+            phoneNumber: whatsappManager.client.info.wid.user,
+            pushname: whatsappManager.client.info.pushname || 'Usuario de WhatsApp',
+            pushname: whatsappManager.client.info.pushname || 'Usuario de WhatsApp'
+        };
+    }
+    
+    res.json(responseData);
 });
 
 // Lista de números autorizados para conectarse al sistema
@@ -908,41 +919,7 @@ const isAuthorizedPhone = (phoneNumber) => {
     return authorizedPhoneNumbers.some(authPhone => normalizedPhone.includes(authPhone));
 };
 
-app.post('/toggle-whatsapp', async (req, res) => {
-    const { enable, password, phoneNumber } = req.body;
-    
-    // Verificar contraseña
-    if (!password || password !== ADMIN_PASSWORD) {
-        return res.json({ success: false, message: 'Clave incorrecta' });
-    }
-    
-    // Si está habilitando, verificar que el número esté autorizado
-    if (enable && phoneNumber) {
-        if (!isAuthorizedPhone(phoneNumber)) {
-            console.log(`Intento de conexión no autorizado desde: ${phoneNumber}`);
-            return res.json({ 
-                success: false, 
-                message: 'Este número no está autorizado para usar el sistema.' 
-            });
-        }
-        console.log(`Acceso autorizado para el número: ${phoneNumber}`);
-    }
-
-    try {
-        if (enable) {
-            if (await whatsappManager.initialize()) {
-                res.json({ success: true, message: 'WhatsApp inicializado correctamente' });
-            } else {
-                res.json({ success: false, message: 'Error al inicializar WhatsApp' });
-            }
-        } else {
-            res.json({ success: false, message: 'La desconexión manual no está implementada para esta librería' });
-        }
-    } catch (error) {
-        console.error('Error en toggle-whatsapp:', error);
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
+// La función toggle-whatsapp ha sido eliminada ya que no se utiliza en la interfaz
 
 app.post('/send-messages', upload.fields([
     { name: 'csvFile', maxCount: 1 },
@@ -1059,28 +1036,7 @@ app.post('/refresh-qr', async (req, res) => {
     }
 });
 
-app.post('/restart-server', async (req, res) => {
-    const { password } = req.body;
-
-    if (!password || password !== ADMIN_PASSWORD) {
-        return res.status(401).json({ 
-            success: false, 
-            message: 'Clave incorrecta' 
-        });
-    }
-
-    console.log('Reiniciando servidor Node.js...');
-
-    res.json({ 
-        success: true, 
-        message: 'Servidor reiniciando...' 
-    });
-
-    // Cerrar servidor y reiniciar
-    setTimeout(() => {
-        process.exit(0);
-    }, 1000);
-});
+// La función restart-server ha sido eliminada ya que no se utiliza en la interfaz
 
 // Iniciar servidor
 app.listen(port, async () => {

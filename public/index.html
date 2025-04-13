@@ -204,6 +204,13 @@
                         <div class="alert alert-success mb-3">
                             <i class="bi bi-check-circle-fill me-2"></i> WhatsApp conectado exitosamente
                         </div>
+                        <div class="card mb-3 border-success">
+                            <div class="card-body">
+                                <h5 class="card-title"><i class="bi bi-person-circle me-2"></i>Sesión activa</h5>
+                                <p class="mb-1"><strong>Nickname:</strong> <span id="user-nickname">Cargando...</span></p>
+                                <p><strong>Número:</strong> <span id="user-phone">Cargando...</span></p>
+                            </div>
+                        </div>
                         <p>Tu WhatsApp está correctamente enlazado y listo para enviar mensajes.</p>
                         <button class="btn btn-primary" onclick="showTab('send')">Ir a Enviar Mensajes</button>
                     </div>
@@ -325,6 +332,12 @@
                     // Cambiar el contenido de la pestaña de enlace
                     qrContainer.classList.add('d-none');
                     authenticatedMessage.classList.remove('d-none');
+                    
+                    // Mostrar información del usuario si está disponible
+                    if (status.userInfo) {
+                        document.getElementById('user-nickname').textContent = status.userInfo.pushname;
+                        document.getElementById('user-phone').textContent = status.userInfo.phoneNumber;
+                    }
                     
                     // Activar la pestaña de envío
                     linkBtn.classList.remove('btn-primary');
