@@ -619,11 +619,14 @@ const whatsappManager = new WhatsAppManager();
 // Configurar rutas de API
 app.get('/connection-status', (req, res) => {
     const state = whatsappManager.getState();
+    // Añadimos un console.log para depuración
     res.json({
         status: state.connectionState,
         isReady: state.isReady,
         lastActivity: state.lastActivity,
-        lastActivityAgo: Math.round((Date.now() - state.lastActivity) / 1000) + ' segundos'
+        lastActivityAgo: Math.round((Date.now() - state.lastActivity) / 1000),
+        hasQR: !!state.qrCode || false, // Asegurar que se envíe el estado del QR
+        connectionState: state.connectionState // Estado explícito de conexión
     });
 });
 

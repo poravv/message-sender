@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Message-sender</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -176,24 +177,32 @@
 
 <body>
     <div id="connection-status" class="status-disconnected">Desconectado</div>
-    <div id="connection-status"></div>
     <div id="alert" class="alert"></div>
 
     <div class="container">
         <h1 class="text-center mb-4">Envío de mensaje sobre lista</h1>
 
         <div class="tab-buttons text-center mb-4">
-            <button class="btn btn-primary" onclick="showTab('link')">Enlazar Whatsapp</button>
-            <button class="btn btn-secondary" onclick="showTab('send')">Enviar Mensaje</button>
-            <button id="toggleWhatsApp" class="" onclick="toggleBaileys()">Habilitar</button>
+            <button id="linkBtn" class="btn btn-primary" onclick="showTab('link')">Enlazar WhatsApp</button>
+            <button id="sendBtn" class="btn btn-secondary" onclick="showTab('send')">Enviar Mensaje</button>
         </div>
 
         <div id="link" class="tab active">
             <div class="card text-center shadow-sm p-4">
                 <div class="card-body">
-                    <p class="card-text">Escanea el QR en tu dispositivo para enlazar el sender</p>
-                    <div id="qr">
-                        <img id="qrImage" src="/qr" alt="QR Code" class="img-fluid">
+                    <div id="qr-container">
+                        <p class="card-text">Escanea el QR en tu dispositivo para enlazar el sender</p>
+                        <div id="qr">
+                            <img id="qrImage" src="/qr" alt="QR Code" class="img-fluid">
+                        </div>
+                        <button id="refreshQrBtn" class="btn btn-info mt-3" onclick="refreshQR()">Refrescar código QR</button>
+                    </div>
+                    <div id="authenticated-message" class="d-none">
+                        <div class="alert alert-success mb-3">
+                            <i class="bi bi-check-circle-fill me-2"></i> WhatsApp conectado exitosamente
+                        </div>
+                        <p>Tu WhatsApp está correctamente enlazado y listo para enviar mensajes.</p>
+                        <button class="btn btn-primary" onclick="showTab('send')">Ir a Enviar Mensajes</button>
                     </div>
                 </div>
             </div>
@@ -282,6 +291,7 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="improved-update.js"></script>
 
     <script>
         // Variables globales
@@ -296,16 +306,56 @@
                 const status = await response.json();
 
                 const statusElement = document.getElementById('connection-status');
-                const button = document.getElementById('toggleBaileys');
+                const button = document.getElementById('toggleWhatsApp');
+                const qrContainer = document.getElementById('qr-container');
+                const authenticatedMessage = document.getElementById('authenticated-message');
+                const linkBtn = document.getElementById('linkBtn');
+                const sendBtn = document.getElementById('sendBtn');
 
                 if (status.isReady) {
-                    button.textContent = 'Deshabilitar';
+                    // Cliente autenticado y listo
+                    button.className = 'btn btn-danger';
                     statusElement.textContent = 'Conectado';
                     statusElement.className = 'status-connected';
+                    
+                    // Cambiar el contenido de la pestaña de enlace
+                    qrContainer.classList.add('d-none');
+                    authenticatedMessage.classList.remove('d-none');
+                    
+                    // Activar la pestaña de envío
+                    linkBtn.classList.remove('btn-primary');
+                    linkBtn.classList.add('btn-outline-primary');
+                    sendBtn.classList.remove('btn-secondary');
+                    sendBtn.classList.add('btn-primary');
                 } else {
-                    button.textContent = 'Habilitar';
+                    // Cliente no autenticado
+                    button.className = 'btn btn-success';
                     statusElement.textContent = 'Desconectado';
                     statusElement.className = 'status-disconnected';
+                    
+                    // Mostrar QR y ocultar mensaje de autenticado
+                    qrContainer.classList.remove('d-none');
+                    authenticatedMessage.classList.add('d-none');
+                    
+                    // Restablecer estilos de botones
+                    linkBtn.classList.add('btn-primary');
+                    linkBtn.classList.remove('btn-outline-primary');
+                    sendBtn.classList.add('btn-secondary'); 
+                    sendBtn.classList.remove('btn-primary');
+                }
+
+                // Verificar si hay un QR para mostrar
+                const qrImage = document.getElementById('qrImage');
+                const refreshQrBtn = document.getElementById('refreshQrBtn');
+                
+                if (!status.isReady && status.hasQR) {
+                    // Actualizar la imagen del QR con timestamp para evitar caché
+                    qrImage.src = `/qr?t=${Date.now()}`;
+                    refreshQrBtn.style.display = 'inline-block';
+                } else if (!status.isReady) {
+                    // Asegurarse de que el QR esté visible
+                    qrImage.src = `/qr?t=${Date.now()}`;
+                    refreshQrBtn.style.display = 'inline-block';
                 }
 
                 // Si hay inactividad prolongada, mostrar alerta
@@ -453,6 +503,34 @@
                 singleImageField.classList.remove('hidden');
             } else if (imageOption === 'audio') {
                 audioField.classList.remove('hidden');
+            }
+        }
+
+        // Función para refrescar el código QR
+        async function refreshQR() {
+            try {
+                const response = await fetch('/refresh-qr', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showAlert('Solicitando nuevo código QR, por favor espere...', 'info');
+                    // Actualizar la imagen QR después de un breve retraso
+                    setTimeout(() => {
+                        const qrImg = document.getElementById('qrImage');
+                        if (qrImg) {
+                            qrImg.src = `/qr?t=${Date.now()}`; // Usar cache-busting
+                        }
+                    }, 2000);
+                } else {
+                    showAlert(result.message || 'No se pudo refrescar el QR', 'warning');
+                }
+            } catch (error) {
+                console.error('Error al refrescar QR:', error);
+                showAlert('Error al solicitar nuevo código QR', 'danger');
             }
         }
 

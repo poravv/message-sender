@@ -1,11 +1,14 @@
 # WhatsApp Message Sender
 
-Sistema de envío masivo de mensajes por WhatsApp con gestión de cola, manejo de sesiones y reinicio seguro.
+Sistema de envío masivo de mensajes por WhatsApp con gestión de cola, manejo de sesiones y reinicio seguro. Implementado con whatsapp-web.js.
 
 ## Características Técnicas
 
 - Sistema de cola con procesamiento ordenado
-- Gestión de sesiones WhatsApp (Baileys)
+- Gestión de sesiones WhatsApp (whatsapp-web.js)
+- Soporte para mensajes de voz (audio MP3)
+- Envío de imágenes simples y múltiples
+- Generación y refresco automático de QR
 - Reinicio seguro del servidor
 - Manejo de conexiones persistentes
 - Sistema de reconexión automática
@@ -44,12 +47,25 @@ NODE_ENV=production                 # Entorno
 
 ### 3. Instalación de dependencias
 ```bash
-npm install --legacy-peer-deps
+npm install whatsapp-web.js qrcode-terminal express multer csv-parser fluent-ffmpeg @ffmpeg-installer/ffmpeg dotenv
 ```
 
 ### 4. Iniciar en desarrollo
 ```bash
 npm start
+```
+
+### 5. Instalación de dependencias adicionales para entornos sin interfaz gráfica
+En servidores o entornos sin GUI (como algunos servidores Linux), es posible que necesites instalar dependencias adicionales para Chrome:
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get install -y gconf-service libasound2 libatk1.0-0 libc6 libcairo2 libcups2 libdbus-1-3 libexpat1 libfontconfig1 libgcc1 libgconf-2-4 libgdk-pixbuf2.0-0 libglib2.0-0 libgtk-3-0 libnspr4 libpango-1.0-0 libpangocairo-1.0-0 libstdc++6 libx11-6 libx11-xcb1 libxcb1 libxcomposite1 libxcursor1 libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libxrender1 libxss1 libxtst6 ca-certificates fonts-liberation libappindicator1 libnss3 lsb-release xdg-utils wget
+```
+
+**macOS:**
+```bash
+brew install --cask google-chrome
 ```
 
 ## Despliegue con Docker
@@ -85,20 +101,54 @@ Para reiniciar manualmente:
 - Soporte para mensajes de texto
 - Envío de imágenes individuales con texto
 - Envío de múltiples imágenes
+- **Envío de mensajes de voz (audio)** 
 - Cola de procesamiento ordenado
 - Sistema de reintentos automáticos
 - Monitoreo en tiempo real del progreso
 
 ### Gestión de Conexión
-- Reconexión automática
+- Implementación con whatsapp-web.js
+- Reconexión automática mejorada
 - Detección de inactividad (30 minutos)
 - Cierre seguro de sesiones
 - Monitoreo de estado de conexión
-- QR dinámico para reconexión
+- Generación y refresco de códigos QR
+- Optimización para entornos sin interfaz gráfica
 
 ### Interfaz de Usuario
 - Panel de control intuitivo
 - Visualización de estado de conexión
+- Botón para refrescar código QR cuando expire
+- Indicadores visuales de estado
+- Cambio dinámico según el estado de conexión
+- Modo autenticado con interfaz simplificada
+- Barra de progreso para envío de mensajes
+
+## Solución de Problemas
+
+### Problemas con el código QR
+Si el código QR no aparece o expira rápidamente:
+1. Haz clic en el botón "Refrescar código QR"
+2. Asegúrate de que tu conexión a internet sea estable
+3. Si persiste, reinicia el servidor con el botón "Deshabilitar"
+
+### Problemas con el envío de audio
+Para garantizar que los mensajes de audio funcionen correctamente:
+1. Asegúrate de que el formato de audio sea compatible (mp3, m4a, etc.)
+2. El sistema convertirá automáticamente los archivos a MP3 para mejor compatibilidad
+3. La duración máxima recomendada es de 2 minutos
+
+### Errores en entornos sin interfaz gráfica
+Si estás ejecutando en un servidor sin GUI y experimentas problemas:
+1. Instala todas las dependencias de Chrome mencionadas en la sección de instalación
+2. Configura Puppeteer para usar un navegador pre-instalado:
+   ```
+   CHROME_BIN=/ruta/a/chrome npm start
+   ```
+3. Aumenta la memoria disponible si es necesario:
+   ```
+   NODE_OPTIONS=--max_old_space_size=512 npm start
+   ```
 - Progreso de envío en tiempo real
 - Estadísticas de envío
 - Gestión de sesión WhatsApp

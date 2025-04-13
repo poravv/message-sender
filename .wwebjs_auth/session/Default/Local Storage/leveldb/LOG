@@ -1,3 +1,6 @@
-2025/04/12-20:37:36.505 9e03 Reusing MANIFEST /Users/andresvera/Desktop/Proyectos/chatbot-2/message-sender/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
-2025/04/12-20:37:36.505 9e03 Recovering log #3
-2025/04/12-20:37:36.505 9e03 Reusing old log /Users/andresvera/Desktop/Proyectos/chatbot-2/message-sender/.wwebjs_auth/session/Default/Local Storage/leveldb/000003.log 
+2025/04/12-21:15:39.309 a003 Reusing MANIFEST /Users/andresvera/Desktop/Proyectos/chatbot-2/message-sender/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
+2025/04/12-21:15:39.310 a003 Recovering log #3
+2025/04/12-21:15:39.310 a003 Reusing old log /Users/andresvera/Desktop/Proyectos/chatbot-2/message-sender/.wwebjs_auth/session/Default/Local Storage/leveldb/000003.log 
+2025/04/12-21:16:40.065 2ac0b Level-0 table #5: started
+2025/04/12-21:16:40.072 2ac0b Level-0 table #5: 18225 bytes OK
+2025/04/12-21:16:40.082 2ac0b Delete type=0 #3
