@@ -43,6 +43,8 @@ PUBLIC_URL=http://localhost         # URL pública
 RESTART_PASSWORD=tu_clave_secreta   # Clave para reinicio/deshabilitación
 ALLOWED_ORIGINS=http://dominio.com  # CORS permitidos
 NODE_ENV=production                 # Entorno
+AUTHORIZED_PHONES=595992756462     # Números telefónicos autorizados (sin +)
+FILE_RETENTION_HOURS=24            # Horas antes de eliminar archivos temporales
 ```
 
 ### 3. Instalación de dependencias
