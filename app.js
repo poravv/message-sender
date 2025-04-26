@@ -452,18 +452,22 @@ class MessageQueue {
                     console.log('Eliminando archivos de audio inmediatamente después del envío...');
                     
                     // 1. Eliminar el archivo temporal convertido
+                    /*
                     if (fs.existsSync(convertedAudioPath)) {
                         fs.unlinkSync(convertedAudioPath);
                         console.log(`✓ Archivo temporal eliminado: ${path.basename(convertedAudioPath)}`);
                     }
+                    */
                     
                     // 2. Eliminar el archivo original subido inmediatamente
+                    /*
                     if (audioFile && audioFile.path && fs.existsSync(audioFile.path)) {
                         fs.unlinkSync(audioFile.path);
                         console.log(`✓ Archivo original eliminado: ${path.basename(audioFile.path)}`);
                     } else {
                         console.log('No se encontró el archivo original para eliminar');
                     }
+                    */
 
                 } catch (error) {
                     console.error(`Error al procesar audio para ${number}:`, error);
