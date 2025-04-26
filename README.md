@@ -37,7 +37,7 @@ cp .env.example .env
 
 Variables importantes en `.env`:
 ```env
-PORT=3009                           # Puerto del servidor
+PORT=3010                           # Puerto del servidor
 RAILWAY_STATIC_URL=http://localhost # URL base
 PUBLIC_URL=http://localhost         # URL pública
 ALLOWED_ORIGINS=http://dominio.com  # CORS permitidos
