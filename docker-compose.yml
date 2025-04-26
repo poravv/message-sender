@@ -1,8 +1,8 @@
 version: '3.8'
 services:
-  whatsapp-sender:
+  aydui-sender:
     build: .
-    container_name: whatsapp-sender
+    container_name: audio-sender
     restart: always
     ports:
       - "${PORT}:${PORT}"
