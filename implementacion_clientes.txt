@@ -28,3 +28,12 @@ sudo docker run -d -e RAILWAY_STATIC_URL=http://localhost -e PUBLIC_URL=http://l
 docker ps 
 
 sudo docker rm -f 9124d056d5a7
+
+# Dar permisos al folder 
+mkdir -p uploads
+# dale ownership a tu usuario actual y permisos de lectura/escritura
+sudo chown -R $(id -u):$(id -g) uploads
+chmod -R ug+rwX uploads
+
+#recargar proyecto
+docker compose up -d --build
