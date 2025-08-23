@@ -2,13 +2,59 @@
 require('dotenv').config();
 const logger = require('./logger');
 
-// ======== ENV ========
+/* ──────────────────────────────────────────────────────────────────────────
+ * Asegurar WebCrypto (necesario para 'jose' en Node 18 dentro de Docker)
+ * ────────────────────────────────────────────────────────────────────────── */
+try {
+  if (!globalThis.crypto) {
+    const { webcrypto } = require('node:crypto');
+    globalThis.crypto = webcrypto;
+  }
+} catch (e) {
+  // Último recurso (no debería hacer falta)
+  (async () => {
+    try {
+      const { webcrypto } = await import('node:crypto');
+      if (!globalThis.crypto) globalThis.crypto = webcrypto;
+    } catch (err) {
+      logger.error({ err: err?.message }, 'No se pudo inicializar WebCrypto');
+    }
+  })();
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Carga dinámica de 'jose' (ESM) y JWKS remoto con caché
+ * ────────────────────────────────────────────────────────────────────────── */
+let _joseMod = null;   // cache del módulo jose
+let _jwks = null;      // cache del RemoteJWKSet
+
+async function jose() {
+  if (!_joseMod) {
+    _joseMod = await import('jose').catch((err) => {
+      logger.error({ err: err?.message }, 'Error importando jose');
+      throw err;
+    });
+  }
+  return _joseMod;
+}
+
+async function getJWKS(jwksUri) {
+  if (!_jwks) {
+    const { createRemoteJWKSet } = await jose();
+    _jwks = createRemoteJWKSet(new URL(jwksUri)); // incluye caché y rate-limit
+  }
+  return _jwks;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * ENV y endpoints OIDC
+ * ────────────────────────────────────────────────────────────────────────── */
 const {
-  KEYCLOAK_URL,              // p.ej.: https://kc.mindtechpy.net
-  KEYCLOAK_REALM,            // p.ej.: message-sender
-  KEYCLOAK_AUDIENCE,         // p.ej.: message-sender-api (clientId API)
-  KEYCLOAK_ISSUER,           // opcional
-  KEYCLOAK_JWKS_URI          // opcional
+  KEYCLOAK_URL,      // p.ej.: https://kc.mindtechpy.net
+  KEYCLOAK_REALM,    // p.ej.: message-sender
+  KEYCLOAK_AUDIENCE, // p.ej.: message-sender-api (clientId de tu API)
+  KEYCLOAK_ISSUER,   // opcional (override)
+  KEYCLOAK_JWKS_URI  // opcional (override)
 } = process.env;
 
 if (!KEYCLOAK_URL || !KEYCLOAK_REALM || !KEYCLOAK_AUDIENCE) {
@@ -18,25 +64,9 @@ if (!KEYCLOAK_URL || !KEYCLOAK_REALM || !KEYCLOAK_AUDIENCE) {
 const ISSUER = KEYCLOAK_ISSUER || `${KEYCLOAK_URL.replace(/\/+$/, '')}/realms/${KEYCLOAK_REALM}`;
 const JWKS_URI = KEYCLOAK_JWKS_URI || `${ISSUER}/protocol/openid-connect/certs`;
 
-// ======== jose (ESM) carga perezosa y cache ========
-let _joseMod = null;     // módulo jose
-let _jwksGetter = null;  // resultado de createRemoteJWKSet(new URL(JWKS_URI))
-
-async function jose() {
-  if (!_joseMod) _joseMod = await import('jose'); // ESM dynamic import compatible con CJS
-  return _joseMod;
-}
-async function getJWKS() {
-  if (!_jwksGetter) {
-    const { createRemoteJWKSet } = await jose();
-    _jwksGetter = createRemoteJWKSet(new URL(JWKS_URI)); // incluye caché y rate limit interno
-  }
-  return _jwksGetter;
-}
-
-/**
- * Extrae Bearer token del header Authorization
- */
+/* ──────────────────────────────────────────────────────────────────────────
+ * Helpers
+ * ────────────────────────────────────────────────────────────────────────── */
 function getBearerToken(req) {
   const header = req.headers['authorization'] || req.headers['Authorization'];
   if (!header) return null;
@@ -45,37 +75,32 @@ function getBearerToken(req) {
   return token;
 }
 
-/**
- * Normaliza roles de token Keycloak
- * - realm_access.roles: roles a nivel realm
- * - resource_access[clientId].roles: roles a nivel cliente
- */
 function extractRoles(payload, clientId) {
-  const realmRoles = payload?.realm_access?.roles || [];
+  const realmRoles  = payload?.realm_access?.roles || [];
   const clientRoles = payload?.resource_access?.[clientId]?.roles || [];
   return {
-    realmRoles: Array.isArray(realmRoles) ? realmRoles : [],
+    realmRoles:  Array.isArray(realmRoles)  ? realmRoles  : [],
     clientRoles: Array.isArray(clientRoles) ? clientRoles : [],
-    all: Array.from(new Set([...(realmRoles || []), ...(clientRoles || [])]))
+    all: Array.from(new Set([...(realmRoles || []), ...(clientRoles || [])])),
   };
 }
 
-/**
- * Middleware: verifica JWT (firma, issuer, audience, exp)
- * Adjunta req.auth y req.userRoles
- */
+/* ──────────────────────────────────────────────────────────────────────────
+ * Middlewares
+ * ────────────────────────────────────────────────────────────────────────── */
 async function checkJwt(req, res, next) {
   try {
     const token = getBearerToken(req);
     if (!token) return res.status(401).json({ error: 'Missing Bearer token' });
 
     const { jwtVerify } = await jose();
-    const JWKS = await getJWKS();
+    const jwks = await getJWKS(JWKS_URI);
 
-    const { payload } = await jwtVerify(token, JWKS, {
+    const { payload } = await jwtVerify(token, jwks, {
       issuer: ISSUER,
       audience: KEYCLOAK_AUDIENCE,
-      algorithms: ['RS256']
+      algorithms: ['RS256'],
+      clockTolerance: 10, // segundos de tolerancia de reloj
     });
 
     req.token = token;
@@ -88,11 +113,8 @@ async function checkJwt(req, res, next) {
   }
 }
 
-/**
- * Middleware de autorización por rol
- */
 function requireRole(role, opts = {}) {
-  const where = opts.in || 'either'; // realm | client | either
+  const where = opts.in || 'either'; // 'realm' | 'client' | 'either'
   return (req, res, next) => {
     try {
       if (!req.auth || !req.userRoles) {
@@ -101,15 +123,12 @@ function requireRole(role, opts = {}) {
       const { realmRoles, clientRoles, all } = req.userRoles;
 
       const has =
-        (where === 'realm' && realmRoles.includes(role)) ||
+        (where === 'realm'  && realmRoles.includes(role)) ||
         (where === 'client' && clientRoles.includes(role)) ||
         (where === 'either' && all.includes(role));
 
       if (!has) {
-        logger.info(
-          { sub: req.auth?.sub, role, where, realmRoles, clientRoles },
-          'Forbidden: missing role'
-        );
+        logger.info({ sub: req.auth?.sub, role, where, realmRoles, clientRoles }, 'Forbidden: missing role');
         return res.status(403).json({ error: 'Forbidden: missing role' });
       }
       return next();
@@ -120,10 +139,13 @@ function requireRole(role, opts = {}) {
   };
 }
 
+/* ──────────────────────────────────────────────────────────────────────────
+ * Exports
+ * ────────────────────────────────────────────────────────────────────────── */
 module.exports = {
   checkJwt,
   requireRole,
   extractRoles,
   ISSUER,
-  JWKS_URI
+  JWKS_URI,
 };
