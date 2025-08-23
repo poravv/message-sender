@@ -1,25 +1,27 @@
+# =========================
 # Build stage
-FROM node:18-bullseye-slim as builder
+# =========================
+FROM node:18-bullseye-slim AS builder
 WORKDIR /app
 
-# Establecer variable para evitar la descarga de Chromium durante la instalación
+# Evitar descarga de Chromium en instalación
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 
-# Copiar solo los archivos necesarios para instalar dependencias
+# Instalar dependencias
 COPY package*.json ./
-
-# Instalar todas las dependencias incluyendo devDependencies para nodemon
 RUN npm install --legacy-peer-deps
 
-# Copiar el resto de archivos de la aplicación
+# Copiar el resto del proyecto (incluye src/, public/, etc.)
 COPY . .
 
-# Production stage
+# =========================
+# Runtime stage (producción)
+# =========================
 FROM node:18-bullseye-slim
 WORKDIR /app
 
-# Instalación de dependencias del sistema necesarias para Puppeteer (Chrome) y FFmpeg
+# Dependencias del sistema para Chromium y FFmpeg (whatsapp-web.js)
 RUN apt-get update && apt-get install -y \
     chromium \
     ffmpeg \
@@ -60,31 +62,32 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     xdg-utils \
     wget \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
 
-# Configurar Chromium como navegador para Puppeteer
+# Configurar Chromium para Puppeteer
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROME_BIN=/usr/bin/chromium
 
-# Instalar nodemon globalmente en la imagen de producción
-RUN npm install -g nodemon
-
-# Copiar solo los archivos necesarios desde el builder
+# Copiar artefactos desde el builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/app.js ./
+COPY --from=builder /app/src ./src
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/nodemon.json ./
-COPY --from=builder /app/.env ./.env
+# (opcional) variables por defecto dentro de la imagen
+# COPY --from=builder /app/.env ./.env
+# (opcional) nodemon.json si lo usas en dev dentro del contenedor
+# COPY --from=builder /app/nodemon.json ./
 
-# Crear directorio para uploads y bot_sessions
+# Directorios usados en runtime
 RUN mkdir -p uploads bot_sessions && chown -R node:node /app
 
-# Usar usuario no root
+# Usuario no root
 USER node
 
-EXPOSE ${PORT:-3000}
+# Puerto (honra PORT si viene del entorno)
+EXPOSE ${PORT:-3010}
 
-# Usar nodemon en lugar de node directamente
-CMD ["nodemon", "app.js"]
+# Arranque en producción: usa node (no nodemon)
+CMD ["node", "app.js"]
