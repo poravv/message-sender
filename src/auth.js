@@ -1,15 +1,14 @@
 // src/auth.js
 require('dotenv').config();
-const { createRemoteJWKSet, jwtVerify } = require('jose');
 const logger = require('./logger');
 
 // ======== ENV ========
 const {
-  KEYCLOAK_URL,              // ej: https://kc.mindtechpy.net
-  KEYCLOAK_REALM,            // ej: message-sender
-  KEYCLOAK_AUDIENCE,         // ej: message-sender-api (tu clientId API en Keycloak)
-  KEYCLOAK_ISSUER,           // opcional (si no se infiere)
-  KEYCLOAK_JWKS_URI          // opcional (si no se infiere)
+  KEYCLOAK_URL,              // p.ej.: https://kc.mindtechpy.net
+  KEYCLOAK_REALM,            // p.ej.: message-sender
+  KEYCLOAK_AUDIENCE,         // p.ej.: message-sender-api (clientId API)
+  KEYCLOAK_ISSUER,           // opcional
+  KEYCLOAK_JWKS_URI          // opcional
 } = process.env;
 
 if (!KEYCLOAK_URL || !KEYCLOAK_REALM || !KEYCLOAK_AUDIENCE) {
@@ -19,8 +18,21 @@ if (!KEYCLOAK_URL || !KEYCLOAK_REALM || !KEYCLOAK_AUDIENCE) {
 const ISSUER = KEYCLOAK_ISSUER || `${KEYCLOAK_URL.replace(/\/+$/, '')}/realms/${KEYCLOAK_REALM}`;
 const JWKS_URI = KEYCLOAK_JWKS_URI || `${ISSUER}/protocol/openid-connect/certs`;
 
-// Remote JWKS con caché y rate-limit interno (lo maneja jose)
-const JWKS = createRemoteJWKSet(new URL(JWKS_URI));
+// ======== jose (ESM) carga perezosa y cache ========
+let _joseMod = null;     // módulo jose
+let _jwksGetter = null;  // resultado de createRemoteJWKSet(new URL(JWKS_URI))
+
+async function jose() {
+  if (!_joseMod) _joseMod = await import('jose'); // ESM dynamic import compatible con CJS
+  return _joseMod;
+}
+async function getJWKS() {
+  if (!_jwksGetter) {
+    const { createRemoteJWKSet } = await jose();
+    _jwksGetter = createRemoteJWKSet(new URL(JWKS_URI)); // incluye caché y rate limit interno
+  }
+  return _jwksGetter;
+}
 
 /**
  * Extrae Bearer token del header Authorization
@@ -57,6 +69,9 @@ async function checkJwt(req, res, next) {
     const token = getBearerToken(req);
     if (!token) return res.status(401).json({ error: 'Missing Bearer token' });
 
+    const { jwtVerify } = await jose();
+    const JWKS = await getJWKS();
+
     const { payload } = await jwtVerify(token, JWKS, {
       issuer: ISSUER,
       audience: KEYCLOAK_AUDIENCE,
@@ -66,7 +81,6 @@ async function checkJwt(req, res, next) {
     req.token = token;
     req.auth = payload;
     req.userRoles = extractRoles(payload, KEYCLOAK_AUDIENCE);
-
     return next();
   } catch (err) {
     logger.warn({ err: err?.message }, 'JWT verification failed');
