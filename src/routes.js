@@ -5,6 +5,7 @@ const { upload } = require('./media');
 const { cleanupOldFiles, loadNumbersFromCSV } = require('./utils');
 const { publicDir, retentionHours } = require('./config');
 const logger = require('./logger');
+const { checkJwt, requireRole } = require('./auth');
 
 function buildRoutes(whatsappManager) {
   const router = express.Router();
@@ -28,7 +29,7 @@ function buildRoutes(whatsappManager) {
     res.json(resp);
   });
 
-  router.post('/send-messages', upload.fields([
+  router.post('/send-messages', checkJwt, requireRole('sender_api'),upload.fields([
     { name: 'csvFile', maxCount: 1 },
     { name: 'images', maxCount: 10 },
     { name: 'singleImage', maxCount: 1 },
@@ -69,7 +70,7 @@ function buildRoutes(whatsappManager) {
     }
   });
 
-  router.get('/message-status', (req, res) => {
+  router.get('/message-status', checkJwt, requireRole('sender_api'),(req, res) => {
     if (!whatsappManager.messageQueue) return res.json({ total: 0, sent: 0, errors: 0, messages: [], completed: true });
     res.json(whatsappManager.messageQueue.getStats());
   });

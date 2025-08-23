@@ -1,3 +1,73 @@
+/** ======== Keycloak: init sin bucles y fetch con token ======== */
+
+// Configura tu cliente (usa exactamente los valores de tu Realm/Client)
+const keycloak = new Keycloak({
+  url: 'https://kc.mindtechpy.net',
+  realm: 'message-sender',
+  clientId: 'message-sender-web',
+});
+
+let refreshing = false;
+let refreshTimer = null;
+
+// Inicializa y realiza login UNA sola vez (sin setInterval agresivos)
+(async function initAuth() {
+  try {
+    const authenticated = await keycloak.init({
+      onLoad: 'login-required',
+      checkLoginIframe: false, // evita pings en iframe que pueden causar comportamientos raros
+      pkceMethod: 'S256',      // recomendado si el cliente lo permite
+    });
+
+    if (!authenticated) {
+      // Una sola redirección si no hay sesión
+      return keycloak.login();
+    }
+
+    // Renueva justo antes de expirar (sin loops)
+    keycloak.onTokenExpired = async () => {
+      if (refreshing) return;
+      refreshing = true;
+      try {
+        await keycloak.updateToken(30); // renueva si quedan <30s
+      } catch (e) {
+        console.error('Fallo refrescando token', e);
+        // Muestra aviso en vez de entrar en bucle de login
+        showAlert('Sesión expirada. Inicia sesión nuevamente.', 'warning');
+        // Si quieres forzar login, hazlo UNA vez:
+        // keycloak.login();
+      } finally {
+        refreshing = false;
+      }
+    };
+
+    // “Pulso” suave: cada 20s, si faltan <60s de token, intenta renovar
+    const tick = async () => {
+      clearTimeout(refreshTimer);
+      try {
+        const expMs = keycloak.tokenParsed?.exp ? keycloak.tokenParsed.exp * 1000 : 0;
+        if (expMs) {
+          const delta = expMs - Date.now();
+          if (delta < 60_000) await keycloak.updateToken(30);
+        }
+      } catch { /* no crítico */ }
+      refreshTimer = setTimeout(tick, 20_000);
+    };
+    tick();
+
+  } catch (err) {
+    console.error('Error iniciando Keycloak:', err);
+    showAlert('Error de autenticación', 'danger');
+  }
+})();
+
+// Helper: fetch con Authorization automáticamente
+async function authFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {});
+  if (keycloak?.token) headers.set('Authorization', `Bearer ${keycloak.token}`);
+  return fetch(url, { ...options, headers });
+}
+
 /** =========================================================================
  * Frontend App - Message Sender
  * Unificado: lógica de UI, sincronización de estado, manejo de formularios.
@@ -305,14 +375,14 @@ document.getElementById('messageForm').addEventListener('submit', async (event) 
   if (spinner) spinner.style.display = 'block';
 
   try {
-    const res = await fetch('/send-messages', { method: 'POST', body: formData });
+    const res = await authFetch('/send-messages', { method: 'POST', body: formData });
     const result = await res.json();
 
     if (res.ok) {
       if (result.initialStats) updateMessageStatus(result.initialStats);
 
       const poll = setInterval(async () => {
-        const sRes = await fetch('/message-status');
+        const sRes = await authFetch('/message-status');
         const status = await sRes.json();
         updateMessageStatus(status);
         if (status.completed) clearInterval(poll);
