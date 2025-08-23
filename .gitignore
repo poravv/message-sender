@@ -3,6 +3,7 @@ node_modules/
 bot_sessions/
 npm-debug.log
 yarn-error.log
+.wwebjs_auth/
 
 # Environment variables
 .env

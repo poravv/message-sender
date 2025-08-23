@@ -1,754 +1,161 @@
 <!DOCTYPE html>
-<html lang="es">
-
+<html lang="es" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Message-sender</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #e5ddd5;
-            margin-top: 50px;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Message-sender</title>
 
-        .tab-buttons button {
-            background-color: #25d366;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            margin: 0 10px;
-            padding: 10px 20px;
-            font-size: 16px;
-        }
+  <!-- Bootstrap + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"/>
 
-        .tab-buttons button:hover {
-            background-color: #128c7e;
-        }
-
-        .card {
-            background-color: #ffffff;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .card-body {
-            color: #075e54;
-        }
-
-        .form-label {
-            color: #128c7e;
-        }
-
-        .btn-success {
-            background-color: #25d366;
-            border: none;
-        }
-
-        .btn-success:hover {
-            background-color: #128c7e;
-        }
-
-        .alert {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            padding: 15px;
-            border-radius: 5px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            display: none;
-        }
-
-        .loader {
-            border: 8px solid #f3f3f3;
-            border-top: 8px solid #25d366;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        #spinner {
-            text-align: center;
-            margin-top: 20px;
-            display: none;
-        }
-
-        .tab {
-            display: none;
-        }
-
-        .tab.active {
-            display: block;
-        }
-
-        #images {
-            margin-top: 10px;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        #connection-status {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 8px 15px;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-
-        .status-connected {
-            background-color: #25d366;
-            color: white;
-        }
-
-        .status-disconnected {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        #messageStatus {
-            margin-top: 20px;
-            display: none;
-        }
-
-        .progress {
-            height: 25px;
-        }
-
-        .status-table {
-            margin-top: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .status-row-success {
-            background-color: #d4edda;
-        }
-
-        .status-row-error {
-            background-color: #f8d7da;
-        }
-
-        .status-badge {
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .badge-queued {
-            background-color: #ffc107;
-            color: black;
-        }
-
-        .badge-sending {
-            background-color: #17a2b8;
-            color: white;
-        }
-
-        .badge-sent {
-            background-color: #28a745;
-            color: white;
-        }
-
-        .badge-error {
-            background-color: #dc3545;
-            color: white;
-        }
-    </style>
+  <!-- Estilos personalizados -->
+  <link rel="stylesheet" href="/styles.css"/>
 </head>
 
 <body>
-    <div id="connection-status" class="status-disconnected">Desconectado</div>
-    <div id="alert" class="alert"></div>
+  <!-- Indicador de conexión -->
+  <div id="connection-status" class="status-disconnected">Desconectado</div>
+  <div id="alert" class="alert"></div>
 
-    <div class="container">
-        <h1 class="text-center mb-4">Envío de mensaje sobre lista</h1>
+  <div class="container">
+    <header class="d-flex align-items-center justify-content-between mb-3">
+      <div>
+        <h1 class="mb-0">Envío de mensaje sobre lista</h1>
+        <p class="subtitle mb-0">Administra tu conexión y realiza envíos de forma controlada y segura</p>
+      </div>
 
-        <div class="tab-buttons text-center mb-4">
-            <button id="linkBtn" class="btn btn-primary" onclick="showTab('link')">Enlazar WhatsApp</button>
-            <button id="sendBtn" class="btn btn-secondary" onclick="showTab('send')">Enviar Mensaje</button>
+      <!-- Switch de tema -->
+      <div class="d-flex align-items-center gap-2">
+        <div class="form-check form-switch ms-2">
+          <input class="form-check-input" type="checkbox" role="switch" id="themeSwitch" aria-label="Cambiar tema" />
+          <label class="form-check-label text-nowrap" for="themeSwitch" id="themeLabel">Oscuro</label>
         </div>
+      </div>
+    </header>
 
-        <div id="link" class="tab active">
-            <div class="card text-center shadow-sm p-4">
-                <div class="card-body">
-                    <div id="qr-container">
-                        <p class="card-text">Escanea el QR en tu dispositivo para enlazar el sender</p>
-                        <div id="qr">
-                            <img id="qrImage" src="/qr" alt="QR Code" class="img-fluid">
-                        </div>
-                        <div class="tab-buttons text-center mb-4">
-                            <button id="refreshQrBtn" class="btn btn-secondary" onclick="refreshQR()">Refrescar código QR</button>
-                        </div>
-                        
-                    </div>
-                    <div id="authenticated-message" class="d-none">
-                        <div class="alert alert-success mb-3">
-                            <i class="bi bi-check-circle-fill me-2"></i> WhatsApp conectado exitosamente
-                        </div>
-                        <div class="card mb-3 border-success">
-                            <div class="card-body">
-                                <h5 class="card-title"><i class="bi bi-person-circle me-2"></i>Sesión activa</h5>
-                                <p class="mb-1"><strong>Nickname:</strong> <span id="user-nickname">Cargando...</span></p>
-                                <p><strong>Número:</strong> <span id="user-phone">Cargando...</span></p>
-                            </div>
-                        </div>
-                        <p>Tu WhatsApp está correctamente enlazado y listo para enviar mensajes.</p>
-                        <button class="btn btn-primary" onclick="showTab('send')">Ir a Enviar Mensajes</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div id="send" class="tab">
-            <div class="card shadow-sm p-4">
-                <div class="card-body">
-                    <h5 class="card-title">Formulario de Envío de Mensaje</h5>
-                    <form id="messageForm" enctype="multipart/form-data">
-                        <div class="mb-3">
-                            <label for="csvFile" class="form-label">Cargar archivo CSV con números:
-                                <b>5959xxxxxxxx</b></label>
-                            <input type="file" id="csvFile" name="csvFile" class="form-control" accept=".csv" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <b><label for="imageOption" class="form-label">Selecciona tipo de imagen:</label></b>
-                            <select id="imageOption" class="form-select" onchange="toggleImageFields()">
-                                <option value="none">Ninguna</option>
-                                <option value="multiple">Cargar múltiples imágenes</option>
-                                <option value="single">Cargar una imagen con comentario</option>
-                                <option value="audio">Enviar mensaje de audio</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3 hidden" id="multipleImagesField">
-                            <b><label for="images" class="form-label">Cargar múltiples imágenes (opcional):</label></b>
-                            <input type="file" id="images" name="images" class="form-control" accept="image/*" multiple>
-                        </div>
-
-                        <div class="mb-3 hidden" id="singleImageField">
-                            <b><label for="singleImage" class="form-label">Cargar una imagen con comentario
-                                    (opcional):</label></b>
-                            <input type="file" id="singleImage" name="singleImage" class="form-control"
-                                accept="image/*">
-                        </div>
-
-                        <div class="mb-3 hidden" id="audioField">
-                            <b><label for="audioFile" class="form-label">Cargar archivo de audio:</label></b>
-                            <input type="file" id="audioFile" name="audioFile" class="form-control" accept="audio/*">
-                        </div>
-
-                        <div class="mb-3">
-                            <b><label for="message" class="form-label">Mensaje:</label></b>
-                            <textarea id="message" name="message" rows="4" class="form-control"></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-success">Enviar Mensaje</button>
-                    </form>
-
-                    <div id="spinner">
-                        <p>Enviando mensajes, por favor espere...</p>
-                        <div class="loader"></div>
-                    </div>
-                </div>
-
-
-                <!-- Nuevo componente de estado de mensajes -->
-                <div id="messageStatus" class="mt-4">
-                    <h5>Estado del Envío</h5>
-                    <div class="progress mb-3">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
-                            aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-                    </div>
-                    <div class="d-flex justify-content-between mb-3">
-                        <span>Enviados: <span id="sentCount">0</span>/<span id="totalCount">0</span></span>
-                        <span>Errores: <span id="errorCount">0</span></span>
-                    </div>
-                    <div class="status-table">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Número</th>
-                                    <th>Estado</th>
-                                    <th>Mensaje</th>
-                                </tr>
-                            </thead>
-                            <tbody id="statusTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-
-            </div>
-        </div>
+    <!-- Botones de tabs -->
+    <div class="tab-buttons text-center mb-4">
+      <button id="linkBtn" class="btn btn-ghost" onclick="showTab('link')">Enlazar WhatsApp</button>
+      <button id="sendBtn" class="btn btn-brand" onclick="showTab('send')">Enviar Mensaje</button>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <!-- Solución directa para el problema de actualización del estado -->
-    <script src="status-sync.js"></script>
-
-    <script>
-        // Variables globales
-        let connectionCheckInterval;
-        let qrCheckInterval;
-        let isEnablingBaileys = false;
-
-        // Función para actualizar el estado de la UI basado en el estado del backend
-        async function updateUIState() {
-            try {
-                const response = await fetch('/connection-status');
-                const status = await response.json();
-
-                const statusElement = document.getElementById('connection-status');
-                const button = document.getElementById('toggleWhatsApp');
-                const qrContainer = document.getElementById('qr-container');
-                const authenticatedMessage = document.getElementById('authenticated-message');
-                const linkBtn = document.getElementById('linkBtn');
-                const sendBtn = document.getElementById('sendBtn');
-
-                if (status.isReady) {
-                    // Cliente autenticado y listo
-                    button.className = 'btn btn-danger';
-                    statusElement.textContent = 'Conectado';
-                    statusElement.className = 'status-connected';
-                    
-                    // Cambiar el contenido de la pestaña de enlace
-                    qrContainer.classList.add('d-none');
-                    authenticatedMessage.classList.remove('d-none');
-                    
-                    // Mostrar información del usuario si está disponible
-                    if (status.userInfo) {
-                        document.getElementById('user-nickname').textContent = status.userInfo.pushname;
-                        document.getElementById('user-phone').textContent = status.userInfo.phoneNumber;
-                    }
-                    
-                    // Activar la pestaña de envío
-                    linkBtn.classList.remove('btn-primary');
-                    linkBtn.classList.add('btn-outline-primary');
-                    sendBtn.classList.remove('btn-secondary');
-                    sendBtn.classList.add('btn-primary');
-                } else {
-                    // Cliente no autenticado
-                    button.className = 'btn btn-success';
-                    statusElement.textContent = 'Desconectado';
-                    statusElement.className = 'status-disconnected';
-                    
-                    // Mostrar QR y ocultar mensaje de autenticado
-                    qrContainer.classList.remove('d-none');
-                    authenticatedMessage.classList.add('d-none');
-                    
-                    // Restablecer estilos de botones
-                    linkBtn.classList.add('btn-primary');
-                    linkBtn.classList.remove('btn-outline-primary');
-                    sendBtn.classList.add('btn-secondary'); 
-                    sendBtn.classList.remove('btn-primary');
-                }
-
-                // Verificar si hay un QR para mostrar
-                const qrImage = document.getElementById('qrImage');
-                const refreshQrBtn = document.getElementById('refreshQrBtn');
-                
-                if (!status.isReady && status.hasQR) {
-                    // Actualizar la imagen del QR con timestamp para evitar caché
-                    qrImage.src = `/qr?t=${Date.now()}`;
-                    refreshQrBtn.style.display = 'inline-block';
-                } else if (!status.isReady) {
-                    // Asegurarse de que el QR esté visible
-                    qrImage.src = `/qr?t=${Date.now()}`;
-                    refreshQrBtn.style.display = 'inline-block';
-                }
-
-                // Si hay inactividad prolongada, mostrar alerta
-                const inactivityTime = (Date.now() - new Date(status.lastActivity)) / 1000;
-                if (inactivityTime > 1800 && status.isReady) { // 30 minutos
-                    showAlert('La conexión ha estado inactiva por mucho tiempo. Considere reiniciarla.', 'warning');
-                }
-            } catch (error) {
-                console.error('Error actualizando estado:', error);
-            }
-        }
-
-        // Iniciar verificación periódica del estado
-        function startStatusCheck() {
-            updateUIState(); // Verificación inicial
-            connectionCheckInterval = setInterval(updateUIState, 30000); // Cada 30 segundos
-        }
-
-        // Función para mostrar alertas
-        function showAlert(message, type = 'success') {
-            const alert = document.getElementById('alert');
-            alert.textContent = message;
-            alert.className = `alert alert-${type}`;
-            alert.style.display = 'block';
-
-            setTimeout(() => {
-                alert.style.display = 'none';
-            }, 5000);
-        }
-
-        async function submitBaileys() {
-            const password = document.getElementById('adminPassword').value.trim();
-            const phoneNumber = document.getElementById('phoneNumber').value.trim();
-            
-            if (!password) {
-                showAlert('Debe ingresar una clave.', 'danger');
-                return;
-            }
-            
-            if (!phoneNumber) {
-                showAlert('Debe ingresar su número de WhatsApp.', 'danger');
-                return;
-            }
-            
-            if (!validatePhoneNumber(phoneNumber)) {
-                showAlert('Formato de número inválido. Use formato internacional sin + ni espacios (ej: 5952123456).', 'warning');
-                return;
-            }
-
-            const button = document.getElementById('toggleBaileys');
-            const isEnabling = button.textContent.includes('Habilitar');
-
-            try {
-                if (isEnabling) {
-                    const response = await fetch('/toggle-whatsapp', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            enable: true,
-                            password,
-                            phoneNumber
-                        })
-                    });
-
-                    const result = await response.json();
-                    if (result.success) {
-                        showAlert('Servicio habilitado correctamente', 'success');
-                        await updateUIState();
-                    } else {
-                        showAlert(result.message || 'Error al habilitar el servicio', 'danger');
-                    }
-                } else {
-                    try {
-                        showAlert('Deteniendo servidor...', 'warning');
-                        
-                        const response = await fetch('/restart-server', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ password })
-                        });
-
-                        const result = await response.json();
-                        if (result.success) {
-                            showAlert('El servidor se está deteniendo...', 'success');
-                            // Esperar 3 segundos y recargar la página
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 3000);
-                        }
-                    } catch (error) {
-                        // Si hay un error de conexión, asumimos que el servidor se está reiniciando
-                        showAlert('El servidor se está deteniendo...', 'success');
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 3000);
-                    }
-                }
-
-                // Cerrar el modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
-                if (modal) {
-                    modal.hide();
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                // Si hay un error de conexión durante el reinicio, lo manejamos como éxito
-                if (!isEnabling) {
-                    showAlert('El servidor se está deteniendo...', 'success');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
-                } else {
-                    showAlert('Error en la operación: ' + (error.message || 'Error desconocido'), 'danger');
-                }
-            }
-        }
-
-        // Función para cambiar entre pestañas con verificación de estado
-        async function showTab(tabId) {
-            if (tabId === 'send') {
-                // Verificar estado antes de cambiar a la pestaña de envío
-                const response = await fetch('/connection-status');
-                const status = await response.json();
-
-                if (!status.isReady) {
-                    showAlert('Debe habilitar el servicio de WhatsApp primero', 'warning');
-                    return;
-                }
-            }
-
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.getElementById(tabId).classList.add('active');
-        }
-
-        async function toggleBaileys() {
-            const button = document.getElementById('toggleBaileys');
-            isEnablingBaileys = button.textContent.includes('Habilitar');
-            const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
-            modal.show();
-        }
-
-        // Función para validar el formato del número de teléfono
-        function validatePhoneNumber(phone) {
-            // Eliminar espacios y otros caracteres
-            const cleaned = phone.replace(/[\s\-\+\(\)]/g, '');
-            // Verificar que solo contenga números y tenga al menos 10 dígitos
-            return /^\d{10,15}$/.test(cleaned);
-        }
-
-        // Función para alternar campos de imagen
-        function toggleImageFields() {
-            const imageOption = document.getElementById('imageOption').value;
-            const multipleImagesField = document.getElementById('multipleImagesField');
-            const singleImageField = document.getElementById('singleImageField');
-            const audioField = document.getElementById('audioField');
-
-            multipleImagesField.classList.add('hidden');
-            singleImageField.classList.add('hidden');
-            audioField.classList.add('hidden');
-
-            if (imageOption === 'multiple') {
-                multipleImagesField.classList.remove('hidden');
-            } else if (imageOption === 'single') {
-                singleImageField.classList.remove('hidden');
-            } else if (imageOption === 'audio') {
-                audioField.classList.remove('hidden');
-            }
-        }
-
-        // Función para refrescar el código QR
-        async function refreshQR() {
-            try {
-                const response = await fetch('/refresh-qr', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' }
-                });
-                
-                const result = await response.json();
-                
-                if (result.success) {
-                    showAlert('Solicitando nuevo código QR, por favor espere...', 'info');
-                    // Actualizar la imagen QR después de un breve retraso
-                    setTimeout(() => {
-                        const qrImg = document.getElementById('qrImage');
-                        if (qrImg) {
-                            qrImg.src = `/qr?t=${Date.now()}`; // Usar cache-busting
-                        }
-                    }, 2000);
-                } else {
-                    showAlert(result.message || 'No se pudo refrescar el QR', 'warning');
-                }
-            } catch (error) {
-                console.error('Error al refrescar QR:', error);
-                showAlert('Error al solicitar nuevo código QR', 'danger');
-            }
-        }
-
-        // Manejador del formulario
-        document.getElementById('messageForm').addEventListener('submit', async (event) => {
-            event.preventDefault();
-
-            const messageStatus = document.getElementById('messageStatus');
-            messageStatus.style.display = 'block';
-            document.getElementById('statusTableBody').innerHTML = '';
-
-            const formData = new FormData();
-            formData.append('message', document.getElementById('message').value);
-            formData.append('csvFile', document.getElementById('csvFile').files[0]);
-
-            const imageOption = document.getElementById('imageOption').value;
-            if (imageOption === 'single') {
-                const singleImage = document.getElementById('singleImage').files[0];
-                if (singleImage) formData.append('singleImage', singleImage);
-            } else if (imageOption === 'multiple') {
-                const images = document.getElementById('images').files;
-                for (let i = 0; i < images.length; i++) {
-                    formData.append('images', images[i]);
-                }
-            } else if (imageOption === 'audio') {
-                const audioFile = document.getElementById('audioFile').files[0];
-                if (audioFile) formData.append('audioFile', audioFile);
-            }
-
-            const spinner = document.getElementById('spinner');
-            spinner.style.display = 'block';
-
-            try {
-                const response = await fetch('/send-messages', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    // Mostrar estado inicial
-                    if (result.initialStats) {
-                        updateMessageStatus(result.initialStats);
-                    }
-
-                    let isCompleted = false;
-                    const pollInterval = setInterval(async () => {
-                        try {
-                            const statusResponse = await fetch('/message-status');
-                            if (!statusResponse.ok) throw new Error('Error al obtener estado');
-
-                            const statusData = await statusResponse.json();
-                            console.log('Estado actual:', statusData);
-
-                            updateMessageStatus(statusData);
-
-                            // Verificar si el proceso está completado
-                            if (statusData.completed) {
-                                if (!isCompleted) {
-                                    isCompleted = true;
-                                    showAlert('Envío completado exitosamente', 'success');
-                                    spinner.style.display = 'none';
-                                }
-                                clearInterval(pollInterval);
-                            }
-                        } catch (error) {
-                            console.error('Error en polling:', error);
-                            clearInterval(pollInterval);
-                            showAlert('Error al actualizar estado: ' + error.message, 'danger');
-                        }
-                    }, 1000);
-                } else {
-                    showAlert(result.error || 'Error al enviar los mensajes', 'danger');
-                    spinner.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showAlert('Error al enviar los mensajes: ' + error.message, 'danger');
-                spinner.style.display = 'none';
-            }
-        });
-
-        // Verificar el estado de Baileys al cargar la página
-        document.addEventListener('DOMContentLoaded', () => {
-            startStatusCheck();
-        });
-
-        // Limpiar intervalos al salir
-        window.addEventListener('beforeunload', () => {
-            if (connectionCheckInterval) clearInterval(connectionCheckInterval);
-            if (qrCheckInterval) clearInterval(qrCheckInterval);
-        });
-
-        // Función para actualizar el estado de los mensajes
-        function updateMessageStatus(status) {
-            const { sent, total, errors, messages, completed } = status;
-
-            // Actualizar progreso
-            const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
-            const progressBar = document.querySelector('.progress-bar');
-            progressBar.style.width = `${progress}%`;
-            progressBar.textContent = `${progress}%`;
-
-            // Actualizar contadores
-            document.getElementById('sentCount').textContent = sent;
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('errorCount').textContent = errors;
-
-            // Actualizar tabla de estado
-            const statusTableBody = document.getElementById('statusTableBody');
-
-            if (messages && messages.length > 0) {
-                // Limpiar filas existentes si es necesario
-                if (completed) {
-                    statusTableBody.innerHTML = '';
-                }
-
-                messages.forEach(msg => {
-                    let row = statusTableBody.querySelector(`[data-number="${msg.number}"]`);
-                    if (!row) {
-                        row = document.createElement('tr');
-                        row.setAttribute('data-number', msg.number);
-                        statusTableBody.appendChild(row);
-                    }
-
-                    const statusClass = msg.status === 'error' ? 'status-row-error' : 'status-row-success';
-                    const badgeClass = {
-                        'queued': 'badge-queued',
-                        'sending': 'badge-sending',
-                        'sent': 'badge-sent',
-                        'error': 'badge-error'
-                    }[msg.status] || 'badge-queued';
-
-                    row.innerHTML = `
-                <td>${msg.number}</td>
-                <td><span class="status-badge ${badgeClass}">${msg.status}</span></td>
-                <td>${msg.message || ''}</td>
-            `;
-                    row.className = statusClass;
-                });
-            }
-
-            // Si está completado, actualizar la UI acordemente
-            if (completed) {
-                document.getElementById('spinner').style.display = 'none';
-                if (errors === 0) {
-                    showAlert('Todos los mensajes fueron enviados exitosamente', 'success');
-                } else {
-                    showAlert(`Envío completado con ${errors} errores`, 'warning');
-                }
-            }
-        }
-    </script>
-
-    <div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="passwordModalLabel">Autenticación</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label for="phoneNumber" class="form-label">Número de WhatsApp:</label>
-                        <input type="text" id="phoneNumber" class="form-control" placeholder="Ingrese su número (ej: 595992756461)" />
-                        <small class="form-text text-muted">Formato internacional sin + ni espacios</small>
-                    </div>
-                    <div class="mb-3">
-                        <label for="adminPassword" class="form-label">Clave administrativa:</label>
-                        <input type="password" id="adminPassword" class="form-control" placeholder="Ingrese la clave" />
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="submitBaileys()">Confirmar</button>
-                </div>
+    <!-- Pestaña de enlace -->
+    <div id="link" class="tab active">
+      <div class="card text-center shadow-sm p-4">
+        <div class="card-body">
+          <div id="qr-container">
+            <p class="card-text">Escanea el QR en tu dispositivo para enlazar el sender</p>
+            <div id="qr">
+              <img id="qrImage" src="/qr" alt="QR Code" class="img-fluid">
             </div>
+            <div class="text-center mt-3">
+              <button id="refreshQrBtn" class="btn btn-ghost" onclick="refreshQR()">
+                <i class="bi bi-arrow-clockwise me-1"></i> Refrescar código QR
+              </button>
+            </div>
+          </div>
+
+          <div id="authenticated-message" class="d-none mt-3">
+            <div class="alert alert-success mb-3" style="display:block">
+              <i class="bi bi-check-circle-fill me-2"></i> WhatsApp conectado exitosamente
+            </div>
+            <div class="card mb-3 border-success">
+              <div class="card-body">
+                <h5 class="card-title"><i class="bi bi-person-circle me-2"></i>Sesión activa</h5>
+                <p class="mb-1"><strong>Nickname:</strong> <span id="user-nickname">Cargando...</span></p>
+                <p class="mb-0"><strong>Número:</strong> <span id="user-phone">Cargando...</span></p>
+              </div>
+            </div>
+            <p class="mb-3">Tu WhatsApp está correctamente enlazado y listo para enviar mensajes.</p>
+            <button class="btn btn-brand" onclick="showTab('send')">Ir a Enviar Mensajes</button>
+          </div>
         </div>
+      </div>
     </div>
+
+    <!-- Pestaña de envío -->
+    <div id="send" class="tab">
+      <div class="card shadow-sm p-4">
+        <div class="card-body">
+          <h5 class="card-title">Formulario de Envío de Mensaje</h5>
+          <form id="messageForm" enctype="multipart/form-data">
+            <div class="mb-3">
+              <label for="csvFile" class="form-label">Cargar archivo CSV con números: <b>5959xxxxxxxx</b></label>
+              <input type="file" id="csvFile" name="csvFile" class="form-control" accept=".csv" required>
+            </div>
+
+            <div class="mb-3">
+              <label for="imageOption" class="form-label fw-bold">Selecciona tipo de envío:</label>
+              <select id="imageOption" class="form-select" onchange="toggleImageFields()">
+                <option value="none">Ninguno (solo texto)</option>
+                <option value="multiple">Cargar múltiples imágenes</option>
+                <option value="single">Cargar una imagen con comentario</option>
+                <option value="audio">Enviar mensaje de audio</option>
+              </select>
+            </div>
+
+            <div class="mb-3 hidden" id="multipleImagesField">
+              <label for="images" class="form-label fw-bold">Cargar múltiples imágenes:</label>
+              <input type="file" id="images" name="images" class="form-control" accept="image/*" multiple>
+            </div>
+
+            <div class="mb-3 hidden" id="singleImageField">
+              <label for="singleImage" class="form-label fw-bold">Cargar una imagen con comentario:</label>
+              <input type="file" id="singleImage" name="singleImage" class="form-control" accept="image/*">
+            </div>
+
+            <div class="mb-3 hidden" id="audioField">
+              <label for="audioFile" class="form-label fw-bold">Cargar archivo de audio:</label>
+              <input type="file" id="audioFile" name="audioFile" class="form-control" accept="audio/*">
+            </div>
+
+            <div class="mb-3">
+              <label for="message" class="form-label fw-bold">Mensaje:</label>
+              <textarea id="message" name="message" rows="4" class="form-control" placeholder="Escribe tu mensaje..."></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-success">Enviar Mensaje</button>
+          </form>
+
+          <div id="spinner">
+            <p>Enviando mensajes, por favor espere...</p>
+            <div class="loader"></div>
+          </div>
+        </div>
+
+        <!-- Estado del envío -->
+        <div id="messageStatus" class="mt-4">
+          <h5>Estado del Envío</h5>
+          <div class="progress mb-3">
+            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                 role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
+          </div>
+          <div class="d-flex justify-content-between mb-3">
+            <span>Enviados: <span id="sentCount">0</span>/<span id="totalCount">0</span></span>
+            <span>Errores: <span id="errorCount">0</span></span>
+          </div>
+          <div class="status-table">
+            <table class="table table-sm">
+              <thead>
+                <tr>
+                  <th>Número</th>
+                  <th>Estado</th>
+                  <th>Mensaje</th>
+                </tr>
+              </thead>
+              <tbody id="statusTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- App (incluye status-sync + lógica de envío y switch de tema) -->
+  <script src="/app.js"></script>
 </body>
-
 </html>
