@@ -1,49 +1,15 @@
 version: '3.8'
-
 services:
   audio-sender:
     build: .
     container_name: audio-sender
     restart: always
     ports:
-      - "${PORT:-3010}:${PORT:-3010}"
+      - "${PORT}:${PORT}"
     environment:
-      # Node / App
       - NODE_ENV=production
-      - PORT=${PORT:-3010}
-      - TZ=${TZ:-America/Asuncion}
-      - BASE_URL=${BASE_URL:-http://localhost:3010}
-      - PUBLIC_URL=${PUBLIC_URL:-/public}
-
-      # WhatsApp / app config opcional
-      - MESSAGE_DELAY_MS=${MESSAGE_DELAY_MS:-600}
-      - RETENTION_HOURS=${RETENTION_HOURS:-24}
-
-      # Puppeteer/Chromium (ya instalados en la imagen)
-      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-      - CHROME_BIN=/usr/bin/chromium
-
-      # Keycloak (backend – usados por src/auth.js)
-      - KEYCLOAK_ISSUER=${KEYCLOAK_ISSUER:-https://kc.mindtechpy.net/realms/message-sender}
-      - KEYCLOAK_JWKS_URI=${KEYCLOAK_JWKS_URI:-https://kc.mindtechpy.net/realms/message-sender/protocol/openid-connect/certs}
-      - KEYCLOAK_AUDIENCE=${KEYCLOAK_AUDIENCE:-message-sender-api}      # << clientId del backend (confidencial)
-      - KEYCLOAK_REQUIRED_ROLE=${KEYCLOAK_REQUIRED_ROLE:-sender_api}
-
-      # CORS (para el front que carga desde la misma URL)
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3010}
-
+      - RAILWAY_STATIC_URL=${RAILWAY_STATIC_URL}
+      - PUBLIC_URL=${PUBLIC_URL}
+      - PORT=${PORT}
     volumes:
-      # Archivos que deben persistir / actualizarse en caliente
       - ./uploads:/app/uploads
-      - ./bot_sessions:/app/bot_sessions
-      # Monta 'public' si querés editar front sin rebuild de imagen (opcional)
-      - ./public:/app/public
-      # Logs opcional
-      - ./logs:/app/logs
-
-    healthcheck:
-      test: ["CMD", "node", "-e",
-             "fetch('http://localhost:'+process.env.PORT+'/connection-status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
