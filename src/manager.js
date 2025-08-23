@@ -1,3 +1,4 @@
+// src/manager.js
 const fs = require('fs');
 const path = require('path');
 const qrImage = require('qrcode');
@@ -17,6 +18,9 @@ class WhatsAppManager {
     this.messageQueue = null;
     this.lastQRUpdate = null;
     this.securityAlert = null;
+
+    // Comp. para controlar cuándo guardar el PNG
+    this.qrCaptureRequested = false;
   }
 
   getState() {
@@ -62,6 +66,32 @@ class WhatsAppManager {
     }
   }
 
+  // ===== Comp. QR: API para la ruta /refresh-qr =====
+  requestQrCapture() {
+    this.qrCaptureRequested = true; // se consumirá en el próximo evento "qr"
+  }
+
+  async captureQrToDisk() {
+    try {
+      if (!this.qrCode) return false;
+      const qrPath = path.join(publicDir, 'qr.png');
+      await new Promise((resolve, reject) => {
+        qrImage.toFile(
+          qrPath,
+          this.qrCode,
+          { color: { dark: '#128C7E', light: '#FFFFFF' }, width: 300, margin: 1 },
+          (err) => (err ? reject(err) : resolve())
+        );
+      });
+      this.lastQRUpdate = Date.now();
+      logger.info({ qrPath }, 'QR guardado (captura inmediata)');
+      return true;
+    } catch (e) {
+      logger.error({ err: e?.message }, 'captureQrToDisk falló');
+      return false;
+    }
+  }
+
   async initialize() {
     if (this.client) return true;
 
@@ -75,7 +105,6 @@ class WhatsAppManager {
           '--disable-accelerated-2d-canvas',
           '--no-first-run',
           '--no-zygote',
-          // '--single-process', // no usar (inestable)
           '--disable-gpu'
         ],
         executablePath: process.env.CHROME_BIN || undefined,
@@ -84,15 +113,35 @@ class WhatsAppManager {
 
       this.client = new Client({ authStrategy: new LocalAuth(), puppeteer: puppeteerConfig });
 
-      // QR
+      // QR (ahora con compuerta)
       this.client.on('qr', (qr) => {
         this.qrCode = qr;
-        logger.info('QR Code recibido');
+
         const qrPath = path.join(publicDir, 'qr.png');
-        qrImage.toFile(qrPath, qr, { color: { dark: '#128C7E', light: '#FFFFFF' }, width: 300, margin: 1 }, (err) => {
-          if (err) logger.error({ err: err?.message }, 'Error al generar archivo QR');
-          else { logger.info({ qrPath }, 'QR guardado'); this.lastQRUpdate = Date.now(); }
-        });
+        const shouldWrite = this.qrCaptureRequested || !fs.existsSync(qrPath);
+
+        if (!shouldWrite) {
+          logger.debug('QR recibido (no guardado: sin solicitud y ya existe qr.png)');
+          return;
+        }
+
+        // consumir compuerta 1 sola vez
+        this.qrCaptureRequested = false;
+
+        logger.info('QR Code recibido');
+        qrImage.toFile(
+          qrPath,
+          qr,
+          { color: { dark: '#128C7E', light: '#FFFFFF' }, width: 300, margin: 1 },
+          (err) => {
+            if (err) {
+              logger.error({ err: err?.message }, 'Error al generar archivo QR');
+            } else {
+              logger.info({ qrPath }, 'QR guardado');
+              this.lastQRUpdate = Date.now();
+            }
+          }
+        );
       });
 
       // Auth
@@ -180,6 +229,10 @@ class WhatsAppManager {
       try { fs.existsSync(qrPath) && fs.unlinkSync(qrPath); logger.info('QR anterior eliminado'); } catch {}
       this.isReady = false; this.qrCode = null; this.connectionState = 'disconnected';
       this.deleteSessionFiles();
+
+      // preparar compuerta para el próximo evento 'qr'
+      this.requestQrCapture();
+
       await new Promise(r => setTimeout(r, 2000));
       logger.info('Inicializando nuevo cliente...');
       await this.initialize();

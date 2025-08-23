@@ -1,3 +1,2 @@
-2025/08/23-08:55:36.570 b303 Reusing MANIFEST /Users/andresvera/Desktop/Proyectos/whatsapp/message-sender/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001
-2025/08/23-08:55:36.570 b303 Recovering log #14
-2025/08/23-08:55:36.570 b303 Reusing old log /Users/andresvera/Desktop/Proyectos/whatsapp/message-sender/.wwebjs_auth/session/Default/Local Storage/leveldb/000014.log 
+2025/08/23-09:08:09.067 8603 Creating DB /Users/andresvera/Desktop/Proyectos/whatsapp/message-sender/.wwebjs_auth/session/Default/Local Storage/leveldb since it was missing.
+2025/08/23-09:08:09.089 8603 Reusing MANIFEST /Users/andresvera/Desktop/Proyectos/whatsapp/message-sender/.wwebjs_auth/session/Default/Local Storage/leveldb/MANIFEST-000001

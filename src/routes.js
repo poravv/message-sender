@@ -29,7 +29,7 @@ function buildRoutes(whatsappManager) {
     res.json(resp);
   });
 
-  router.post('/send-messages', checkJwt, requireRole('sender_api'),upload.fields([
+  router.post('/send-messages', checkJwt, requireRole('sender_api'), upload.fields([
     { name: 'csvFile', maxCount: 1 },
     { name: 'images', maxCount: 10 },
     { name: 'singleImage', maxCount: 1 },
@@ -63,14 +63,14 @@ function buildRoutes(whatsappManager) {
       if (req.files) {
         Object.entries(req.files).forEach(([fieldName, files]) => {
           if (fieldName !== 'audioFile') {
-            for (const f of files) { try { fs.existsSync(f.path) && fs.unlinkSync(f.path); } catch {} }
+            for (const f of files) { try { fs.existsSync(f.path) && fs.unlinkSync(f.path); } catch { } }
           }
         });
       }
     }
   });
 
-  router.get('/message-status', checkJwt, requireRole('sender_api'),(req, res) => {
+  router.get('/message-status', checkJwt, requireRole('sender_api'), (req, res) => {
     if (!whatsappManager.messageQueue) return res.json({ total: 0, sent: 0, errors: 0, messages: [], completed: true });
     res.json(whatsappManager.messageQueue.getStats());
   });
@@ -83,10 +83,27 @@ function buildRoutes(whatsappManager) {
 
   router.post('/refresh-qr', async (req, res) => {
     try {
-      if (whatsappManager.isReady) return res.status(400).json({ success: false, message: 'No se puede actualizar el QR si ya estás conectado' });
-      const ok = await whatsappManager.refreshQR();
-      if (ok) res.json({ success: true, message: 'Solicitando nuevo código QR...' });
-      else res.status(400).json({ success: false, message: 'No se pudo refrescar el QR en este momento' });
+      if (whatsappManager.isReady) {
+        return res.status(400).json({ success: false, message: 'No se puede actualizar el QR si ya estás conectado' });
+      }
+
+      // Activa la compuerta
+      whatsappManager.requestQrCapture();
+
+      // Si ya hay un QR en memoria, lo escribimos YA (no esperamos a un nuevo evento)
+      const wrote = await whatsappManager.captureQrToDisk();
+
+      if (wrote) {
+        return res.json({ success: true, message: 'QR actualizado' });
+      }
+
+      // Plan B: si aún no tenemos QR en memoria, pedimos regeneración (tu método existente)
+      const ok = await whatsappManager.refreshQR?.();
+      if (ok) {
+        return res.json({ success: true, message: 'Solicitando nuevo código QR...' });
+      }
+
+      return res.status(400).json({ success: false, message: 'No se pudo refrescar el QR en este momento' });
     } catch (e) {
       logger.error({ err: e?.message }, 'Error en refresh-qr');
       res.status(500).json({ success: false, message: e.message || 'Error al refrescar QR' });
