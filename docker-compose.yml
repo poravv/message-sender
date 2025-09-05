@@ -19,6 +19,8 @@ services:
       - ./uploads:/app/uploads
       - ./bot_sessions:/app/bot_sessions
       - ./temp:/app/temp
+    networks:
+      - whatsapp-shared-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT:-3010}/"] 
       interval: 30s
@@ -30,3 +32,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  whatsapp-shared-network:
+    external: true
