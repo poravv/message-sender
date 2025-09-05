@@ -19,6 +19,8 @@ services:
       - ./uploads:/app/uploads
       - ./bot_sessions:/app/bot_sessions
       - ./temp:/app/temp
+    networks:
+      - audio-sender-network
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT:-3009}/"] 
       interval: 30s
@@ -30,3 +32,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+
+networks:
+  audio-sender-network:
+    external: true
+    name: audio-sender-shared-network

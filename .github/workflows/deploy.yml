@@ -127,10 +127,23 @@ jobs:
             echo "🛑 Deteniendo contenedores existentes..."
             docker compose --project-name "${PROJECT_NAME}" down --remove-orphans || true
             
-            # Limpiar imágenes y contenedores huérfanos para liberar espacio
+            # Limpiar recursos Docker para liberar espacio
             echo "🧹 Limpiando recursos Docker..."
             docker container prune -f || true
             docker image prune -f || true
+            docker network prune -f || true
+            
+            # Crear red compartida si no existe
+            echo "🌐 Verificando red compartida..."
+            if ! docker network ls | grep -q "audio-sender-shared-network"; then
+              echo "📡 Creando red compartida audio-sender-shared-network..."
+              docker network create --driver bridge \
+                --subnet=172.20.0.0/16 \
+                --ip-range=172.20.240.0/20 \
+                audio-sender-shared-network
+            else
+              echo "✅ Red compartida ya existe"
+            fi
             
             # Construir nueva imagen
             echo "🔨 Construyendo nueva imagen Docker..."
