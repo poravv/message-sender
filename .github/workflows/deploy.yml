@@ -106,6 +106,7 @@ jobs:
             
             # Actualizar código desde GitHub
             echo "📥 Actualizando código desde GitHub..."
+            git remote set-url origin https://github.com/${{ github.repository }}.git
             git fetch origin
             git reset --hard origin/${BRANCH_NAME}
             
