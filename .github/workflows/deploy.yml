@@ -45,7 +45,7 @@ jobs:
             
             BRANCH_NAME="${{ steps.client-info.outputs.branch }}"
             CLIENT_ID="${{ steps.client-info.outputs.client }}"
-            PROJECT_DIR="/home/elporavv/workspaceandre/clientes/cliente-${CLIENT_ID}/message-sender"
+            PROJECT_DIR="~/workspaceandres/clientes/cliente-${CLIENT_ID}/message-sender"
             
             echo "🚀 Iniciando deployment para cliente ${CLIENT_ID}"
             echo "📁 Directorio: ${PROJECT_DIR}"
