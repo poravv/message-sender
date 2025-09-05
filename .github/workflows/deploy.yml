@@ -133,10 +133,6 @@ jobs:
             docker image prune -f || true
             docker network prune -f || true
             
-            # Crear red compartida si no existe
-            echo "🌐 Verificando red compartida para clientes..."
-            docker network create whatsapp-shared-network --driver bridge --subnet=172.20.0.0/16 || echo "Red ya existe o error creando red, continuando..."
-            
             # Construir nueva imagen
             echo "🔨 Construyendo nueva imagen Docker..."
             docker compose --project-name "${PROJECT_NAME}" build --no-cache
