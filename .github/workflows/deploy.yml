@@ -4,24 +4,171 @@ on:
   push:
     branches:
       - main
+      - cliente-*  # Para todas las ramas de clientes
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        clientes: [3010]
+    
+    # Solo ejecutar si es push a main o rama cliente-*
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/cliente-')
 
     steps:
-      - name: Deploy al cliente ${{ matrix.clientes }}
-        uses: appleboy/ssh-action@master
+      - name: Extract client info from branch
+        id: client-info
+        run: |
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          echo "branch=$BRANCH_NAME" >> $GITHUB_OUTPUT
+          
+          # Como cada cliente tiene su propio repo, usamos el nombre de la rama como identificador
+          if [[ $BRANCH_NAME == cliente-* ]]; then
+            CLIENT_ID=${BRANCH_NAME#cliente-}
+            echo "client=$CLIENT_ID" >> $GITHUB_OUTPUT
+            echo "folder=audio-sender-refactor-$CLIENT_ID" >> $GITHUB_OUTPUT
+          else
+            echo "client=main" >> $GITHUB_OUTPUT
+            echo "folder=audio-sender-refactor-main" >> $GITHUB_OUTPUT
+          fi
+          
+          echo "Branch: $BRANCH_NAME"
+          echo "Client: $CLIENT_ID"
+
+      - name: Deploy al cliente ${{ steps.client-info.outputs.client }}
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
+          port: ${{ secrets.SSH_PORT || 22 }}
           script: |
-            cd /home/usuario/audio-sender-refactor-${{ matrix.clientes }}
-            git pull origin main
-            docker compose down
-            docker compose up -d --build
+            set -e  # Salir si hay errores
+            
+            BRANCH_NAME="${{ steps.client-info.outputs.branch }}"
+            CLIENT_ID="${{ steps.client-info.outputs.client }}"
+            PROJECT_DIR="/home/elporavv/audio-sender-refactor-${CLIENT_ID}"
+            
+            echo "🚀 Iniciando deployment para cliente ${CLIENT_ID}"
+            echo "📁 Directorio: ${PROJECT_DIR}"
+            echo "🌿 Rama: ${BRANCH_NAME}"
+            
+            # Verificar si el directorio existe
+            if [ ! -d "${PROJECT_DIR}" ]; then
+              echo "❌ Error: Directorio ${PROJECT_DIR} no existe"
+              echo ""
+              echo "🔧 Para configurar este cliente, ejecuta en el servidor:"
+              echo "   git clone -b ${BRANCH_NAME} https://github.com/${{ github.repository }}.git ${PROJECT_DIR}"
+              echo "   cd ${PROJECT_DIR}"
+              echo "   # Configura tu archivo .env específico del cliente"
+              echo "   # docker compose up -d"
+              exit 1
+            fi
+            
+            # Cambiar al directorio del proyecto
+            cd "${PROJECT_DIR}"
+            
+            # Verificar que existe .env
+            if [ ! -f ".env" ]; then
+              echo "❌ Error: Archivo .env no encontrado en ${PROJECT_DIR}"
+              echo ""
+              echo "🔧 Para configurar este cliente:"
+              echo "   1. Crea el archivo .env con las variables necesarias"
+              echo "   2. Configura PORT, NODE_ENV, PUBLIC_URL y Keycloak"
+              echo "   3. Reinicia el deployment con: git push origin ${BRANCH_NAME}"
+              echo "KEYCLOAK_REALM=message-sender"
+              echo "KEYCLOAK_AUDIENCE=message-sender-web"
+              exit 1
+            fi
+            
+            # Leer el puerto desde el .env para logging
+            CLIENT_PORT=$(grep "^PORT=" .env | cut -d'=' -f2 | tr -d ' ')
+            if [ -z "$CLIENT_PORT" ]; then
+              echo "❌ Error: PORT no está definido en .env"
+              exit 1
+            fi
+            
+            echo "📋 Puerto del cliente: ${CLIENT_PORT} (leído desde .env)"
+            
+            # Verificar que Docker está disponible
+            if ! command -v docker &> /dev/null; then
+              echo "❌ Error: Docker no está instalado"
+              exit 1
+            fi
+            
+            if ! docker compose version &> /dev/null && ! command -v docker-compose &> /dev/null; then
+              echo "❌ Error: Docker Compose no está disponible"
+              exit 1
+            fi
+            
+            # Hacer backup del .env antes del pull
+            echo "💾 Respaldando configuración actual..."
+            cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+            cp .env .env.temp
+            
+            # Actualizar código desde GitHub
+            echo "📥 Actualizando código desde GitHub..."
+            git fetch origin
+            git reset --hard origin/${BRANCH_NAME}
+            
+            # Restaurar .env (preservar configuración local)
+            mv .env.temp .env
+            
+            # Crear directorios necesarios si no existen
+            echo "📁 Verificando directorios necesarios..."
+            mkdir -p uploads bot_sessions temp logs
+            
+            # Configurar permisos
+            echo "🔐 Configurando permisos..."
+            chown -R elporavv:elporavv . 2>/dev/null || true
+            chmod -R 755 .
+            
+            # Parar contenedores existentes
+            echo "🛑 Deteniendo contenedores existentes..."
+            docker compose down --remove-orphans || true
+            
+            # Limpiar imágenes y contenedores huérfanos para liberar espacio
+            echo "🧹 Limpiando recursos Docker..."
+            docker container prune -f || true
+            docker image prune -f || true
+            
+            # Construir nueva imagen
+            echo "🔨 Construyendo nueva imagen Docker..."
+            docker compose build --no-cache
+            
+            # Iniciar contenedores
+            echo "🚀 Iniciando contenedores..."
+            docker compose up -d
+            
+            # Esperar a que el servicio esté listo
+            echo "⏳ Esperando a que el servicio esté listo..."
+            sleep 15
+            
+            # Verificar que el contenedor está corriendo
+            echo "✅ Verificando estado del deployment..."
+            
+            if docker compose ps | grep -q "Up"; then
+              CONTAINER_STATUS=$(docker compose ps --format "table {{.Name}}\t{{.Status}}")
+              echo "🎉 Deployment exitoso para cliente ${CLIENT_ID} en puerto ${CLIENT_PORT}!"
+              echo ""
+              echo "📊 Estado de contenedores:"
+              echo "${CONTAINER_STATUS}"
+              echo ""
+              echo "🌐 Servicio disponible en:"
+              echo "   - Local: http://localhost:${CLIENT_PORT}"
+              echo "   - Nginx Proxy Manager: Configurar proxy host apuntando a localhost:${CLIENT_PORT}"
+              echo ""
+              echo "📋 Para ver logs en tiempo real:"
+              echo "   docker compose logs -f"
+            else
+              echo "❌ Error: El contenedor no está corriendo correctamente"
+              echo ""
+              echo "📋 Estado de contenedores:"
+              docker compose ps
+              echo ""
+              echo "📋 Últimos logs del contenedor:"
+              docker compose logs --tail=30
+              echo ""
+              echo "🔧 Para depurar:"
+              echo "   cd ${PROJECT_DIR}"
+              echo "   docker compose logs -f"
+              exit 1
+            fi

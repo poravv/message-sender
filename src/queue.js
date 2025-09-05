@@ -131,6 +131,20 @@ class MessageQueue {
           ptt: true // Enviar como mensaje de voz
         });
 
+        // Limpiar archivos de audio después del envío exitoso
+        try {
+          if (fs.existsSync(audioFile.path)) {
+            fs.unlinkSync(audioFile.path);
+            logger.info(`Archivo de audio original eliminado: ${audioFile.path}`);
+          }
+          if (fs.existsSync(converted) && converted !== audioFile.path) {
+            fs.unlinkSync(converted);
+            logger.info(`Archivo de audio convertido eliminado: ${converted}`);
+          }
+        } catch (cleanupError) {
+          logger.warn(`Error al limpiar archivos de audio: ${cleanupError.message}`);
+        }
+
         // Enviar texto después del audio si existe
         if (message && message.trim()) {
           await sleep(SEND_BETWEEN_MS);

@@ -89,10 +89,18 @@ function buildRoutes(whatsappManager) {
       logger.error({ err: error?.message }, 'Error en /send-messages');
       res.status(500).json({ error: error.message });
     } finally {
+      // Limpiar todos los archivos subidos, incluidos los de audio en caso de error
       if (req.files) {
         Object.entries(req.files).forEach(([fieldName, files]) => {
-          if (fieldName !== 'audioFile') {
-            for (const f of files) { try { fs.existsSync(f.path) && fs.unlinkSync(f.path); } catch { } }
+          for (const f of files) {
+            try {
+              if (fs.existsSync(f.path)) {
+                fs.unlinkSync(f.path);
+                logger.info(`Archivo temporal eliminado: ${f.path}`);
+              }
+            } catch (cleanupError) {
+              logger.warn(`Error al eliminar archivo temporal: ${f.path} - ${cleanupError.message}`);
+            }
           }
         });
       }
