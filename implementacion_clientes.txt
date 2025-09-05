@@ -4,7 +4,7 @@ docker build -t message-sender .
 
 # Ejecutar el contenedor Docker
 docker run -d \
-    -p 3010:3000 \
+    -p 3009:3000 \
     --name message-sender \
     message-sender
 
@@ -15,7 +15,7 @@ docker run -d \
 sudo docker build -t message-sender-marita .
 
 # Ejecutar el contenedor Docker
-sudo docker run -d -e RAILWAY_STATIC_URL=http://localhost -e PUBLIC_URL=http://localhost -e PORT=3010 -p 3010:3010 --name message-sender-marita01 message-sender-marita
+sudo docker run -d -e RAILWAY_STATIC_URL=http://localhost -e PUBLIC_URL=http://localhost -e PORT=3009 -p 3009:3009 --name message-sender-marita01 message-sender-marita
 
 
 # Construir la imagen Docker

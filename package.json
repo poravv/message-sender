@@ -8,7 +8,7 @@
         "dev": "nodemon app.js",
         "build": "echo 'No build step required'",
         "docker:build": "docker build -t whatsapp-sender .",
-        "docker:run": "docker run -p 3010:3010 --env-file .env whatsapp-sender",
+        "docker:run": "docker run -p 3009:3009 --env-file .env whatsapp-sender",
         "docker:compose": "docker-compose up -d",
         "docker:logs": "docker-compose logs -f audio-sender",
         "docker:stop": "docker-compose down",

@@ -22,7 +22,7 @@ Sistema profesional de envío masivo de mensajes por WhatsApp con arquitectura m
 - **CI/CD**: GitHub Actions para deployment automático
 
 ### 🏢 **Multi-Cliente**
-- **Arquitectura de ramas**: Una rama por cliente (`cliente-3010`, `cliente-3011`, etc.)
+- **Arquitectura de ramas**: Una rama por cliente (`cliente-3009`, `cliente-3011`, etc.)
 - **Configuración independiente**: Cada cliente con su `.env` y puerto específico
 - **Deployment aislado**: GitHub Actions deploy por rama automáticamente
 - **Nginx Proxy Manager**: Compatible para gestión de dominios
@@ -48,10 +48,10 @@ npm start
 ### 2. **Variables de Entorno (.env)**
 ```env
 # Configuración del servidor
-PORT=3010
+PORT=3009
 NODE_ENV=production
 PUBLIC_URL=http://localhost
-ALLOWED_ORIGINS=http://localhost:3010,http://localhost
+ALLOWED_ORIGINS=http://localhost:3009,http://localhost
 
 # Configuración de Seguridad y Rendimiento
 MAX_RETRIES=3
@@ -72,7 +72,7 @@ KEYCLOAK_AUDIENCE=message-sender-api
 ### **Arquitectura Multi-Cliente**
 ```
 /home/elporavv/workspaceandre/clientes/
-├── cliente-3010/message-sender/  # Cliente A (Puerto 3010)
+├── cliente-3009/message-sender/  # Cliente A (Puerto 3009)
 ├── cliente-3011/message-sender/  # Cliente B (Puerto 3011)
 └── cliente-3012/message-sender/  # Cliente C (Puerto 3012)
 ```
@@ -80,7 +80,7 @@ KEYCLOAK_AUDIENCE=message-sender-api
 ### **Setup Manual por Cliente (Una sola vez)**
 ```bash
 # En el servidor de producción
-CLIENT_ID="3010"  # Cambiar por el ID del cliente
+CLIENT_ID="3009"  # Cambiar por el ID del cliente
 mkdir -p /home/elporavv/workspaceandre/clientes/cliente-${CLIENT_ID}
 cd /home/elporavv/workspaceandre/clientes/cliente-${CLIENT_ID}
 
@@ -124,15 +124,15 @@ SSH_PORT=22
 **Flujo automático:**
 ```bash
 # Hacer cambios en código
-git checkout cliente-3010
+git checkout cliente-3009
 # ... realizar modificaciones ...
 git add .
 git commit -m "feat: nueva funcionalidad"
-git push origin cliente-3010
+git push origin cliente-3009
 
 # 🚀 GitHub Actions se ejecuta automáticamente:
-# ✅ Detecta rama cliente-3010 → CLIENT_ID=3010
-# ✅ Busca /home/elporavv/workspaceandre/clientes/cliente-3010/message-sender
+# ✅ Detecta rama cliente-3009 → CLIENT_ID=3009
+# ✅ Busca /home/elporavv/workspaceandre/clientes/cliente-3009/message-sender
 # ✅ Preserva .env local
 # ✅ Actualiza código (git pull)
 # ✅ Redeploya con Docker Compose
@@ -143,10 +143,10 @@ git push origin cliente-3010
 
 ```bash
 # Ejemplo de configuración por cliente:
-Domain Name: cliente3010.tudominio.com
+Domain Name: cliente3009.tudominio.com
 Scheme: http
 Forward Hostname/IP: localhost
-Forward Port: 3010
+Forward Port: 3009
 
 # SSL: Activar Force SSL y HTTP/2 Support
 # Certificado: Let's Encrypt automático
@@ -243,7 +243,7 @@ docker compose logs --tail=50
 docker compose restart
 
 # Verificar conectividad
-curl http://localhost:3010/connection-status
+curl http://localhost:3009/connection-status
 ```
 
 ### **Problemas de Audio**
@@ -261,7 +261,7 @@ curl http://localhost:3010/connection-status
 # Solución: Crear .env con variables requeridas
 
 # Error: Puerto en uso
-# Solución: Verificar conflictos con netstat -tuln | grep :3010
+# Solución: Verificar conflictos con netstat -tuln | grep :3009
 ```
 
 ## 🔄 Mantenimiento

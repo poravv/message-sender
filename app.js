@@ -16,7 +16,7 @@ const { WhatsAppManager } = require('./src/manager');
 const { buildRoutes } = require('./src/routes');
 
 const app = express();
-const port = process.env.PORT || 3010;
+const port = process.env.PORT || 3009;
 
 // Si hay proxy/ingress con TLS, ayuda a detectar https correcto en req
 app.set('trust proxy', 1);
