@@ -1,4 +1,12 @@
 require('dotenv').config();
+const logger = require('./src/logger');
+
+// Configurar NODE_ENV para desarrollo si no está establecido
+if (!process.env.NODE_ENV) {
+  process.env.NODE_ENV = 'development';
+  logger.info('NODE_ENV configurado como development');
+}
+
 const express = require('express');
 const path = require('path');
 
@@ -6,10 +14,9 @@ const { retentionHours } = require('./src/config');
 const { cleanupOldFiles } = require('./src/utils');
 const { WhatsAppManager } = require('./src/manager');
 const { buildRoutes } = require('./src/routes');
-const logger = require('./src/logger');
 
 const app = express();
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3010;
 
 // Si hay proxy/ingress con TLS, ayuda a detectar https correcto en req
 app.set('trust proxy', 1);

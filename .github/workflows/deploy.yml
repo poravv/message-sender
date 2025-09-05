@@ -1,0 +1,27 @@
+name: Deploy a clientes
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        clientes: [3010]
+
+    steps:
+      - name: Deploy al cliente ${{ matrix.clientes }}
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /home/usuario/audio-sender-refactor-${{ matrix.clientes }}
+            git pull origin main
+            docker compose down
+            docker compose up -d --build

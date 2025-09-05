@@ -5,7 +5,17 @@
     "main": "app.js",
     "scripts": {
         "start": "node app.js",
-        "dev": "nodemon app.js"
+        "dev": "nodemon app.js",
+        "build": "echo 'No build step required'",
+        "docker:build": "docker build -t whatsapp-sender .",
+        "docker:run": "docker run -p 3010:3010 --env-file .env whatsapp-sender",
+        "docker:compose": "docker-compose up -d",
+        "docker:logs": "docker-compose logs -f audio-sender",
+        "docker:stop": "docker-compose down",
+        "docker:restart": "docker-compose restart audio-sender",
+        "prod:start": "./start-prod.sh",
+        "prod:stop": "docker-compose down",
+        "prod:logs": "docker-compose logs -f audio-sender"
     },
     "keywords": [
         "whatsapp",
@@ -15,6 +25,8 @@
     ],
     "dependencies": {
         "@ffmpeg-installer/ffmpeg": "^1.1.0",
+        "@hapi/boom": "^10.0.1",
+        "@whiskeysockets/baileys": "^6.7.19",
         "cors": "^2.8.5",
         "csv-parser": "^3.2.0",
         "dotenv": "^16.5.0",
@@ -25,11 +37,10 @@
         "jsonwebtoken": "^9.0.2",
         "jwks-rsa": "^3.2.0",
         "multer": "^1.4.5-lts.1",
-        "pino": "^9.9.0",
+        "pino": "^9.9.4",
         "pino-pretty": "^13.1.1",
         "qrcode": "^1.5.4",
-        "qrcode-terminal": "^0.12.0",
-        "whatsapp-web.js": "^1.27.0"
+        "qrcode-terminal": "^0.12.0"
     },
     "devDependencies": {
         "nodemon": "^3.1.9"

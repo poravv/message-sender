@@ -7,6 +7,32 @@ const { publicDir, retentionHours } = require('./config');
 const logger = require('./logger');
 const { checkJwt, requireRole } = require('./auth');
 
+// Middleware condicional para desarrollo
+const conditionalAuth = (req, res, next) => {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
+  if (isDevelopment) {
+    // En desarrollo, simular usuario autenticado
+    req.auth = { sub: 'dev-user' };
+    req.userRoles = { all: ['sender_api'], realmRoles: [], clientRoles: ['sender_api'] };
+    return next();
+  }
+  
+  // En producción, usar autenticación real
+  return checkJwt(req, res, next);
+};
+
+const conditionalRole = (role) => (req, res, next) => {
+  const isDevelopment = process.env.NODE_ENV !== 'production';
+  
+  if (isDevelopment) {
+    return next(); // En desarrollo, omitir verificación de roles
+  }
+  
+  // En producción, usar verificación real de roles
+  return requireRole(role)(req, res, next);
+};
+
 function buildRoutes(whatsappManager) {
   const router = express.Router();
 
@@ -20,16 +46,19 @@ function buildRoutes(whatsappManager) {
       hasQR: !!s.qrCode,
       connectionState: s.connectionState
     };
-    if (s.isReady && whatsappManager.client?.info) {
+    
+    // Con Baileys, la información del usuario está en s.userInfo que se almacena cuando se conecta
+    if (s.userInfo) {
       resp.userInfo = {
-        phoneNumber: whatsappManager.client.info.wid.user,
-        pushname: whatsappManager.client.info.pushname || 'Usuario de WhatsApp'
+        phoneNumber: s.userInfo.phoneNumber,
+        pushname: s.userInfo.pushname
       };
     }
+    
     res.json(resp);
   });
 
-  router.post('/send-messages', checkJwt, requireRole('sender_api'), upload.fields([
+  router.post('/send-messages', conditionalAuth, conditionalRole('sender_api'), upload.fields([
     { name: 'csvFile', maxCount: 1 },
     { name: 'images', maxCount: 10 },
     { name: 'singleImage', maxCount: 1 },
@@ -70,7 +99,7 @@ function buildRoutes(whatsappManager) {
     }
   });
 
-  router.get('/message-status', checkJwt, requireRole('sender_api'), (req, res) => {
+  router.get('/message-status', conditionalAuth, conditionalRole('sender_api'), (req, res) => {
     if (!whatsappManager.messageQueue) return res.json({ total: 0, sent: 0, errors: 0, messages: [], completed: true });
     res.json(whatsappManager.messageQueue.getStats());
   });

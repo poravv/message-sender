@@ -1,9 +1,8 @@
 const fs = require('fs');
-const { MessageMedia } = require('whatsapp-web.js');
-const { sleep, safeSend, isIgnorableSerializeError } = require('./utils');
+const { sleep, isIgnorableSerializeError } = require('./utils');
 const { convertAudioToOpus } = require('./media');
 const { messageDelay } = require('./config');
-const logger = require('./logger');  // <<--- importamos el logger
+const logger = require('./logger');
 
 // Derivados del delay base
 const LOOP_IDLE_MS   = Math.max(500, messageDelay);
@@ -114,54 +113,71 @@ class MessageQueue {
     logger.info(`Enviando mensaje a ${number} (posición original: ${originalIndex + 1})`);
 
     try {
-      if (!this.client || !this.client.info) throw new Error('Cliente de WhatsApp no está listo');
+      if (!this.client || !this.client.user) throw new Error('Socket de WhatsApp no está listo');
 
-      const id = await this.client.getNumberId(number);
-      if (!id) throw new Error(`El número ${number} no está en WhatsApp`);
-      const jid = id._serialized;
-
-      await this.client.getChatById(jid).catch(() => {});
+      // Formatear número para Baileys (agregar @s.whatsapp.net si no lo tiene)
+      const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
 
       // AUDIO
       if (audioFile) {
         if (!fs.existsSync(audioFile.path)) throw new Error('Archivo de audio no encontrado');
+        
         const converted = await convertAudioToOpus(audioFile.path);
-        const audioMedia = MessageMedia.fromFilePath(converted);
-        audioMedia.mimetype = 'audio/mp3';
-        await safeSend(this.client, jid, audioMedia, { sendAudioAsVoice: true, sendMediaAsDocument: false });
-        if (message && message.trim()) await safeSend(this.client, jid, message.trim());
+        const audioBuffer = fs.readFileSync(converted);
+        
+        await this.client.sendMessage(jid, {
+          audio: audioBuffer,
+          mimetype: 'audio/mp4',
+          ptt: true // Enviar como mensaje de voz
+        });
+
+        // Enviar texto después del audio si existe
+        if (message && message.trim()) {
+          await sleep(SEND_BETWEEN_MS);
+          await this.client.sendMessage(jid, { text: message.trim() });
+        }
         return true;
       }
 
       // 1 IMAGEN
       if (singleImage) {
         if (!fs.existsSync(singleImage.path)) throw new Error('Archivo de imagen no encontrado');
-        const media = MessageMedia.fromFilePath(singleImage.path);
-        await safeSend(this.client, jid, media, { caption: message || '', sendMediaAsDocument: false });
+        
+        const imageBuffer = fs.readFileSync(singleImage.path);
+        
+        await this.client.sendMessage(jid, {
+          image: imageBuffer,
+          caption: message || ''
+        });
         return true;
       }
 
-      // N IMÁGENES
+            // MÚLTIPLES IMÁGENES
       if (images && images.length > 0) {
-        if (message && message.trim()) {
-          await safeSend(this.client, jid, message.trim());
-          await sleep(IMG_PREFIX_MS);
-        }
-        for (const img of images) {
-          if (!fs.existsSync(img.path)) {
-            logger.warn(`Imagen no encontrada: ${img.path}, omitiendo...`);
-            continue;
+        for (let i = 0; i < images.length; i++) {
+          const image = images[i];
+          if (!fs.existsSync(image.path)) {
+            throw new Error(`Archivo de imagen no encontrado: ${image.path}`);
           }
-          const media = MessageMedia.fromFilePath(img.path);
-          await safeSend(this.client, jid, media);
-          await sleep(IMG_BETWEEN_MS);
+          
+          const imageBuffer = fs.readFileSync(image.path);
+          
+          await this.client.sendMessage(jid, {
+            image: imageBuffer,
+            caption: i === 0 ? message || '' : '' // Solo agregar el mensaje a la primera imagen
+          });
+          
+          // Pequeña pausa entre imágenes para evitar límites de velocidad
+          if (i < images.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
         }
         return true;
       }
 
       // SOLO TEXTO
       if (message && message.trim()) {
-        await safeSend(this.client, jid, message.trim());
+        await this.client.sendMessage(jid, { text: message.trim() });
         return true;
       }
 

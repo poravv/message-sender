@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-bullseye-slim as builder
+FROM node:20-bullseye-slim AS builder
 WORKDIR /app
 
 # Establecer variable para evitar la descarga de Chromium durante la instalación
@@ -16,7 +16,7 @@ RUN npm install --legacy-peer-deps
 COPY . .
 
 # Production stage
-FROM node:18-bullseye-slim
+FROM node:20-bullseye-slim
 WORKDIR /app
 
 # Instalación de dependencias del sistema necesarias para Puppeteer (Chrome) y FFmpeg
@@ -67,25 +67,26 @@ RUN apt-get update && apt-get install -y \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV CHROME_BIN=/usr/bin/chromium
 
-# Instalar nodemon globalmente en la imagen de producción
-RUN npm install -g nodemon
+# Crear directorio para uploads y bot_sessions antes de copiar
+RUN mkdir -p uploads bot_sessions temp
 
 # Copiar solo los archivos necesarios desde el builder
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/app.js ./
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/nodemon.json ./
-COPY --from=builder /app/.env ./.env
 COPY --from=builder /app/src ./src
 
-# Crear directorio para uploads y bot_sessions
-RUN mkdir -p uploads bot_sessions && chown -R node:node /app
+# Copiar archivos de configuración si existen
+COPY --from=builder /app/nodemon.json ./nodemon.json
+
+# Cambiar propietario de todos los archivos al usuario node
+RUN chown -R node:node /app
 
 # Usar usuario no root
 USER node
 
 EXPOSE ${PORT:-3010}
 
-# Usar nodemon en lugar de node directamente
-CMD ["nodemon", "app.js"]
+# Comando de inicio optimizado para producción
+CMD ["node", "app.js"]

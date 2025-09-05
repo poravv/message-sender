@@ -1,15 +1,32 @@
-version: '3.8'
 services:
   audio-sender:
     build: .
     container_name: audio-sender
-    restart: always
+    restart: unless-stopped
     ports:
-      - "${PORT}:${PORT}"
+      - "${PORT:-3010}:${PORT:-3010}"
+    env_file:
+      - .env
     environment:
       - NODE_ENV=production
       - RAILWAY_STATIC_URL=${RAILWAY_STATIC_URL}
       - PUBLIC_URL=${PUBLIC_URL}
-      - PORT=${PORT}
+      - PORT=${PORT:-3010}
+      - KEYCLOAK_URL=${KEYCLOAK_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_AUDIENCE=${KEYCLOAK_AUDIENCE}
     volumes:
       - ./uploads:/app/uploads
+      - ./bot_sessions:/app/bot_sessions
+      - ./temp:/app/temp
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT:-3010}/"] 
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

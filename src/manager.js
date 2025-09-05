@@ -1,16 +1,25 @@
 // src/manager.js
 const fs = require('fs');
 const path = require('path');
-const qrImage = require('qrcode');
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const { safeSend } = require('./utils');
+const qrcode = require('qrcode');
+const { 
+  default: makeWASocket, 
+  DisconnectReason, 
+  useMultiFileAuthState,
+  downloadContentFromMessage,
+  generateWAMessageFromContent,
+  proto,
+  prepareWAMessageMedia,
+  MediaType
+} = require('@whiskeysockets/baileys');
+const pino = require('pino');
 const { isAuthorizedPhone, publicDir } = require('./config');
 const { MessageQueue } = require('./queue');
 const logger = require('./logger');
 
 class WhatsAppManager {
   constructor() {
-    this.client = null;
+    this.sock = null;
     this.isReady = false;
     this.qrCode = null;
     this.connectionState = 'disconnected';
@@ -18,6 +27,9 @@ class WhatsAppManager {
     this.messageQueue = null;
     this.lastQRUpdate = null;
     this.securityAlert = null;
+    this.userInfo = null;
+    this.authState = null;
+    this.saveCreds = null;
 
     // Comp. para controlar cuándo guardar el PNG
     this.qrCaptureRequested = false;
@@ -30,7 +42,8 @@ class WhatsAppManager {
       lastActivity: this.lastActivity,
       lastQRUpdate: this.lastQRUpdate || null,
       hasQR: !!this.qrCode,
-      securityAlert: this.securityAlert || null
+      securityAlert: this.securityAlert || null,
+      userInfo: this.userInfo || null
     };
   }
 
@@ -39,7 +52,7 @@ class WhatsAppManager {
   deleteSessionFiles() {
     try {
       logger.info('Eliminando archivos de sesión...');
-      const sessionDir = path.join(publicDir, '..', 'bot_sessions');
+      const sessionDir = path.join(publicDir, '..', 'auth_info');
       if (!fs.existsSync(sessionDir)) return logger.info('Directorio de sesiones no encontrado');
 
       let deleted = 0;
@@ -68,20 +81,17 @@ class WhatsAppManager {
 
   // ===== Comp. QR: API para la ruta /refresh-qr =====
   requestQrCapture() {
-    this.qrCaptureRequested = true; // se consumirá en el próximo evento "qr"
+    this.qrCaptureRequested = true;
   }
 
   async captureQrToDisk() {
     try {
       if (!this.qrCode) return false;
       const qrPath = path.join(publicDir, 'qr.png');
-      await new Promise((resolve, reject) => {
-        qrImage.toFile(
-          qrPath,
-          this.qrCode,
-          { color: { dark: '#128C7E', light: '#FFFFFF' }, width: 300, margin: 1 },
-          (err) => (err ? reject(err) : resolve())
-        );
+      await qrcode.toFile(qrPath, this.qrCode, {
+        color: { dark: '#128C7E', light: '#FFFFFF' },
+        width: 300,
+        margin: 1
       });
       this.lastQRUpdate = Date.now();
       logger.info({ qrPath }, 'QR guardado (captura inmediata)');
@@ -93,150 +103,188 @@ class WhatsAppManager {
   }
 
   async initialize() {
-    if (this.client) return true;
+    if (this.sock) return true;
 
     try {
-      const puppeteerConfig = {
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-accelerated-2d-canvas',
-          '--no-first-run',
-          '--no-zygote',
-          '--disable-gpu'
-        ],
-        executablePath: process.env.CHROME_BIN || undefined,
-        timeout: 60000
-      };
+      // Configurar autenticación
+      const authDir = path.join(publicDir, '..', 'auth_info');
+      if (!fs.existsSync(authDir)) {
+        fs.mkdirSync(authDir, { recursive: true });
+      }
 
-      this.client = new Client({ authStrategy: new LocalAuth(), puppeteer: puppeteerConfig });
+      const { state, saveCreds } = await useMultiFileAuthState(authDir);
+      this.authState = state;
+      this.saveCreds = saveCreds;
 
-      // QR (ahora con compuerta)
-      this.client.on('qr', (qr) => {
-        this.qrCode = qr;
+      // Crear socket
+      this.sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: 'silent' }) // Logger compatible con Baileys
+      });
 
-        const qrPath = path.join(publicDir, 'qr.png');
-        const shouldWrite = this.qrCaptureRequested || !fs.existsSync(qrPath);
+      // Event handlers
+      this.sock.ev.on('creds.update', saveCreds);
 
-        if (!shouldWrite) {
-          logger.debug('QR recibido (no guardado: sin solicitud y ya existe qr.png)');
-          return;
+      this.sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        if (qr) {
+          this.qrCode = qr;
+          this.connectionState = 'qr_ready';
+
+          const qrPath = path.join(publicDir, 'qr.png');
+          const shouldWrite = this.qrCaptureRequested || !fs.existsSync(qrPath);
+
+          if (shouldWrite) {
+            this.qrCaptureRequested = false;
+            logger.info('QR Code recibido');
+            await qrcode.toFile(qrPath, qr, {
+              color: { dark: '#128C7E', light: '#FFFFFF' },
+              width: 300,
+              margin: 1
+            });
+            logger.info({ qrPath }, 'QR guardado');
+            this.lastQRUpdate = Date.now();
+          }
         }
 
-        // consumir compuerta 1 sola vez
-        this.qrCaptureRequested = false;
+        if (connection === 'close') {
+          const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+          logger.warn({ 
+            reason: lastDisconnect?.error?.message,
+            shouldReconnect 
+          }, 'Conexión cerrada');
+          
+          this.isReady = false;
+          this.connectionState = 'disconnected';
+          this.userInfo = null;
+          this.sock = null;
 
-        logger.info('QR Code recibido');
-        qrImage.toFile(
-          qrPath,
-          qr,
-          { color: { dark: '#128C7E', light: '#FFFFFF' }, width: 300, margin: 1 },
-          (err) => {
-            if (err) {
-              logger.error({ err: err?.message }, 'Error al generar archivo QR');
-            } else {
-              logger.info({ qrPath }, 'QR guardado');
-              this.lastQRUpdate = Date.now();
+          if (shouldReconnect) {
+            setTimeout(() => {
+              logger.info('Reintentando conexión...');
+              this.initialize().catch(err => logger.error({ err: err?.message }, 'Error en reconexión'));
+            }, 5000);
+          }
+        } else if (connection === 'open') {
+          logger.info('Conexión abierta');
+          this.connectionState = 'connected';
+
+          // Obtener información del usuario
+          if (this.sock?.user) {
+            const phoneNumber = this.sock.user.id.split(':')[0];
+            
+            // Log para ver qué propiedades están disponibles
+            logger.info({ userObject: this.sock.user }, 'Propiedades disponibles del usuario');
+            
+            // Establecer información básica del usuario
+            // En Baileys, el pushname se obtiene mejor desde mensajes o contactos
+            // Por ahora usamos el número como identificador principal
+            const pushname = `Usuario ${phoneNumber}`;
+            
+            this.userInfo = {
+              phoneNumber: phoneNumber,
+              pushname: pushname,
+              jid: this.sock.user.id
+            };
+            logger.info({ userInfo: this.userInfo }, 'Información del usuario obtenida');
+
+            // Verificar si está autorizado
+            if (!isAuthorizedPhone(phoneNumber)) {
+              const alert = `¡ALERTA! Número no autorizado: ${phoneNumber}`;
+              logger.warn({ phoneNumber }, 'Número no autorizado, desconectando...');
+              this.securityAlert = { 
+                timestamp: Date.now(), 
+                messages: [alert, 'Desconectando...'], 
+                phoneNumber 
+              };
+              
+              // Enviar mensaje de advertencia y desconectar
+              try {
+                await this.sock.sendMessage(this.sock.user.id, { 
+                  text: 'Número no autorizado. Se cerrará la sesión.' 
+                });
+              } catch {}
+              
+              this.isReady = false;
+              this.connectionState = 'unauthorized';
+              
+              setTimeout(async () => {
+                try {
+                  await this.sock?.logout();
+                  this.sock = null;
+                  this.deleteSessionFiles();
+                  setTimeout(() => this.initialize(), 8000);
+                } catch {}
+              }, 3000);
+              return;
             }
+
+            logger.info({ phoneNumber }, 'Número autorizado');
+            this.isReady = true;
+            this.lastActivity = Date.now();
+            
+            // Eliminar QR una vez conectado
+            const qrPath = path.join(publicDir, 'qr.png');
+            try { 
+              if (fs.existsSync(qrPath)) {
+                fs.unlinkSync(qrPath); 
+                logger.info('QR eliminado tras conexión exitosa');
+              }
+            } catch {}
           }
-        );
-      });
-
-      // Auth
-      this.client.on('authenticated', () => {
-        logger.info('Cliente autenticado');
-        this.connectionState = 'authenticated';
-        this.qrCode = null;
-        const qrPath = path.join(publicDir, 'qr.png');
-        try { fs.existsSync(qrPath) && fs.unlinkSync(qrPath); } catch {}
-      });
-
-      this.client.on('auth_failure', (m) => {
-        logger.error({ message: m }, 'Fallo de autenticación');
-        this.connectionState = 'auth_failure';
-      });
-
-      // Ready
-      this.client.on('ready', async () => {
-        try {
-          if (!this.client.info || !this.client.info.wid) throw new Error('No se pudo obtener información del cliente');
-          const connectedNumber = this.client.info.wid.user;
-          logger.info({ connectedNumber }, 'Cliente listo');
-
-          if (!isAuthorizedPhone(connectedNumber)) {
-            const alert = `¡ALERTA! Número no autorizado: ${connectedNumber}`;
-            logger.warn({ connectedNumber }, 'Número no autorizado, desconectando...');
-            this.securityAlert = { timestamp: Date.now(), messages: [alert, 'Desconectando...'], phoneNumber: connectedNumber };
-            try { await safeSend(this.client, this.client.info.wid._serialized, 'Número no autorizado. Se cerrará la sesión.'); } catch {}
-            this.isReady = false; this.connectionState = 'unauthorized';
-            setTimeout(async () => {
-              try { await this.client.logout(); } catch {}
-              try { await this.client.destroy(); } catch {}
-              this.client = null;
-              this.deleteSessionFiles();
-              setTimeout(() => this.initialize(), 8000);
-            }, 3000);
-            return;
-          }
-
-          logger.info({ connectedNumber }, 'Número autorizado');
-          this.isReady = true; this.connectionState = 'connected'; this.lastActivity = Date.now();
-        } catch (e) {
-          logger.error({ err: e?.message }, 'Error al verificar número conectado');
-          this.connectionState = 'error';
+        } else if (connection === 'connecting') {
+          logger.info('Conectando...');
+          this.connectionState = 'connecting';
         }
       });
 
-      // Diagnóstico (opcional)
-      this.client.on('change_state', s => logger.info({ state: s }, 'Estado WA Web'));
-      this.client.on('loading_screen', (p, t) => logger.info({ progress: p, text: t }, 'Cargando WA Web'));
-
-      // Disconnected
-      this.client.on('disconnected', async (reason) => {
-        logger.warn({ reason }, 'Cliente desconectado');
-        this.isReady = false; this.connectionState = 'disconnected';
-        if (this.client) { try { await this.client.destroy(); } catch {} this.client = null; }
-        setTimeout(() => {
-          logger.info('Reiniciando cliente...');
-          this.initialize().catch(err => logger.error({ err: err?.message }, 'Error en reconexión automática'));
-        }, 10000);
-      });
-
-      await this.client.initialize();
-      this.messageQueue = new MessageQueue(this.client);
+      // Configurar cola de mensajes
+      this.messageQueue = new MessageQueue(this.sock);
+      
       return true;
     } catch (e) {
-      logger.error({ err: e?.message }, 'Error inicializando cliente WhatsApp');
+      logger.error({ err: e?.message }, 'Error inicializando Baileys');
       return false;
     }
   }
 
   async refreshQR() {
     logger.info('Solicitando refrescar QR...');
-    if (this.isReady) { logger.info('No se puede refrescar: ya autenticado'); return false; }
+    if (this.isReady) { 
+      logger.info('No se puede refrescar: ya autenticado'); 
+      return false; 
+    }
 
     try {
-      if (this.client) {
-        logger.info('Cerrando cliente actual...');
-        try { await this.client.logout().catch(()=>{}); } catch {}
-        try { await this.client.destroy().catch(()=>{}); } catch {}
-        this.client = null;
+      if (this.sock) {
+        logger.info('Cerrando socket actual...');
+        try { 
+          await this.sock.logout(); 
+        } catch {}
+        this.sock = null;
       }
 
       const qrPath = path.join(publicDir, 'qr.png');
-      try { fs.existsSync(qrPath) && fs.unlinkSync(qrPath); logger.info('QR anterior eliminado'); } catch {}
-      this.isReady = false; this.qrCode = null; this.connectionState = 'disconnected';
+      try { 
+        fs.existsSync(qrPath) && fs.unlinkSync(qrPath); 
+        logger.info('QR anterior eliminado'); 
+      } catch {}
+      
+      this.isReady = false; 
+      this.qrCode = null; 
+      this.connectionState = 'disconnected';
+      this.userInfo = null;
       this.deleteSessionFiles();
 
       // preparar compuerta para el próximo evento 'qr'
       this.requestQrCapture();
 
       await new Promise(r => setTimeout(r, 2000));
-      logger.info('Inicializando nuevo cliente...');
+      logger.info('Inicializando nuevo socket...');
       await this.initialize();
-      logger.info('Nuevo cliente inicializado, esperando QR...');
+      logger.info('Nuevo socket inicializado, esperando QR...');
       return true;
     } catch (e) {
       logger.error({ err: e?.message }, 'Error al refrescar QR');
