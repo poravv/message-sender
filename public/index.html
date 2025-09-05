@@ -3,160 +3,607 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Message-sender</title>
+  <title>WhatsApp Message Sender Pro</title>
+  <meta name="description" content="Plataforma profesional para envío masivo de mensajes de WhatsApp">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📱</text></svg>">
 
   <!-- Bootstrap + Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"/>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
   <!-- Estilos personalizados -->
   <link rel="stylesheet" href="/styles.css"/>
 </head>
 
 <body>
-  <!-- Indicador de conexión -->
-  <div id="connection-status" class="status-disconnected">Desconectado</div>
-  <div id="alert" class="alert"></div>
-
-  <div class="container">
-    <header class="d-flex align-items-center justify-content-between mb-3">
-      <div>
-        <h1 class="mb-0">Envío de mensaje sobre lista</h1>
-        <p class="subtitle mb-0">Administra tu conexión y realiza envíos de forma controlada y segura</p>
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="loading-content">
+      <div class="loading-logo">
+        <i class="bi bi-whatsapp"></i>
       </div>
-
-      <!-- Switch de tema -->
-      <div class="d-flex align-items-center gap-2">
-        <div class="form-check form-switch ms-2">
-          <input class="form-check-input" type="checkbox" role="switch" id="themeSwitch" aria-label="Cambiar tema" />
-          <label class="form-check-label text-nowrap" for="themeSwitch" id="themeLabel">Oscuro</label>
-        </div>
-      </div>
-    </header>
-
-    <!-- Botones de tabs -->
-    <div class="tab-buttons text-center mb-4">
-      <button id="linkBtn" class="btn btn-ghost" onclick="showTab('link')">Enlazar WhatsApp</button>
-      <button id="sendBtn" class="btn btn-brand" onclick="showTab('send')">Enviar Mensaje</button>
-    </div>
-
-    <!-- Pestaña de enlace -->
-    <div id="link" class="tab active">
-      <div class="card text-center shadow-sm p-4">
-        <div class="card-body">
-          <div id="qr-container">
-            <p class="card-text">Escanea el QR en tu dispositivo para enlazar el sender</p>
-            <div id="qr">
-              <img id="qrImage" src="/qr" alt="QR Code" class="img-fluid">
-            </div>
-            <div class="text-center mt-3">
-              <button id="refreshQrBtn" class="btn btn-ghost" onclick="refreshQR()">
-                <i class="bi bi-arrow-clockwise me-1"></i> Refrescar código QR
-              </button>
-            </div>
-          </div>
-
-          <div id="authenticated-message" class="d-none mt-3">
-            <div class="alert alert-success mb-3" style="display:block">
-              <i class="bi bi-check-circle-fill me-2"></i> WhatsApp conectado exitosamente
-            </div>
-            <div class="card mb-3 border-success">
-              <div class="card-body">
-                <h5 class="card-title"><i class="bi bi-person-circle me-2"></i>Sesión activa</h5>
-                <p class="mb-1"><strong>Nickname:</strong> <span id="user-nickname">Cargando...</span></p>
-                <p class="mb-0"><strong>Número:</strong> <span id="user-phone">Cargando...</span></p>
-              </div>
-            </div>
-            <p class="mb-3">Tu WhatsApp está correctamente enlazado y listo para enviar mensajes.</p>
-            <button class="btn btn-brand" onclick="showTab('send')">Ir a Enviar Mensajes</button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Pestaña de envío -->
-    <div id="send" class="tab">
-      <div class="card shadow-sm p-4">
-        <div class="card-body">
-          <h5 class="card-title">Formulario de Envío de Mensaje</h5>
-          <form id="messageForm" enctype="multipart/form-data">
-            <div class="mb-3">
-              <label for="csvFile" class="form-label">Cargar archivo CSV con números: <b>5959xxxxxxxx</b></label>
-              <input type="file" id="csvFile" name="csvFile" class="form-control" accept=".csv" required>
-            </div>
-
-            <div class="mb-3">
-              <label for="imageOption" class="form-label fw-bold">Selecciona tipo de envío:</label>
-              <select id="imageOption" class="form-select" onchange="toggleImageFields()">
-                <option value="none">Ninguno (solo texto)</option>
-                <option value="multiple">Cargar múltiples imágenes</option>
-                <option value="single">Cargar una imagen con comentario</option>
-                <option value="audio">Enviar mensaje de audio</option>
-              </select>
-            </div>
-
-            <div class="mb-3 hidden" id="multipleImagesField">
-              <label for="images" class="form-label fw-bold">Cargar múltiples imágenes:</label>
-              <input type="file" id="images" name="images" class="form-control" accept="image/*" multiple>
-            </div>
-
-            <div class="mb-3 hidden" id="singleImageField">
-              <label for="singleImage" class="form-label fw-bold">Cargar una imagen con comentario:</label>
-              <input type="file" id="singleImage" name="singleImage" class="form-control" accept="image/*">
-            </div>
-
-            <div class="mb-3 hidden" id="audioField">
-              <label for="audioFile" class="form-label fw-bold">Cargar archivo de audio:</label>
-              <input type="file" id="audioFile" name="audioFile" class="form-control" accept="audio/*">
-            </div>
-
-            <div class="mb-3">
-              <label for="message" class="form-label fw-bold">Mensaje:</label>
-              <textarea id="message" name="message" rows="4" class="form-control" placeholder="Escribe tu mensaje..."></textarea>
-            </div>
-
-            <button type="submit" class="btn btn-success">Enviar Mensaje</button>
-          </form>
-
-          <div id="spinner">
-            <p>Enviando mensajes, por favor espere...</p>
-            <div class="loader"></div>
-          </div>
-        </div>
-
-        <!-- Estado del envío -->
-        <div id="messageStatus" class="mt-4">
-          <h5>Estado del Envío</h5>
-          <div class="progress mb-3">
-            <div class="progress-bar progress-bar-striped progress-bar-animated"
-                 role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-          </div>
-          <div class="d-flex justify-content-between mb-3">
-            <span>Enviados: <span id="sentCount">0</span>/<span id="totalCount">0</span></span>
-            <span>Errores: <span id="errorCount">0</span></span>
-          </div>
-          <div class="status-table">
-            <table class="table table-sm">
-              <thead>
-                <tr>
-                  <th>Número</th>
-                  <th>Estado</th>
-                  <th>Mensaje</th>
-                </tr>
-              </thead>
-              <tbody id="statusTableBody"></tbody>
-            </table>
-          </div>
-        </div>
-
+      <div class="loading-text">WhatsApp Sender Pro</div>
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
       </div>
     </div>
   </div>
 
-  <!-- Bootstrap -->
+  <!-- Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-transparent fixed-top">
+    <div class="container">
+      <a class="navbar-brand d-flex align-items-center" href="#">
+        <div class="brand-icon me-2">
+          <i class="bi bi-whatsapp"></i>
+        </div>
+        <span class="brand-text">WhatsApp Sender Pro</span>
+      </a>
+      
+      <div class="navbar-nav ms-auto d-flex flex-row align-items-center">
+        <!-- Connection Status -->
+        <div id="connection-status" class="connection-status me-3">
+          <div class="status-indicator"></div>
+          <span class="status-text">Desconectado</span>
+        </div>
+        
+        <!-- Theme Toggle -->
+        <div class="theme-toggle">
+          <input type="checkbox" id="themeSwitch" class="theme-switch-checkbox">
+          <label for="themeSwitch" class="theme-switch-label">
+            <span class="theme-switch-inner">
+              <i class="bi bi-sun-fill"></i>
+              <i class="bi bi-moon-fill"></i>
+            </span>
+            <span class="theme-switch-switch"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Alert System -->
+  <div id="alert-container" class="alert-container"></div>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="container">
+      <!-- Header Section -->
+      <section class="hero-section text-center mb-5">
+        <div class="hero-content">
+          <h1 class="hero-title">
+            <span class="title-highlight">Envío Masivo</span> de Mensajes
+          </h1>
+          <p class="hero-subtitle">
+            Plataforma profesional para envío controlado y seguro de mensajes de WhatsApp
+          </p>
+          <div class="hero-stats">
+            <div class="stat-item">
+              <div class="stat-number" id="totalSentToday">0</div>
+              <div class="stat-label">Enviados hoy</div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <div class="stat-number" id="successRate">99.8%</div>
+              <div class="stat-label">Tasa de éxito</div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <div class="stat-number" id="avgSpeed">2.5s</div>
+              <div class="stat-label">Tiempo promedio</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <div class="tab-nav-container">
+          <button class="tab-nav-btn active" data-tab="link" id="linkBtn">
+            <div class="tab-icon">
+              <i class="bi bi-qr-code-scan"></i>
+            </div>
+            <div class="tab-content">
+              <div class="tab-title">Conectar WhatsApp</div>
+              <div class="tab-description">Escanear código QR</div>
+            </div>
+          </button>
+          
+          <button class="tab-nav-btn" data-tab="send" id="sendBtn">
+            <div class="tab-icon">
+              <i class="bi bi-send-fill"></i>
+            </div>
+            <div class="tab-content">
+              <div class="tab-title">Enviar Mensajes</div>
+              <div class="tab-description" id="sendTabDescription">Configurar y enviar</div>
+            </div>
+          </button>
+          
+          <button class="tab-nav-btn" data-tab="analytics" id="analyticsBtn">
+            <div class="tab-icon">
+              <i class="bi bi-bar-chart-fill"></i>
+            </div>
+            <div class="tab-content">
+              <div class="tab-title">Estadísticas</div>
+              <div class="tab-description">Ver resultados</div>
+            </div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="tab-content-container">
+        <!-- Link Tab -->
+        <div id="link" class="tab-pane active">
+          <div class="connection-card">
+            <div class="card-header">
+              <div class="card-icon">
+                <i class="bi bi-whatsapp"></i>
+              </div>
+              <div class="card-title-section">
+                <h3 class="card-title">Conectar WhatsApp</h3>
+                <p class="card-subtitle">Vincula tu cuenta de WhatsApp para comenzar</p>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <div id="qr-container" class="qr-section">
+                <div class="qr-instructions">
+                  <div class="instruction-steps">
+                    <div class="step">
+                      <div class="step-number">1</div>
+                      <div class="step-text">Abre WhatsApp en tu teléfono</div>
+                    </div>
+                    <div class="step">
+                      <div class="step-number">2</div>
+                      <div class="step-text">Ve a Configuración > Dispositivos vinculados</div>
+                    </div>
+                    <div class="step">
+                      <div class="step-number">3</div>
+                      <div class="step-text">Escanea el código QR a continuación</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="qr-code-container">
+                  <div class="qr-wrapper">
+                    <img id="qrImage" src="/qr" alt="Código QR de WhatsApp" class="qr-image">
+                    <div class="qr-overlay">
+                      <div class="qr-scanning-line"></div>
+                    </div>
+                  </div>
+                  
+                  <div class="qr-actions">
+                    <button id="refreshQrBtn" class="btn-refresh" onclick="refreshQR()">
+                      <i class="bi bi-arrow-clockwise"></i>
+                      <span>Refrescar código</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="authenticated-message" class="authenticated-section d-none">
+                <div class="success-animation">
+                  <div class="success-checkmark">
+                    <i class="bi bi-check-circle-fill"></i>
+                  </div>
+                </div>
+                
+                <div class="connection-info">
+                  <h4 class="connection-title">¡Conectado exitosamente!</h4>
+                  <p class="connection-description" id="connectionDescription">Tu WhatsApp está vinculado y listo para enviar mensajes</p>
+                  
+                  <div class="user-info-card">
+                    <div class="user-avatar">
+                      <i class="bi bi-person-circle"></i>
+                    </div>
+                    <div class="user-details">
+                      <div class="user-name">
+                        <span class="label">Usuario:</span>
+                        <span id="user-nickname" class="value">Cargando...</span>
+                      </div>
+                      <div class="user-phone">
+                        <span class="label">Número:</span>
+                        <span id="user-phone" class="value">Cargando...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="next-steps">
+                  <button class="btn-primary-action" onclick="showTab('send')">
+                    <i class="bi bi-send-fill me-2"></i>
+                    Comenzar a enviar mensajes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Send Tab -->
+        <div id="send" class="tab-pane">
+          <div class="send-message-card">
+            <div class="card-header">
+              <div class="card-icon">
+                <i class="bi bi-send-fill"></i>
+              </div>
+              <div class="card-title-section">
+                <h3 class="card-title">Enviar Mensajes</h3>
+                <p class="card-subtitle">Configura y envía mensajes masivos de forma controlada</p>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <form id="messageForm" enctype="multipart/form-data" class="message-form">
+                <!-- CSV Upload Section -->
+                <div class="form-section">
+                  <div class="section-header">
+                    <div class="section-icon">
+                      <i class="bi bi-file-earmark-spreadsheet"></i>
+                    </div>
+                    <div class="section-title">
+                      <h4>Lista de destinatarios</h4>
+                      <p>Carga un archivo CSV con los números de teléfono</p>
+                    </div>
+                  </div>
+                  
+                  <div class="file-upload-area">
+                    <input type="file" id="csvFile" name="csvFile" class="file-input" accept=".csv" required>
+                    <label for="csvFile" class="file-upload-label">
+                      <div class="upload-icon">
+                        <i class="bi bi-cloud-upload"></i>
+                      </div>
+                      <div class="upload-text">
+                        <div class="upload-title">Arrastra o selecciona tu archivo CSV</div>
+                        <div class="upload-subtitle">Formato: 5959xxxxxxxx (un número por línea)</div>
+                      </div>
+                    </label>
+                    <div class="file-info" id="csvFileInfo"></div>
+                  </div>
+                </div>
+
+                <!-- Message Type Section -->
+                <div class="form-section">
+                  <div class="section-header">
+                    <div class="section-icon">
+                      <i class="bi bi-chat-dots"></i>
+                    </div>
+                    <div class="section-title">
+                      <h4>Tipo de mensaje</h4>
+                      <p>Selecciona el formato del contenido a enviar</p>
+                    </div>
+                  </div>
+                  
+                  <div class="message-type-grid">
+                    <div class="message-type-option">
+                      <input type="radio" id="type-text" name="messageType" value="none" checked>
+                      <label for="type-text" class="type-option-label">
+                        <div class="type-icon">
+                          <i class="bi bi-chat-text"></i>
+                        </div>
+                        <div class="type-content">
+                          <div class="type-title">Solo texto</div>
+                          <div class="type-description">Enviar únicamente mensaje de texto</div>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    <div class="message-type-option">
+                      <input type="radio" id="type-single-image" name="messageType" value="single">
+                      <label for="type-single-image" class="type-option-label">
+                        <div class="type-icon">
+                          <i class="bi bi-image"></i>
+                        </div>
+                        <div class="type-content">
+                          <div class="type-title">Imagen + texto</div>
+                          <div class="type-description">Una imagen con comentario</div>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    <div class="message-type-option">
+                      <input type="radio" id="type-multiple-images" name="messageType" value="multiple">
+                      <label for="type-multiple-images" class="type-option-label">
+                        <div class="type-icon">
+                          <i class="bi bi-images"></i>
+                        </div>
+                        <div class="type-content">
+                          <div class="type-title">Múltiples imágenes</div>
+                          <div class="type-description">Varias imágenes en un envío</div>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    <div class="message-type-option">
+                      <input type="radio" id="type-audio" name="messageType" value="audio">
+                      <label for="type-audio" class="type-option-label">
+                        <div class="type-icon">
+                          <i class="bi bi-mic-fill"></i>
+                        </div>
+                        <div class="type-content">
+                          <div class="type-title">Mensaje de audio</div>
+                          <div class="type-description">Enviar archivo de audio</div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Media Upload Sections -->
+                <div class="media-upload-sections">
+                  <div id="singleImageSection" class="media-section d-none">
+                    <div class="file-upload-area media-upload">
+                      <input type="file" id="singleImage" name="singleImage" class="file-input" accept="image/*">
+                      <label for="singleImage" class="file-upload-label">
+                        <div class="upload-icon">
+                          <i class="bi bi-image"></i>
+                        </div>
+                        <div class="upload-text">
+                          <div class="upload-title">Seleccionar imagen</div>
+                          <div class="upload-subtitle">JPG, PNG, GIF (máx. 16MB)</div>
+                        </div>
+                      </label>
+                      <div class="file-info" id="singleImageInfo"></div>
+                    </div>
+                  </div>
+                  
+                  <div id="multipleImagesSection" class="media-section d-none">
+                    <div class="file-upload-area media-upload">
+                      <input type="file" id="images" name="images" class="file-input" accept="image/*" multiple>
+                      <label for="images" class="file-upload-label">
+                        <div class="upload-icon">
+                          <i class="bi bi-images"></i>
+                        </div>
+                        <div class="upload-text">
+                          <div class="upload-title">Seleccionar múltiples imágenes</div>
+                          <div class="upload-subtitle">JPG, PNG, GIF (máx. 16MB cada una)</div>
+                        </div>
+                      </label>
+                      <div class="file-info" id="multipleImagesInfo"></div>
+                    </div>
+                  </div>
+                  
+                  <div id="audioSection" class="media-section d-none">
+                    <div class="file-upload-area media-upload">
+                      <input type="file" id="audioFile" name="audioFile" class="file-input" accept="audio/*">
+                      <label for="audioFile" class="file-upload-label">
+                        <div class="upload-icon">
+                          <i class="bi bi-mic-fill"></i>
+                        </div>
+                        <div class="upload-text">
+                          <div class="upload-title">Seleccionar archivo de audio</div>
+                          <div class="upload-subtitle">MP3, WAV, M4A, OGG (máx. 16MB)</div>
+                        </div>
+                      </label>
+                      <div class="file-info" id="audioFileInfo"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Message Content Section -->
+                <div class="form-section">
+                  <div class="section-header">
+                    <div class="section-icon">
+                      <i class="bi bi-pencil-square"></i>
+                    </div>
+                    <div class="section-title">
+                      <h4>Contenido del mensaje</h4>
+                      <p>Escribe el texto que acompañará tu envío</p>
+                    </div>
+                  </div>
+                  
+                  <div class="message-composer">
+                    <textarea 
+                      id="message" 
+                      name="message" 
+                      class="message-textarea"
+                      placeholder="Escribe tu mensaje aquí... Puedes usar emojis y saltos de línea."
+                      rows="4"
+                    ></textarea>
+                    <div class="message-tools">
+                      <div class="character-counter">
+                        <span id="charCount">0</span>/4096 caracteres
+                      </div>
+                      <div class="message-actions">
+                        <button type="button" class="btn-emoji" id="emojiBtn">
+                          <i class="bi bi-emoji-smile"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Send Button -->
+                <div class="form-actions">
+                  <button type="submit" class="btn-send-message" id="sendMessageBtn">
+                    <span class="btn-content">
+                      <i class="bi bi-send-fill"></i>
+                      <span class="btn-text">Enviar mensajes</span>
+                    </span>
+                    <div class="btn-loading">
+                      <div class="btn-spinner"></div>
+                      <span>Enviando...</span>
+                    </div>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Progress Section -->
+          <div id="messageStatus" class="progress-card d-none">
+            <div class="card-header">
+              <div class="card-icon">
+                <i class="bi bi-graph-up"></i>
+              </div>
+              <div class="card-title-section">
+                <h3 class="card-title">Progreso del envío</h3>
+                <p class="card-subtitle">Seguimiento en tiempo real del estado de los mensajes</p>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <!-- Overall Progress -->
+              <div class="overall-progress">
+                <div class="progress-header">
+                  <div class="progress-title">Progreso general</div>
+                  <div class="progress-percentage">0%</div>
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar" id="overallProgressBar">
+                    <div class="progress-fill"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stats Grid -->
+              <div class="stats-grid">
+                <div class="stat-card stat-total">
+                  <div class="stat-icon">
+                    <i class="bi bi-list-ul"></i>
+                  </div>
+                  <div class="stat-content">
+                    <div class="stat-number" id="totalCount">0</div>
+                    <div class="stat-label">Total</div>
+                  </div>
+                </div>
+                
+                <div class="stat-card stat-sent">
+                  <div class="stat-icon">
+                    <i class="bi bi-check-circle-fill"></i>
+                  </div>
+                  <div class="stat-content">
+                    <div class="stat-number" id="sentCount">0</div>
+                    <div class="stat-label">Enviados</div>
+                  </div>
+                </div>
+                
+                <div class="stat-card stat-errors">
+                  <div class="stat-icon">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                  </div>
+                  <div class="stat-content">
+                    <div class="stat-number" id="errorCount">0</div>
+                    <div class="stat-label">Errores</div>
+                  </div>
+                </div>
+                
+                <div class="stat-card stat-speed">
+                  <div class="stat-icon">
+                    <i class="bi bi-speedometer2"></i>
+                  </div>
+                  <div class="stat-content">
+                    <div class="stat-number" id="currentSpeed">0</div>
+                    <div class="stat-label">msg/min</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Status Table -->
+              <div class="status-table-container">
+                <div class="table-header">
+                  <h4>Detalle de envíos</h4>
+                  <div class="table-actions">
+                    <button class="btn-export" id="exportBtn">
+                      <i class="bi bi-download"></i>
+                      Exportar
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="table-wrapper">
+                  <table class="status-table">
+                    <thead>
+                      <tr>
+                        <th>Número</th>
+                        <th>Estado</th>
+                        <th>Hora</th>
+                        <th>Respuesta</th>
+                      </tr>
+                    </thead>
+                    <tbody id="statusTableBody">
+                      <!-- Dynamic content -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics" class="tab-pane">
+          <div class="analytics-card">
+            <div class="card-header">
+              <div class="card-icon">
+                <i class="bi bi-bar-chart-fill"></i>
+              </div>
+              <div class="card-title-section">
+                <h3 class="card-title">Estadísticas y análisis</h3>
+                <p class="card-subtitle">Métricas detalladas de rendimiento y uso</p>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <div class="analytics-grid">
+                <!-- Daily Stats -->
+                <div class="analytics-section">
+                  <h4 class="analytics-title">Resumen diario</h4>
+                  <div class="analytics-stats">
+                    <div class="analytics-stat">
+                      <div class="stat-value">1,247</div>
+                      <div class="stat-label">Mensajes enviados hoy</div>
+                      <div class="stat-change positive">+12.5%</div>
+                    </div>
+                    <div class="analytics-stat">
+                      <div class="stat-value">98.7%</div>
+                      <div class="stat-label">Tasa de entrega</div>
+                      <div class="stat-change positive">+2.1%</div>
+                    </div>
+                    <div class="analytics-stat">
+                      <div class="stat-value">2.3s</div>
+                      <div class="stat-label">Tiempo promedio</div>
+                      <div class="stat-change negative">-0.4s</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Charts Placeholder -->
+                <div class="analytics-section">
+                  <h4 class="analytics-title">Tendencias de uso</h4>
+                  <div class="chart-placeholder">
+                    <i class="bi bi-graph-up"></i>
+                    <p>Próximamente: Gráficos interactivos de uso y rendimiento</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Loading Overlay for Actions -->
+  <div id="loading-overlay" class="loading-overlay d-none">
+    <div class="loading-content">
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+      </div>
+      <div class="loading-text">Procesando...</div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <!-- App (incluye status-sync + lógica de envío y switch de tema) -->
-   <script src="https://cdn.jsdelivr.net/npm/keycloak-js@latest/dist/keycloak.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/keycloak-js@latest/dist/keycloak.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
