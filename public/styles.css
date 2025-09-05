@@ -314,6 +314,44 @@ body::before {
   color: var(--text-secondary);
 }
 
+/* User Info */
+.user-info {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-secondary);
+  background: var(--bg-elevated);
+  backdrop-filter: blur(10px);
+  transition: all var(--transition-normal);
+}
+
+.user-avatar {
+  margin-right: var(--spacing-sm);
+  color: var(--primary-500);
+  font-size: 1.25rem;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  min-width: 120px;
+}
+
+.user-name {
+  font-size: 0.875rem;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.user-email {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  opacity: 0.8;
+  line-height: 1.2;
+}
+
 /* Theme Toggle */
 .theme-toggle {
   margin-left: var(--spacing-md);

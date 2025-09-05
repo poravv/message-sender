@@ -12,8 +12,8 @@ const path = require('path');
 
 const { retentionHours } = require('./src/config');
 const { cleanupOldFiles } = require('./src/utils');
-const { WhatsAppManager } = require('./src/manager');
 const { buildRoutes } = require('./src/routes');
+const sessionManager = require('./src/sessionManager');
 
 const app = express();
 const port = process.env.PORT || 3009;
@@ -28,11 +28,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 // JSON parser
 app.use(express.json());
 
-// WhatsApp manager
-const whatsappManager = new WhatsAppManager();
-
-// Rutas de API (dentro de buildRoutes ya protegés lo sensible con checkJwt/requireRole)
-app.use('/', buildRoutes(whatsappManager));
+// Rutas de API (buildRoutes ahora maneja las sesiones automáticamente)
+app.use('/', buildRoutes());
 
 // Raíz -> index.html (sin auth)
 app.get('/', (_req, res) => {
@@ -44,7 +41,7 @@ app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
 
 // Start
 app.listen(port, async () => {
-  logger.info({ url: `http://localhost:${port}` }, 'Servidor escuchando');
+  logger.info({ url: `http://localhost:${port}` }, 'Servidor multi-sesión escuchando');
   logger.info({ retentionHours }, 'Configuración de retención');
 
   cleanupOldFiles(retentionHours);
@@ -53,9 +50,11 @@ app.listen(port, async () => {
     cleanupOldFiles(retentionHours);
   }, 6 * 3600 * 1000);
 
-  try {
-    await whatsappManager.initialize();
-  } catch (e) {
-    logger.error({ err: e?.message }, 'Error inicializando WhatsApp');
-  }
+  // Programar limpieza de sesiones inactivas cada 4 horas
+  setInterval(() => {
+    logger.info('Limpieza de sesiones inactivas...');
+    sessionManager.cleanupInactiveSessions(24); // 24 horas
+  }, 4 * 3600 * 1000);
+
+  logger.info('Sistema multi-sesión WhatsApp inicializado correctamente');
 });

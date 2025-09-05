@@ -18,6 +18,28 @@ function logDebug(...args) {
   }
 }
 
+/** ======== Multi-Session State ======== */
+let currentUser = {
+  id: null,
+  name: null,
+  email: null
+};
+
+/** ======== User Interface Functions ======== */
+function updateUserInfoNavbar(user) {
+  const userInfoElement = document.getElementById('user-info');
+  const userNameElement = document.getElementById('user-name');
+  const userEmailElement = document.getElementById('user-email');
+  
+  if (userInfoElement && userNameElement && userEmailElement) {
+    userNameElement.textContent = user.name || 'Usuario';
+    userEmailElement.textContent = user.email || 'Sin email';
+    userInfoElement.classList.remove('d-none');
+    
+    logDebug('Navbar actualizado con usuario:', user);
+  }
+}
+
 /** ======== Keycloak Authentication ======== */
 let keycloak = null;
 let isAuthenticated = false;
@@ -44,6 +66,17 @@ async function initKeycloak() {
 
     isAuthenticated = true;
     console.log('✅ Autenticación exitosa');
+    
+    // Extraer información del usuario
+    if (keycloak.tokenParsed) {
+      currentUser.id = keycloak.tokenParsed.sub;
+      currentUser.name = keycloak.tokenParsed.name || keycloak.tokenParsed.preferred_username;
+      currentUser.email = keycloak.tokenParsed.email;
+      logDebug('Usuario autenticado:', currentUser);
+      
+      // Actualizar navbar con información del usuario de Keycloak
+      updateUserInfoNavbar(currentUser);
+    }
     
     // Renueva justo antes de expirar (sin loops)
     keycloak.onTokenExpired = async () => {
@@ -246,9 +279,11 @@ function initializeQR() {
   
   const qrImage = document.getElementById('qrImage');
   if (qrImage) {
-    qrImage.src = `/qr?t=${Date.now()}`;
+    // Usar QR específico del usuario
+    const userId = currentUser.id || 'default';
+    qrImage.src = `/qr-${userId}.png?t=${Date.now()}`;
     qrInitialized = true;
-    logDebug('QR inicializado');
+    logDebug('QR inicializado para usuario:', userId);
   }
 }
 
@@ -273,8 +308,10 @@ async function refreshQR() {
       // Wait a bit for the QR to be generated and then refresh the image
       setTimeout(() => {
         if (qrImage) {
-          qrImage.src = `/qr?t=${Date.now()}`;
-          logDebug('QR refrescado manualmente');
+          // Usar la URL específica del usuario que devuelve el servidor
+          const qrUrl = result.qrUrl || `/qr-${currentUser.id}.png`;
+          qrImage.src = `${qrUrl}?t=${Date.now()}`;
+          logDebug('QR refrescado manualmente para usuario:', currentUser.id);
         }
       }, 1000);
     } else {
@@ -337,21 +374,33 @@ function updateConnectionStatus(status) {
     statusElement.classList.add('connected');
     
     if (isFullyReady) {
-      statusText.textContent = 'Conectado';
+      const userInfo = status.userInfo || {};
+      const phoneNumber = userInfo.phoneNumber || '';
+      
+      statusText.innerHTML = `
+        <div>WhatsApp Conectado</div>
+        ${phoneNumber ? `<small style="opacity: 0.8;">Tel: ${phoneNumber}</small>` : ''}
+      `;
       
       if (!isCurrentlyConnected) {
-        showAlert('¡WhatsApp conectado exitosamente!', 'success', 'Conexión establecida');
+        showAlert(`¡WhatsApp conectado exitosamente!`, 'success', 'Conexión establecida');
         // Auto-switch to send tab after successful connection
         setTimeout(() => showTab('send'), 1500);
       }
       isCurrentlyConnected = true;
     } else {
-      statusText.textContent = 'Autenticado (sincronizando...)';
+      statusText.innerHTML = `
+        <div>Autenticando WhatsApp...</div>
+        <small style="opacity: 0.8;">Sincronizando</small>
+      `;
       isCurrentlyConnected = false; // No considerar completamente conectado hasta que isReady sea true
     }
   } else {
     statusElement.classList.remove('connected');
-    statusText.textContent = 'Desconectado';
+    statusText.innerHTML = `
+      <div>WhatsApp Desconectado</div>
+      <small style="opacity: 0.8;">Escanear QR</small>
+    `;
     isCurrentlyConnected = false;
   }
 }

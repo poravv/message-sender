@@ -30,6 +30,7 @@ class WhatsAppManager {
     this.userInfo = null;
     this.authState = null;
     this.saveCreds = null;
+    this.authPath = null; // Ruta personalizable para autenticación
 
     // Comp. para controlar cuándo guardar el PNG
     this.qrCaptureRequested = false;
@@ -52,7 +53,7 @@ class WhatsAppManager {
   deleteSessionFiles() {
     try {
       logger.info('Eliminando archivos de sesión...');
-      const sessionDir = path.join(publicDir, '..', 'auth_info');
+      const sessionDir = this.authPath || path.join(publicDir, '..', 'auth_info');
       if (!fs.existsSync(sessionDir)) return logger.info('Directorio de sesiones no encontrado');
 
       let deleted = 0;
@@ -73,7 +74,7 @@ class WhatsAppManager {
           logger.error({ p, err: e?.message }, 'Error eliminando archivo de sesión');
         }
       }
-      logger.info({ deleted }, 'Archivos de sesión eliminados');
+      logger.info({ deleted, sessionDir }, 'Archivos de sesión eliminados');
     } catch (e) {
       logger.error({ err: e?.message }, 'Error al eliminar archivos de sesión');
     }
@@ -84,17 +85,21 @@ class WhatsAppManager {
     this.qrCaptureRequested = true;
   }
 
-  async captureQrToDisk() {
+  async captureQrToDisk(userId = null) {
     try {
       if (!this.qrCode) return false;
-      const qrPath = path.join(publicDir, 'qr.png');
+      
+      // Si tenemos un userId, crear QR específico para ese usuario
+      const qrFileName = userId ? `qr-${userId}.png` : 'qr.png';
+      const qrPath = path.join(publicDir, qrFileName);
+      
       await qrcode.toFile(qrPath, this.qrCode, {
         color: { dark: '#128C7E', light: '#FFFFFF' },
         width: 300,
         margin: 1
       });
       this.lastQRUpdate = Date.now();
-      logger.info({ qrPath }, 'QR guardado (captura inmediata)');
+      logger.info({ qrPath, userId }, 'QR guardado (captura inmediata)');
       return true;
     } catch (e) {
       logger.error({ err: e?.message }, 'captureQrToDisk falló');
@@ -103,11 +108,14 @@ class WhatsAppManager {
   }
 
   async initialize() {
-    if (this.sock) return true;
+    if (this.sock) {
+      logger.info('Socket ya inicializado, reutilizando...');
+      return true;
+    }
 
     try {
       // Configurar autenticación
-      const authDir = path.join(publicDir, '..', 'auth_info');
+      const authDir = this.authPath || path.join(publicDir, '..', 'auth_info');
       if (!fs.existsSync(authDir)) {
         fs.mkdirSync(authDir, { recursive: true });
       }
@@ -120,7 +128,11 @@ class WhatsAppManager {
       this.sock = makeWASocket({
         auth: state,
         printQRInTerminal: false,
-        logger: pino({ level: 'silent' }) // Logger compatible con Baileys
+        logger: pino({ level: 'silent' }), // Logger compatible con Baileys
+        connectTimeoutMs: 60000,
+        defaultQueryTimeoutMs: 0,
+        keepAliveIntervalMs: 10000,
+        markOnlineOnConnect: false
       });
 
       // Event handlers
@@ -133,27 +145,34 @@ class WhatsAppManager {
           this.qrCode = qr;
           this.connectionState = 'qr_ready';
 
-          const qrPath = path.join(publicDir, 'qr.png');
+          // Obtener userId desde authPath si está disponible
+          const userId = this.authPath ? path.basename(this.authPath).replace('user-', '') : null;
+          const qrFileName = userId ? `qr-${userId}.png` : 'qr.png';
+          const qrPath = path.join(publicDir, qrFileName);
+          
           const shouldWrite = this.qrCaptureRequested || !fs.existsSync(qrPath);
 
           if (shouldWrite) {
             this.qrCaptureRequested = false;
-            logger.info('QR Code recibido');
+            logger.info({ userId }, 'QR Code recibido');
             await qrcode.toFile(qrPath, qr, {
               color: { dark: '#128C7E', light: '#FFFFFF' },
               width: 300,
               margin: 1
             });
-            logger.info({ qrPath }, 'QR guardado');
+            logger.info({ qrPath, userId }, 'QR guardado');
             this.lastQRUpdate = Date.now();
           }
         }
 
         if (connection === 'close') {
           const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+          const reason = lastDisconnect?.error?.message;
+          
           logger.warn({ 
-            reason: lastDisconnect?.error?.message,
-            shouldReconnect 
+            reason,
+            shouldReconnect,
+            userId: this.authPath ? path.basename(this.authPath).replace('user-', '') : null
           }, 'Conexión cerrada');
           
           this.isReady = false;
@@ -161,11 +180,18 @@ class WhatsAppManager {
           this.userInfo = null;
           this.sock = null;
 
+          // Evitar reconexión en caso de conflictos
+          if (reason && reason.includes('conflict')) {
+            logger.warn('Conflicto detectado, no reintentando conexión automáticamente');
+            return;
+          }
+
           if (shouldReconnect) {
+            // Delay más largo para evitar conflictos
             setTimeout(() => {
               logger.info('Reintentando conexión...');
               this.initialize().catch(err => logger.error({ err: err?.message }, 'Error en reconexión'));
-            }, 5000);
+            }, 10000); // Aumentado a 10 segundos
           }
         } else if (connection === 'open') {
           logger.info('Conexión abierta');
@@ -225,12 +251,15 @@ class WhatsAppManager {
             this.isReady = true;
             this.lastActivity = Date.now();
             
-            // Eliminar QR una vez conectado
-            const qrPath = path.join(publicDir, 'qr.png');
+            // Eliminar QR una vez conectado (específico del usuario)
+            const userId = this.authPath ? path.basename(this.authPath).replace('user-', '') : null;
+            const qrFileName = userId ? `qr-${userId}.png` : 'qr.png';
+            const qrPath = path.join(publicDir, qrFileName);
+            
             try { 
               if (fs.existsSync(qrPath)) {
                 fs.unlinkSync(qrPath); 
-                logger.info('QR eliminado tras conexión exitosa');
+                logger.info({ userId, qrPath }, 'QR eliminado tras conexión exitosa');
               }
             } catch {}
           }
@@ -266,10 +295,16 @@ class WhatsAppManager {
         this.sock = null;
       }
 
-      const qrPath = path.join(publicDir, 'qr.png');
+      // Eliminar QR específico del usuario
+      const userId = this.authPath ? path.basename(this.authPath).replace('user-', '') : null;
+      const qrFileName = userId ? `qr-${userId}.png` : 'qr.png';
+      const qrPath = path.join(publicDir, qrFileName);
+      
       try { 
-        fs.existsSync(qrPath) && fs.unlinkSync(qrPath); 
-        logger.info('QR anterior eliminado'); 
+        if (fs.existsSync(qrPath)) {
+          fs.unlinkSync(qrPath); 
+          logger.info({ userId, qrPath }, 'QR anterior eliminado'); 
+        }
       } catch {}
       
       this.isReady = false; 
@@ -282,9 +317,9 @@ class WhatsAppManager {
       this.requestQrCapture();
 
       await new Promise(r => setTimeout(r, 2000));
-      logger.info('Inicializando nuevo socket...');
+      logger.info({ userId }, 'Inicializando nuevo socket...');
       await this.initialize();
-      logger.info('Nuevo socket inicializado, esperando QR...');
+      logger.info({ userId }, 'Nuevo socket inicializado, esperando QR...');
       return true;
     } catch (e) {
       logger.error({ err: e?.message }, 'Error al refrescar QR');
