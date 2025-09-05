@@ -46,6 +46,7 @@ jobs:
             BRANCH_NAME="${{ steps.client-info.outputs.branch }}"
             CLIENT_ID="${{ steps.client-info.outputs.client }}"
             PROJECT_DIR="$HOME/workspaceandres/clientes/cliente-${CLIENT_ID}/message-sender"
+            PROJECT_NAME="audio-sender-cliente-${CLIENT_ID}"
             
             echo "🚀 Iniciando deployment para cliente ${CLIENT_ID}"
             echo "📁 Directorio: ${PROJECT_DIR}"
@@ -124,7 +125,7 @@ jobs:
             
             # Parar contenedores existentes
             echo "🛑 Deteniendo contenedores existentes..."
-            docker compose down --remove-orphans || true
+            docker compose --project-name "${PROJECT_NAME}" down --remove-orphans || true
             
             # Limpiar imágenes y contenedores huérfanos para liberar espacio
             echo "🧹 Limpiando recursos Docker..."
@@ -133,11 +134,11 @@ jobs:
             
             # Construir nueva imagen
             echo "🔨 Construyendo nueva imagen Docker..."
-            docker compose build --no-cache
+            docker compose --project-name "${PROJECT_NAME}" build --no-cache
             
             # Iniciar contenedores
             echo "🚀 Iniciando contenedores..."
-            docker compose up -d
+            docker compose --project-name "${PROJECT_NAME}" up -d
             
             # Esperar a que el servicio esté listo
             echo "⏳ Esperando a que el servicio esté listo..."
@@ -146,8 +147,8 @@ jobs:
             # Verificar que el contenedor está corriendo
             echo "✅ Verificando estado del deployment..."
             
-            if docker compose ps | grep -q "Up"; then
-              CONTAINER_STATUS=$(docker compose ps --format "table {{.Name}}\t{{.Status}}")
+            if docker compose --project-name "${PROJECT_NAME}" ps | grep -q "Up"; then
+              CONTAINER_STATUS=$(docker compose --project-name "${PROJECT_NAME}" ps --format "table {{.Name}}\t{{.Status}}")
               echo "🎉 Deployment exitoso para cliente ${CLIENT_ID} en puerto ${CLIENT_PORT}!"
               echo ""
               echo "📊 Estado de contenedores:"
@@ -158,18 +159,18 @@ jobs:
               echo "   - Nginx Proxy Manager: Configurar proxy host apuntando a localhost:${CLIENT_PORT}"
               echo ""
               echo "📋 Para ver logs en tiempo real:"
-              echo "   docker compose logs -f"
+              echo "   docker compose --project-name \"${PROJECT_NAME}\" logs -f"
             else
               echo "❌ Error: El contenedor no está corriendo correctamente"
               echo ""
               echo "📋 Estado de contenedores:"
-              docker compose ps
+              docker compose --project-name "${PROJECT_NAME}" ps
               echo ""
               echo "📋 Últimos logs del contenedor:"
-              docker compose logs --tail=30
+              docker compose --project-name "${PROJECT_NAME}" logs --tail=30
               echo ""
               echo "🔧 Para depurar:"
               echo "   cd ${PROJECT_DIR}"
-              echo "   docker compose logs -f"
+              echo "   docker compose --project-name \"${PROJECT_NAME}\" logs -f"
               exit 1
             fi
