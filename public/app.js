@@ -656,6 +656,43 @@ function animateNumber(element, start, end, duration = 1000) {
   }, 16);
 }
 
+// Variables para calcular velocidad en tiempo real
+let lastSentCount = 0;
+let lastUpdateTime = Date.now();
+let speedHistory = [];
+
+function calculateRealTimeSpeed(currentSent, total) {
+  const now = Date.now();
+  const timeDiff = (now - lastUpdateTime) / 1000; // segundos
+  
+  if (timeDiff > 0 && currentSent > lastSentCount) {
+    const messagesSent = currentSent - lastSentCount;
+    const currentSpeed = messagesSent / timeDiff;
+    
+    // Mantener historial de velocidades para suavizar
+    speedHistory.push(currentSpeed);
+    if (speedHistory.length > 10) {
+      speedHistory.shift(); // Mantener solo los últimos 10 valores
+    }
+    
+    // Promedio de velocidades para suavizar fluctuaciones
+    const avgSpeed = speedHistory.reduce((sum, speed) => sum + speed, 0) / speedHistory.length;
+    
+    lastSentCount = currentSent;
+    lastUpdateTime = now;
+    
+    return Math.round(avgSpeed * 60); // mensajes por minuto
+  }
+  
+  // Si no hay cambios, devolver la velocidad promedio histórica
+  if (speedHistory.length > 0) {
+    const avgSpeed = speedHistory.reduce((sum, speed) => sum + speed, 0) / speedHistory.length;
+    return Math.round(avgSpeed * 60);
+  }
+  
+  return 0;
+}
+
 let statusCheckPromise = null;
 
 async function checkStatus() {
@@ -939,19 +976,33 @@ let messageProgressPoll = null;
 function updateMessageStatus(status) {
   const { sent, total, errors, messages, completed, speed } = status || {};
 
-  // Update progress bar
+  // Update progress bar with smooth animation
   const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
   const progressFill = document.querySelector('.progress-fill');
   const progressPercentage = document.querySelector('.progress-percentage');
   
-  if (progressFill) progressFill.style.width = `${progress}%`;
-  if (progressPercentage) progressPercentage.textContent = `${progress}%`;
+  if (progressFill) {
+    // Add active class during sending for faster animation
+    if (!completed && total > 0) {
+      progressFill.classList.add('active');
+    } else {
+      progressFill.classList.remove('active');
+    }
+    
+    progressFill.style.width = `${progress}%`;
+  }
+  if (progressPercentage) {
+    progressPercentage.textContent = `${progress}%`;
+  }
 
-  // Update stat cards
+  // Update stat cards with smooth number animation
   updateStatCard('totalCount', total || 0);
   updateStatCard('sentCount', sent || 0);
   updateStatCard('errorCount', errors || 0);
-  updateStatCard('currentSpeed', speed || 0);
+  
+  // Calculate and display real-time speed
+  const currentSpeed = calculateRealTimeSpeed(sent, total);
+  updateStatCard('currentSpeed', currentSpeed);
 
   // Update status table
   updateStatusTable(messages || []);
@@ -963,6 +1014,14 @@ function updateMessageStatus(status) {
     if (sendBtn) {
       sendBtn.classList.remove('loading');
       sendBtn.disabled = false;
+    }
+    
+    // Add success animation to progress bar
+    if (progressFill && (errors || 0) === 0) {
+      progressFill.classList.add('success');
+      setTimeout(() => {
+        progressFill.classList.remove('success');
+      }, 3000);
     }
     
     if ((errors || 0) === 0) {
@@ -977,7 +1036,8 @@ function updateStatCard(statId, value) {
   const element = document.getElementById(statId);
   if (element) {
     const currentValue = parseInt(element.textContent) || 0;
-    animateNumber(element, currentValue, value, 500);
+    // Animación más rápida durante envío activo para mejor respuesta
+    animateNumber(element, currentValue, value, 300);
   }
 }
 
@@ -1032,7 +1092,7 @@ function startProgressPolling() {
     } catch (e) {
       console.error('Progress polling error:', e);
     }
-  }, 1000);
+  }, 300); // Polling más frecuente para mejor respuesta (cada 300ms)
 }
 
 function stopProgressPolling() {
@@ -1077,6 +1137,11 @@ async function handleMessageFormSubmit(event) {
   // Clear previous results
   const tbody = document.getElementById('statusTableBody');
   if (tbody) tbody.innerHTML = '';
+
+  // Reset speed calculation variables
+  lastSentCount = 0;
+  lastUpdateTime = Date.now();
+  speedHistory = [];
 
   // Validate form
   const csvFile = document.getElementById('csvFile').files[0];
