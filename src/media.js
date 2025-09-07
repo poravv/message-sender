@@ -13,24 +13,49 @@ async function convertAudioToOpus(inputPath, userId = 'default') {
 
   // Incluir userId en el nombre del archivo para evitar conflictos entre usuarios
   const timestamp = Date.now();
-  const fileName = `audio_${userId}_${timestamp}.mp3`;
+  const fileName = `audio_${userId}_${timestamp}.m4a`;
   const out = path.join(tempDir, fileName);
+  
+  console.log(`[AUDIO] Iniciando conversión: ${inputPath} -> ${out}`);
+  
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .noVideo()
-      .audioCodec('libmp3lame')
-      .audioBitrate('128k')
-      .audioChannels(2)
-      .audioFrequency(44100)
-      .outputOptions(['-write_xing 0', '-id3v2_version 0', '-ar 44100'])
-      .format('mp3')
+      .audioCodec('aac')     // AAC es el formato más compatible con iOS
+      .audioBitrate('64k')   // Bitrate más bajo para mejor compatibilidad
+      .audioChannels(1)      // Mono para mensajes de voz
+      .audioFrequency(44100) // Frecuencia estándar para mejor calidad
+      .outputOptions([
+        '-f', 'mp4',               // Contenedor MP4 
+        '-movflags', '+faststart', // Optimización para reproducción inmediata
+        '-profile:a', 'aac_low',   // Perfil AAC de baja complejidad
+        '-avoid_negative_ts', 'make_zero', // Evitar timestamps negativos
+        '-fflags', '+genpts'       // Generar timestamps si faltan
+      ])
+      .format('mp4')
+      .on('start', (commandLine) => {
+        console.log(`[AUDIO] Ejecutando FFmpeg: ${commandLine}`);
+      })
+      .on('progress', (progress) => {
+        console.log(`[AUDIO] Progreso: ${Math.round(progress.percent || 0)}%`);
+      })
       .on('end', () => {
+        console.log(`[AUDIO] Conversión completada: ${out}`);
         if (!fs.existsSync(out)) return reject(new Error('El archivo convertido no existe'));
         const size = fs.statSync(out).size;
+        console.log(`[AUDIO] Tamaño del archivo convertido: ${size} bytes`);
         if (size <= 0) return reject(new Error('El archivo convertido está vacío'));
-        resolve(out);
+        
+        // Verificar duración mínima
+        setTimeout(() => {
+          if (!fs.existsSync(out)) return reject(new Error('El archivo se eliminó antes de completar la verificación'));
+          resolve(out);
+        }, 100);
       })
-      .on('error', reject)
+      .on('error', (err) => {
+        console.error(`[AUDIO] Error en conversión: ${err.message}`);
+        reject(err);
+      })
       .save(out);
   });
 }
