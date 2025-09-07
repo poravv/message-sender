@@ -9,37 +9,58 @@ class SessionManager {
     this.sessions = new Map(); // userId -> WhatsAppManager instance
     this.userSessions = new Map(); // Para mapear tokens a userIds
     this.baseSessionPath = path.join(__dirname, '..', 'bot_sessions');
+    this.creatingSession = new Map(); // Para evitar creación concurrente
   }
 
   // Obtener o crear sesión para un usuario
   async getSession(userId) {
-    if (!this.sessions.has(userId)) {
-      const sessionPath = path.join(this.baseSessionPath, `user-${userId}`);
-      
-      // Crear directorio si no existe
-      await fs.mkdir(sessionPath, { recursive: true });
-      
-      const manager = new WhatsAppManager();
-      // Modificar la ruta de autenticación para este usuario específico
-      manager.authPath = sessionPath;
-      
-      // Verificar que no hay otra sesión activa para este usuario
-      const existingSessions = Array.from(this.sessions.values());
-      const hasActiveWhatsApp = existingSessions.some(m => m.isReady);
-      
-      if (hasActiveWhatsApp) {
-        logger.warn({ userId }, 'Ya hay una sesión de WhatsApp activa, creando sesión sin inicializar');
-        // No inicializar automáticamente para evitar conflictos
-      } else {
-        // Inicializar la sesión solo si no hay otras activas
-        await manager.initialize();
-      }
-      
-      this.sessions.set(userId, manager);
-      logger.info({ userId, sessionPath, hasActiveWhatsApp }, 'Nueva sesión creada para usuario');
+    // Si ya existe la sesión, devolverla inmediatamente
+    if (this.sessions.has(userId)) {
+      return this.sessions.get(userId);
     }
     
-    return this.sessions.get(userId);
+    // Si ya se está creando esta sesión, esperar a que termine
+    if (this.creatingSession.has(userId)) {
+      await this.creatingSession.get(userId);
+      return this.sessions.get(userId);
+    }
+    
+    // Crear promesa para bloquear otras llamadas concurrentes
+    const creationPromise = this.createSession(userId);
+    this.creatingSession.set(userId, creationPromise);
+    
+    try {
+      await creationPromise;
+      return this.sessions.get(userId);
+    } finally {
+      this.creatingSession.delete(userId);
+    }
+  }
+  
+  async createSession(userId) {
+    const sessionPath = path.join(this.baseSessionPath, `user-${userId}`);
+    
+    // Crear directorio si no existe
+    await fs.mkdir(sessionPath, { recursive: true });
+    
+    const manager = new WhatsAppManager();
+    // Modificar la ruta de autenticación para este usuario específico
+    manager.authPath = sessionPath;
+    
+    // Verificar que no hay otra sesión activa para este usuario
+    const existingSessions = Array.from(this.sessions.values());
+    const hasActiveWhatsApp = existingSessions.some(m => m.isReady);
+    
+    if (hasActiveWhatsApp) {
+      logger.warn({ userId }, 'Ya hay una sesión de WhatsApp activa, creando sesión sin inicializar');
+      // No inicializar automáticamente para evitar conflictos
+    } else {
+      // Inicializar la sesión solo si no hay otras activas
+      await manager.initialize();
+    }
+    
+    this.sessions.set(userId, manager);
+    logger.info({ userId, sessionPath, hasActiveWhatsApp }, 'Nueva sesión creada para usuario');
   }
 
   // Obtener sesión por token JWT (después de validar con Keycloak)

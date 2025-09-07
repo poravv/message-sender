@@ -49,15 +49,24 @@ class MessageQueue {
     this.queue = [];
     this.retryQueue = [];
     this.isProcessing = false;
-    this.maxRetries = 3;
     this.batchSize = 1;
-    this.messageStats = { total: 0, sent: 0, errors: 0, messages: [], completed: false };
+    this.messageStats = null;
+    // Sistema de referencias de archivos
+    this.fileReferences = new Map(); // { filePath: count }
+    this.filesToCleanup = new Set(); // archivos marcados para limpieza
   }
 
   getStats() { return this.messageStats; }
 
   async add(numbers, message, images, singleImage, audioFile) {
     this.messageStats = { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false };
+    
+    // Contar referencias de archivos
+    if (audioFile && audioFile.path) {
+      const currentCount = this.fileReferences.get(audioFile.path) || 0;
+      this.fileReferences.set(audioFile.path, currentCount + numbers.length);
+    }
+    
     const items = numbers.map((entry, i) => {
       // Soporte para formato legacy (solo números) y nuevo formato (con variables)
       const number = typeof entry === 'string' ? entry : entry.number;
@@ -112,6 +121,9 @@ class MessageQueue {
       this.isProcessing = false;
       this.messageStats.completed = true;
       logger.info('Cola procesada completamente');
+      
+      // Limpiar archivos temp remanentes al finalizar
+      this.cleanupTempDirectory();
     }
   }
 
@@ -153,6 +165,75 @@ class MessageQueue {
     logger.info(`Lote procesado: ${ok}/${batch.length} mensajes enviados exitosamente`);
   }
 
+  // Decrementar referencia de archivo y limpiar si es necesario
+  decrementFileReference(audioFile) {
+    if (!audioFile || !audioFile.path) return;
+    
+    const filePath = audioFile.path;
+    const currentCount = this.fileReferences.get(filePath) || 0;
+    const newCount = Math.max(0, currentCount - 1);
+    
+    if (newCount === 0) {
+      // No quedan referencias, eliminar archivo
+      this.fileReferences.delete(filePath);
+      this.cleanupAudioFiles(audioFile);
+    } else {
+      // Aún hay referencias pendientes
+      this.fileReferences.set(filePath, newCount);
+    }
+  }
+
+  // Limpiar archivos de audio cuando no hay más referencias
+  cleanupAudioFiles(audioFile) {
+    if (!audioFile) return;
+    
+    try {
+      // Limpiar archivo original
+      if (fs.existsSync(audioFile.path)) {
+        fs.unlinkSync(audioFile.path);
+        logger.info(`Archivo de audio original eliminado: ${audioFile.path}`);
+      }
+      
+      // Limpiar archivo convertido usando la ruta real guardada
+      if (audioFile.convertedPath && fs.existsSync(audioFile.convertedPath)) {
+        fs.unlinkSync(audioFile.convertedPath);
+        logger.info(`Archivo de audio convertido eliminado: ${audioFile.convertedPath}`);
+      }
+    } catch (cleanupError) {
+      logger.warn(`Error al limpiar archivos de audio: ${cleanupError.message}`);
+    }
+  }
+
+  // Limpiar directorio temp de archivos remanentes
+  cleanupTempDirectory() {
+    try {
+      const { tempDir } = require('./config');
+      
+      if (!fs.existsSync(tempDir)) return;
+      
+      const files = fs.readdirSync(tempDir);
+      let cleanedCount = 0;
+      
+      files.forEach(file => {
+        if (file.startsWith('audio_') && file.endsWith('.mp3')) {
+          const filePath = require('path').join(tempDir, file);
+          try {
+            fs.unlinkSync(filePath);
+            cleanedCount++;
+          } catch (error) {
+            logger.warn(`Error al eliminar archivo temp ${file}: ${error.message}`);
+          }
+        }
+      });
+      
+      if (cleanedCount > 0) {
+        logger.info(`Limpieza de directorio temp completada: ${cleanedCount} archivos eliminados`);
+      }
+    } catch (error) {
+      logger.warn(`Error durante limpieza del directorio temp: ${error.message}`);
+    }
+  }
+
   async sendMessage(item) {
     const { number, message, variables, images, singleImage, audioFile, originalIndex } = item;
     logger.info(`Enviando mensaje a ${number} (posición original: ${originalIndex + 1})`);
@@ -178,25 +259,17 @@ class MessageQueue {
         const converted = await convertAudioToOpus(audioFile.path);
         const audioBuffer = fs.readFileSync(converted);
         
+        // Guardar la ruta del archivo convertido para limpieza posterior
+        audioFile.convertedPath = converted;
+        
         await this.client.sendMessage(jid, {
           audio: audioBuffer,
           mimetype: 'audio/mp4',
           ptt: true // Enviar como mensaje de voz
         });
 
-        // Limpiar archivos de audio después del envío exitoso
-        try {
-          if (fs.existsSync(audioFile.path)) {
-            fs.unlinkSync(audioFile.path);
-            logger.info(`Archivo de audio original eliminado: ${audioFile.path}`);
-          }
-          if (fs.existsSync(converted) && converted !== audioFile.path) {
-            fs.unlinkSync(converted);
-            logger.info(`Archivo de audio convertido eliminado: ${converted}`);
-          }
-        } catch (cleanupError) {
-          logger.warn(`Error al limpiar archivos de audio: ${cleanupError.message}`);
-        }
+        // Decrementar referencia del archivo de audio
+        this.decrementFileReference(audioFile);
 
         // Enviar texto después del audio si existe
         if (processedMessage && processedMessage.trim()) {
@@ -250,6 +323,11 @@ class MessageQueue {
 
       throw new Error('No se proporcionó contenido');
     } catch (error) {
+      // Decrementar referencia del archivo en caso de error también
+      if (audioFile) {
+        this.decrementFileReference(audioFile);
+      }
+      
       if (isIgnorableSerializeError(error)) {
         logger.warn(`Aviso: error interno "serialize" ignorado para ${number}`);
         return true;

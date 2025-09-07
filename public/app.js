@@ -194,6 +194,33 @@ async function authFetch(url, options = {}) {
   return fetch(url, { ...options, headers });
 }
 
+// Función para cerrar sesión de Keycloak
+async function logoutKeycloak() {
+  try {
+    console.log('🚪 Cerrando sesión de Keycloak...');
+    
+    // Mostrar confirmación
+    const confirmLogout = confirm('¿Estás seguro de que deseas cerrar sesión?');
+    if (!confirmLogout) return;
+    
+    showLoadingScreen();
+    
+    // Limpiar datos locales
+    sessionStorage.removeItem(CONFIG.authAttemptKey);
+    localStorage.clear();
+    
+    // Cerrar sesión en Keycloak
+    await keycloak.logout({
+      redirectUri: window.location.origin
+    });
+    
+  } catch (error) {
+    console.error('❌ Error al cerrar sesión:', error);
+    hideLoadingScreen();
+    showAlert('Error al cerrar sesión. Inténtalo nuevamente.', 'error', 'Error de logout');
+  }
+}
+
 /** ======== Loading Screen Management ======== */
 function showLoadingScreen(message = 'Cargando...') {
   const loadingScreen = document.getElementById('loading-screen');
@@ -629,7 +656,21 @@ function animateNumber(element, start, end, duration = 1000) {
   }, 16);
 }
 
+let statusCheckPromise = null;
+
 async function checkStatus() {
+  // Evitar múltiples llamadas concurrentes
+  if (statusCheckPromise) {
+    return statusCheckPromise;
+  }
+  
+  statusCheckPromise = performStatusCheck();
+  const result = await statusCheckPromise;
+  statusCheckPromise = null;
+  return result;
+}
+
+async function performStatusCheck() {
   try {
     const url = `${CONFIG.statusEndpoint}?t=${Date.now()}`;
     const res = await authFetch(url);
@@ -1196,6 +1237,12 @@ function setupEventListeners() {
   const exportBtn = document.getElementById('exportBtn');
   if (exportBtn) {
     exportBtn.addEventListener('click', exportResults);
+  }
+
+  // Logout button
+  const logoutBtn = document.getElementById('logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', logoutKeycloak);
   }
 }
 

@@ -352,6 +352,41 @@ body::before {
   line-height: 1.2;
 }
 
+.user-actions {
+  margin-left: var(--spacing-sm);
+  display: flex;
+  align-items: center;
+}
+
+.btn-logout {
+  background: none;
+  border: none;
+  padding: var(--spacing-xs);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+}
+
+.btn-logout:hover {
+  background: var(--bg-tertiary);
+  color: var(--danger-500);
+  transform: translateY(-1px);
+}
+
+.btn-logout:active {
+  transform: translateY(0);
+}
+
+[data-theme="light"] .btn-logout:hover {
+  background: var(--gray-100);
+  color: var(--danger-600);
+}
+
 /* Theme Toggle */
 .theme-toggle {
   margin-left: var(--spacing-md);
