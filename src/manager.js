@@ -2,15 +2,10 @@
 const fs = require('fs');
 const path = require('path');
 const qrcode = require('qrcode');
-const { 
-  default: makeWASocket, 
-  DisconnectReason, 
+const {
+  default: makeWASocket,
+  DisconnectReason,
   useMultiFileAuthState,
-  downloadContentFromMessage,
-  generateWAMessageFromContent,
-  proto,
-  prepareWAMessageMedia,
-  MediaType
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { isAuthorizedPhone, publicDir } = require('./config');
@@ -20,34 +15,72 @@ const logger = require('./logger');
 class WhatsAppManager {
   constructor(userId = 'default') {
     this.userId = userId;
+
+    // Estado de conexión
     this.sock = null;
     this.isReady = false;
-    this.qrCode = null;
     this.connectionState = 'disconnected';
+    this.lastDisconnectReason = null;
+    this.isConnecting = false;
+    this.connectionPromise = null;
     this.lastActivity = Date.now();
-    this.messageQueue = null;
-    this.lastQRUpdate = null;
-    this.securityAlert = null;
-    this.userInfo = null;
+
+    // Autenticación (Baileys)
     this.authState = null;
     this.saveCreds = null;
-    this.authPath = null; // Ruta personalizable para autenticación
-    
-    // Rate limiting y control de conflictos
+    this.authPath = null; // ruta por-usuario: .../auth_info/user-<id>
+
+    // QR
+    this.qrCode = null;
+    this.lastQRUpdate = null;
+    this.qrCaptureRequested = false;
+
+    // Info de user
+    this.userInfo = null;
+    this.securityAlert = null;
+
+    // Rate limiting y conflictos
     this.lastMessageTime = 0;
     this.messageCount = 0;
-    this.maxMessagesPerMinute = 15; // Límite más conservador
+    this.maxMessagesPerMinute = 15;
     this.conflictCount = 0;
     this.lastConflictTime = 0;
     this.isInCooldown = false;
-    
-    // Mutex para prevenir conexiones concurrentes
-    this.isConnecting = false;
-    this.connectionPromise = null;
-    this.lastDisconnectReason = null;
 
-    // Comp. para controlar cuándo guardar el PNG
-    this.qrCaptureRequested = false;
+    // Cola de mensajes
+    this.messageQueue = null;
+  }
+
+  // ========= Helpers internos =========
+
+  _getAuthDir() {
+    // Si ya setearon authPath, úsalo. Si no, por defecto: <publicDir>/../auth_info/user-<id>
+    if (this.authPath) return this.authPath;
+    const base = path.join(publicDir, '..', 'auth_info');
+    return path.join(base, `user-${this.userId}`);
+  }
+
+  _getScopedUserId() {
+    // Deriva userId desde el authPath si viene con "user-<id>"
+    if (this.authPath) {
+      const base = path.basename(this.authPath);
+      if (base.startsWith('user-')) return base.replace('user-', '');
+    }
+    return this.userId;
+  }
+
+  _getUserQrPath() {
+    const uid = this._getScopedUserId();
+    const qrFileName = `qr-${uid}.png`;
+    return path.join(publicDir, qrFileName);
+  }
+
+  _delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  updateActivity() {
+    this.lastActivity = Date.now();
   }
 
   getState() {
@@ -58,413 +91,10 @@ class WhatsAppManager {
       lastQRUpdate: this.lastQRUpdate || null,
       hasQR: !!this.qrCode,
       securityAlert: this.securityAlert || null,
-      userInfo: this.userInfo || null
+      userInfo: this.userInfo || null,
     };
   }
 
-  updateActivity() { this.lastActivity = Date.now(); }
-
-  deleteSessionFiles() {
-    try {
-      logger.info('Eliminando archivos de sesión...');
-      const sessionDir = this.authPath || path.join(publicDir, '..', 'auth_info');
-      if (!fs.existsSync(sessionDir)) return logger.info('Directorio de sesiones no encontrado');
-
-      let deleted = 0;
-      for (const f of fs.readdirSync(sessionDir)) {
-        const p = path.join(sessionDir, f);
-        try {
-          if (fs.lstatSync(p).isDirectory()) {
-            for (const sf of fs.readdirSync(p)) {
-              fs.unlinkSync(path.join(p, sf));
-              deleted++;
-            }
-            fs.rmdirSync(p);
-          } else {
-            fs.unlinkSync(p);
-            deleted++;
-          }
-        } catch (e) {
-          logger.error({ p, err: e?.message }, 'Error eliminando archivo de sesión');
-        }
-      }
-      logger.info({ deleted, sessionDir }, 'Archivos de sesión eliminados');
-    } catch (e) {
-      logger.error({ err: e?.message }, 'Error al eliminar archivos de sesión');
-    }
-  }
-
-  // ===== Comp. QR: API para la ruta /refresh-qr =====
-  requestQrCapture() {
-    this.qrCaptureRequested = true;
-  }
-
-  async captureQrToDisk(userId = null) {
-    try {
-      if (!this.qrCode) return false;
-      
-      // Si tenemos un userId, crear QR específico para ese usuario
-      const qrFileName = userId ? `qr-${userId}.png` : 'qr.png';
-      const qrPath = path.join(publicDir, qrFileName);
-      
-      await qrcode.toFile(qrPath, this.qrCode, {
-        color: { dark: '#128C7E', light: '#FFFFFF' },
-        width: 300,
-        margin: 1
-      });
-      this.lastQRUpdate = Date.now();
-      logger.info({ qrPath, userId }, 'QR guardado (captura inmediata)');
-      return true;
-    } catch (e) {
-      logger.error({ err: e?.message }, 'captureQrToDisk falló');
-      return false;
-    }
-  }
-
-  // Método seguro para inicializar que evita conexiones concurrentes
-  async safeInitialize() {
-    // Si ya hay una conexión en progreso, esperar a que termine
-    if (this.isConnecting) {
-      logger.warn('Conexión ya en progreso, esperando...');
-      if (this.connectionPromise) {
-        try {
-          await this.connectionPromise;
-        } catch (err) {
-          logger.warn('Conexión anterior falló, continuando con nueva conexión');
-        }
-      }
-      return;
-    }
-
-    // Si está en cooldown, no conectar
-    if (this.isInCooldown) {
-      logger.warn('En cooldown, cancelando intento de conexión');
-      return;
-    }
-
-    // Marcar como conectando y guardar promesa
-    this.isConnecting = true;
-    this.connectionPromise = this.initialize()
-      .catch(err => {
-        logger.error({ err: err?.message }, 'Error en inicialización segura');
-        throw err;
-      })
-      .finally(() => {
-        this.isConnecting = false;
-        this.connectionPromise = null;
-      });
-
-    return this.connectionPromise;
-  }
-
-  async initialize() {
-    if (this.sock) {
-      logger.info('Socket ya inicializado, reutilizando...');
-      return true;
-    }
-
-    try {
-      // Configurar autenticación
-      const authDir = this.authPath || path.join(publicDir, '..', 'auth_info');
-      if (!fs.existsSync(authDir)) {
-        fs.mkdirSync(authDir, { recursive: true });
-      }
-
-      const { state, saveCreds } = await useMultiFileAuthState(authDir);
-      this.authState = state;
-      this.saveCreds = saveCreds;
-
-      // Crear socket
-      this.sock = makeWASocket({
-        auth: state,
-        printQRInTerminal: false,
-        logger: pino({ level: 'silent' }), // Logger compatible con Baileys
-        connectTimeoutMs: 60000,
-        defaultQueryTimeoutMs: 0,
-        keepAliveIntervalMs: 10000,
-        markOnlineOnConnect: false
-      });
-
-      // Event handlers
-      this.sock.ev.on('creds.update', saveCreds);
-
-      this.sock.ev.on('connection.update', async (update) => {
-        const { connection, lastDisconnect, qr } = update;
-
-        if (qr) {
-          this.qrCode = qr;
-          this.connectionState = 'qr_ready';
-
-          // Obtener userId desde authPath si está disponible
-          const userId = this.authPath ? path.basename(this.authPath).replace('user-', '') : null;
-          const qrFileName = userId ? `qr-${userId}.png` : 'qr.png';
-          const qrPath = path.join(publicDir, qrFileName);
-          
-          const shouldWrite = this.qrCaptureRequested || !fs.existsSync(qrPath);
-
-          if (shouldWrite) {
-            this.qrCaptureRequested = false;
-            logger.info({ userId }, 'QR Code recibido');
-            await qrcode.toFile(qrPath, qr, {
-              color: { dark: '#128C7E', light: '#FFFFFF' },
-              width: 300,
-              margin: 1
-            });
-            logger.info({ qrPath, userId }, 'QR guardado');
-            this.lastQRUpdate = Date.now();
-          }
-        }
-
-        if (connection === 'close') {
-          const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-          const reason = lastDisconnect?.error?.message;
-          
-          this.lastDisconnectReason = reason;
-          
-          logger.warn({ 
-            reason,
-            shouldReconnect,
-            userId: this.authPath ? path.basename(this.authPath).replace('user-', '') : null
-          }, 'Conexión cerrada');
-          
-          this.isReady = false;
-          this.connectionState = 'disconnected';
-          this.userInfo = null;
-          this.sock = null;
-          this.isConnecting = false; // Reset mutex
-
-          // Manejar diferentes tipos de desconexión
-          if (reason && reason.includes('QR refs attempts ended')) {
-            logger.warn('Sesión cerrada por timeout de QR. Esperando antes de reconectar...');
-            // QR timeout - esperar más tiempo antes de reconectar
-            if (shouldReconnect) {
-              setTimeout(() => {
-                logger.info('Reintentando conexión tras QR timeout...');
-                this.safeInitialize();
-              }, 30000); // 30 segundos para QR timeout
-            }
-            return;
-          }
-
-          // Evitar reconexión en caso de conflictos
-          if (reason && reason.includes('conflict')) {
-            this.conflictCount++;
-            this.lastConflictTime = Date.now();
-            
-            logger.warn(`Conflicto detectado (#${this.conflictCount}). Implementando estrategia de reconexión inteligente`);
-            
-            // Cooldown escalado basado en número de conflictos
-            const cooldownMinutes = Math.min(this.conflictCount * 2, 10); // Máximo 10 minutos
-            const cooldownMs = cooldownMinutes * 60 * 1000;
-            
-            this.isInCooldown = true;
-            
-            logger.info(`Entrando en cooldown por ${cooldownMinutes} minutos debido a conflicto`);
-            
-            setTimeout(() => {
-              this.isInCooldown = false;
-              logger.info('Cooldown terminado, intentando reconexión después de conflicto');
-              this.safeInitialize();
-            }, cooldownMs);
-            
-            return;
-          }
-
-          if (shouldReconnect) {
-            // Reset contador de conflictos en desconexiones normales
-            if (!reason || !reason.includes('conflict')) {
-              this.conflictCount = Math.max(0, this.conflictCount - 1);
-            }
-            
-            // Delay más largo para evitar conflictos, escalado si hay historial de conflictos
-            const baseDelay = 15000; // 15 segundos base
-            const conflictPenalty = this.conflictCount * 5000; // 5 segundos adicionales por conflicto previo
-            const totalDelay = baseDelay + conflictPenalty;
-            
-            setTimeout(() => {
-              logger.info(`Reintentando conexión (delay: ${totalDelay}ms, conflictos previos: ${this.conflictCount})...`);
-              this.safeInitialize();
-            }, totalDelay);
-          }
-        } else if (connection === 'open') {
-          logger.info('Conexión abierta');
-          this.connectionState = 'connected';
-
-          // Obtener información del usuario
-          if (this.sock?.user) {
-            const phoneNumber = this.sock.user.id.split(':')[0];
-            
-            // Log para ver qué propiedades están disponibles
-            logger.info({ userObject: this.sock.user }, 'Propiedades disponibles del usuario');
-            
-            // Establecer información básica del usuario
-            // En Baileys, el pushname se obtiene mejor desde mensajes o contactos
-            // Por ahora usamos el número como identificador principal
-            const pushname = `Usuario ${phoneNumber}`;
-            
-            this.userInfo = {
-              phoneNumber: phoneNumber,
-              pushname: pushname,
-              jid: this.sock.user.id
-            };
-            logger.info({ userInfo: this.userInfo }, 'Información del usuario obtenida');
-
-            // Verificar si está autorizado
-            if (!isAuthorizedPhone(phoneNumber)) {
-              const alert = `¡ALERTA! Número no autorizado: ${phoneNumber}`;
-              logger.warn({ phoneNumber }, 'Número no autorizado, desconectando...');
-              this.securityAlert = { 
-                timestamp: Date.now(), 
-                messages: [alert, 'Desconectando...'], 
-                phoneNumber 
-              };
-              
-              // Enviar mensaje de advertencia y desconectar
-              try {
-                await this.sock.sendMessage(this.sock.user.id, { 
-                  text: 'Número no autorizado. Se cerrará la sesión.' 
-                });
-              } catch {}
-              
-              this.isReady = false;
-              this.connectionState = 'unauthorized';
-              
-              setTimeout(async () => {
-                try {
-                  await this.sock?.logout();
-                  this.sock = null;
-                  this.deleteSessionFiles();
-                  setTimeout(() => this.initialize(), 8000);
-                } catch {}
-              }, 3000);
-              return;
-            }
-
-            logger.info({ phoneNumber }, 'Número autorizado');
-            this.isReady = true;
-            this.lastActivity = Date.now();
-            
-            // Eliminar QR una vez conectado (específico del usuario)
-            const userId = this.authPath ? path.basename(this.authPath).replace('user-', '') : null;
-            const qrFileName = userId ? `qr-${userId}.png` : 'qr.png';
-            const qrPath = path.join(publicDir, qrFileName);
-            
-            try { 
-              if (fs.existsSync(qrPath)) {
-                fs.unlinkSync(qrPath); 
-                logger.info({ userId, qrPath }, 'QR eliminado tras conexión exitosa');
-              }
-            } catch {}
-          }
-        } else if (connection === 'connecting') {
-          logger.info('Conectando...');
-          this.connectionState = 'connecting';
-        }
-      });
-
-      // Configurar cola de mensajes con userId
-      this.messageQueue = new MessageQueue(this.sock, this.userId);
-      
-      return true;
-    } catch (e) {
-      logger.error({ err: e?.message }, 'Error inicializando Baileys');
-      return false;
-    }
-  }
-
-  async refreshQR() {
-    logger.info('Solicitando refrescar QR...');
-    if (this.isReady) { 
-      logger.info('No se puede refrescar: ya autenticado'); 
-      return false; 
-    }
-
-    try {
-      if (this.sock) {
-        logger.info('Cerrando socket actual...');
-        try { 
-          await this.sock.logout(); 
-        } catch {}
-        this.sock = null;
-      }
-
-      // Eliminar QR específico del usuario
-      const userId = this.authPath ? path.basename(this.authPath).replace('user-', '') : null;
-      const qrFileName = userId ? `qr-${userId}.png` : 'qr.png';
-      const qrPath = path.join(publicDir, qrFileName);
-      
-      try { 
-        if (fs.existsSync(qrPath)) {
-          fs.unlinkSync(qrPath); 
-          logger.info({ userId, qrPath }, 'QR anterior eliminado'); 
-        }
-      } catch {}
-      
-      this.isReady = false; 
-      this.qrCode = null; 
-      this.connectionState = 'disconnected';
-      this.userInfo = null;
-      this.deleteSessionFiles();
-
-      // preparar compuerta para el próximo evento 'qr'
-      this.requestQrCapture();
-
-      await new Promise(r => setTimeout(r, 2000));
-      logger.info({ userId }, 'Inicializando nuevo socket...');
-      await this.safeInitialize();
-      logger.info({ userId }, 'Nuevo socket inicializado, esperando QR...');
-      return true;
-    } catch (e) {
-      logger.error({ err: e?.message }, 'Error al refrescar QR');
-      return false;
-    }
-  }
-
-  // Métodos para rate limiting y manejo de conflictos
-  checkRateLimit() {
-    const now = Date.now();
-    const oneMinuteAgo = now - (60 * 1000);
-    
-    // Reset contador si ha pasado más de un minuto
-    if (now - this.lastMessageTime > 60000) {
-      this.messageCount = 0;
-    }
-    
-    return this.messageCount < this.maxMessagesPerMinute;
-  }
-  
-  recordMessage() {
-    const now = Date.now();
-    this.lastMessageTime = now;
-    this.messageCount++;
-    
-    logger.info(`Mensaje registrado: ${this.messageCount}/${this.maxMessagesPerMinute} en la última hora`);
-    
-    // Si estamos cerca del límite, registrar advertencia
-    if (this.messageCount >= this.maxMessagesPerMinute * 0.8) {
-      logger.warn(`Cerca del límite de rate: ${this.messageCount}/${this.maxMessagesPerMinute}`);
-    }
-  }
-  
-  async waitForRateLimit() {
-    if (!this.checkRateLimit()) {
-      const waitTime = 60000; // Esperar 1 minuto
-      logger.warn(`Rate limit alcanzado. Esperando ${waitTime/1000} segundos...`);
-      await new Promise(resolve => setTimeout(resolve, waitTime));
-      this.messageCount = 0; // Reset contador después del cooldown
-    }
-  }
-  
-  isInConflictCooldown() {
-    if (!this.isInCooldown) return false;
-    
-    const now = Date.now();
-    const timeSinceLastConflict = now - this.lastConflictTime;
-    const cooldownDuration = Math.min(this.conflictCount * 2 * 60 * 1000, 10 * 60 * 1000);
-    
-    return timeSinceLastConflict < cooldownDuration;
-  }
-  
   getConnectionHealth() {
     return {
       isReady: this.isReady,
@@ -476,40 +106,445 @@ class WhatsAppManager {
       lastConflictTime: this.lastConflictTime,
       isConnecting: this.isConnecting,
       lastDisconnectReason: this.lastDisconnectReason,
-      canSendMessages: this.isReady && !this.isInCooldown && this.checkRateLimit() && !this.isConnecting
+      canSendMessages:
+        this.isReady && !this.isInCooldown && this._checkRateLimit() && !this.isConnecting,
     };
   }
 
-  // Método para cerrar sesión de WhatsApp completamente
+  // ========= QR helpers =========
+  requestQrCapture() {
+    this.qrCaptureRequested = true;
+  }
+
+  async captureQrToDisk(userId = null) {
+    try {
+      if (!this.qrCode) return false;
+      const uid = userId || this._getScopedUserId();
+      const qrFileName = `qr-${uid}.png`;
+      const qrPath = path.join(publicDir, qrFileName);
+
+      await qrcode.toFile(qrPath, this.qrCode, {
+        color: { dark: '#128C7E', light: '#FFFFFF' },
+        width: 300,
+        margin: 1,
+      });
+      this.lastQRUpdate = Date.now();
+      logger.info({ qrPath, userId: uid }, 'QR guardado (captura inmediata)');
+      return true;
+    } catch (e) {
+      logger.error({ err: e?.message }, 'captureQrToDisk falló');
+      return false;
+    }
+  }
+
+  // ========= Inicialización =========
+
+  async safeInitialize() {
+    if (this.isConnecting) {
+      logger.warn('Conexión ya en progreso, esperando...');
+      if (this.connectionPromise) {
+        try {
+          await this.connectionPromise;
+        } catch {
+          // swallow
+        }
+      }
+      return;
+    }
+
+    if (this.isInCooldown) {
+      logger.warn('En cooldown, cancelando intento de conexión');
+      return;
+    }
+
+    this.isConnecting = true;
+    this.connectionPromise = this._initialize()
+      .catch((err) => {
+        logger.error({ err: err?.message }, 'Error en inicialización segura');
+        throw err;
+      })
+      .finally(() => {
+        this.isConnecting = false;
+        this.connectionPromise = null;
+      });
+
+    return this.connectionPromise;
+  }
+
+  async _initialize() {
+    if (this.sock) {
+      logger.info('Socket ya inicializado, reutilizando...');
+      return true;
+    }
+
+    try {
+      // Auth por usuario
+      const authDir = this._getAuthDir();
+      this.authPath = authDir;
+      if (!fs.existsSync(authDir)) {
+        fs.mkdirSync(authDir, { recursive: true });
+      }
+
+      const { state, saveCreds } = await useMultiFileAuthState(authDir);
+      this.authState = state;
+      this.saveCreds = saveCreds;
+
+      // Socket Baileys
+      this.sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: false,
+        logger: pino({ level: 'silent' }),
+        connectTimeoutMs: 60_000,
+        defaultQueryTimeoutMs: 0,
+        keepAliveIntervalMs: 10_000,
+        markOnlineOnConnect: false,
+      });
+
+      this.sock.ev.on('creds.update', saveCreds);
+
+      this.sock.ev.on('connection.update', async (update) => {
+        const { connection, lastDisconnect, qr } = update;
+
+        // QR recibido
+        if (qr) {
+          this.qrCode = qr;
+          this.connectionState = 'qr_ready';
+
+          const qrPath = this._getUserQrPath();
+          const shouldWrite = this.qrCaptureRequested || !fs.existsSync(qrPath);
+
+          if (shouldWrite) {
+            this.qrCaptureRequested = false;
+            logger.info({ userId: this._getScopedUserId() }, 'QR Code recibido');
+            await qrcode.toFile(qrPath, qr, {
+              color: { dark: '#128C7E', light: '#FFFFFF' },
+              width: 300,
+              margin: 1,
+            });
+            logger.info({ qrPath }, 'QR guardado');
+            this.lastQRUpdate = Date.now();
+          }
+        }
+
+        if (connection === 'open') {
+          logger.info('Conexión abierta');
+          this.connectionState = 'connected';
+
+          if (this.sock?.user) {
+            const phoneNumber = this.sock.user.id.split(':')[0];
+            const pushname = `Usuario ${phoneNumber}`;
+
+            this.userInfo = {
+              phoneNumber,
+              pushname,
+              jid: this.sock.user.id,
+            };
+            logger.info({ userInfo: this.userInfo }, 'Información del usuario obtenida');
+
+            // Autorización de número
+            if (!isAuthorizedPhone(phoneNumber)) {
+              const alert = `¡ALERTA! Número no autorizado: ${phoneNumber}`;
+              logger.warn({ phoneNumber }, 'Número no autorizado, desconectando...');
+              this.securityAlert = {
+                timestamp: Date.now(),
+                messages: [alert, 'Desconectando...'],
+                phoneNumber,
+              };
+
+              try {
+                await this.sock.sendMessage(this.sock.user.id, {
+                  text: 'Número no autorizado. Se cerrará la sesión.',
+                });
+              } catch {
+                /* noop */
+              }
+
+              this.isReady = false;
+              this.connectionState = 'unauthorized';
+
+              setTimeout(async () => {
+                try {
+                  await this.sock?.logout();
+                  this.sock = null;
+                  await this._deleteSessionFilesCompletely();
+                  setTimeout(() => this.safeInitialize(), 8_000);
+                } catch {
+                  /* noop */
+                }
+              }, 3_000);
+              return;
+            }
+
+            // OK
+            logger.info({ phoneNumber }, 'Número autorizado');
+            this.isReady = true;
+            this.lastActivity = Date.now();
+
+            // borrar QR al conectar
+            const qrPath = this._getUserQrPath();
+            try {
+              if (fs.existsSync(qrPath)) {
+                fs.unlinkSync(qrPath);
+                logger.info({ qrPath }, 'QR eliminado tras conexión exitosa');
+              }
+            } catch {
+              /* noop */
+            }
+          }
+        }
+
+        if (connection === 'connecting') {
+          logger.info('Conectando...');
+          this.connectionState = 'connecting';
+        }
+
+        if (connection === 'close') {
+          const shouldReconnect =
+            lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+          const reason = lastDisconnect?.error?.message;
+          this.lastDisconnectReason = reason;
+
+          logger.warn(
+            {
+              reason,
+              shouldReconnect,
+              userId: this._getScopedUserId(),
+            },
+            'Conexión cerrada'
+          );
+
+          this.isReady = false;
+          this.connectionState = 'disconnected';
+          this.userInfo = null;
+          this.sock = null;
+          this.isConnecting = false;
+
+          // Timeout QR
+          if (reason && reason.includes('QR refs attempts ended')) {
+            logger.warn('Timeout de QR. Esperando antes de reconectar...');
+            if (shouldReconnect) {
+              setTimeout(() => {
+                logger.info('Reintentando conexión tras QR timeout...');
+                this.safeInitialize();
+              }, 30_000);
+            }
+            return;
+          }
+
+          // Conflictos
+          if (reason && reason.includes('conflict')) {
+            this.conflictCount++;
+            this.lastConflictTime = Date.now();
+
+            logger.warn(
+              `Conflicto detectado (#${this.conflictCount}). Estrategia de reconexión inteligente...`
+            );
+
+            const cooldownMinutes = Math.min(this.conflictCount * 2, 10);
+            const cooldownMs = cooldownMinutes * 60 * 1000;
+            this.isInCooldown = true;
+
+            logger.info(`Entrando en cooldown por ${cooldownMinutes} minutos debido a conflicto`);
+            setTimeout(() => {
+              this.isInCooldown = false;
+              logger.info('Cooldown terminado, intentando reconexión');
+              this.safeInitialize();
+            }, cooldownMs);
+
+            return;
+          }
+
+          // Reintento normal
+          if (shouldReconnect) {
+            if (!reason || !reason.includes('conflict')) {
+              this.conflictCount = Math.max(0, this.conflictCount - 1);
+            }
+
+            const baseDelay = 15_000;
+            const conflictPenalty = this.conflictCount * 5_000;
+            const totalDelay = baseDelay + conflictPenalty;
+
+            setTimeout(() => {
+              logger.info(
+                `Reintentando conexión (delay: ${totalDelay}ms, conflictos previos: ${this.conflictCount})...`
+              );
+              this.safeInitialize();
+            }, totalDelay);
+          }
+        }
+      });
+
+      // Cola de mensajes por usuario
+      this.messageQueue = new MessageQueue(this.sock, this.userId);
+      return true;
+    } catch (e) {
+      logger.error({ err: e?.message }, 'Error inicializando Baileys');
+      return false;
+    }
+  }
+
+  // ========= QR manual =========
+
+  async refreshQR() {
+    logger.info('Solicitando refrescar QR...');
+    if (this.isReady) {
+      logger.info('No se puede refrescar: ya autenticado');
+      return false;
+    }
+
+    try {
+      // cerrar socket si existe
+      if (this.sock) {
+        logger.info('Cerrando socket actual...');
+        try {
+          await this.sock.logout();
+        } catch {
+          /* noop */
+        }
+        this.sock = null;
+      }
+
+      // borrar QR previo
+      const qrPath = this._getUserQrPath();
+      try {
+        if (fs.existsSync(qrPath)) {
+          fs.unlinkSync(qrPath);
+          logger.info({ qrPath }, 'QR anterior eliminado');
+        }
+      } catch {
+        /* noop */
+      }
+
+      // reset estado y borrar sesión
+      this.isReady = false;
+      this.qrCode = null;
+      this.connectionState = 'disconnected';
+      this.userInfo = null;
+      await this._deleteSessionFilesCompletely();
+
+      // preparar compuerta para el próximo evento 'qr'
+      this.requestQrCapture();
+
+      await this._delay(2_000);
+      logger.info({ userId: this._getScopedUserId() }, 'Inicializando nuevo socket...');
+      await this.safeInitialize();
+      logger.info({ userId: this._getScopedUserId() }, 'Nuevo socket inicializado, esperando QR...');
+      return true;
+    } catch (e) {
+      logger.error({ err: e?.message }, 'Error al refrescar QR');
+      return false;
+    }
+  }
+
+  // ========= Rate limiting =========
+
+  _checkRateLimit() {
+    const now = Date.now();
+    if (now - this.lastMessageTime > 60_000) {
+      this.messageCount = 0;
+    }
+    return this.messageCount < this.maxMessagesPerMinute;
+  }
+
+  recordMessage() {
+    const now = Date.now();
+    this.lastMessageTime = now;
+    this.messageCount++;
+    logger.info(
+      `Mensaje registrado: ${this.messageCount}/${this.maxMessagesPerMinute} en el último minuto`
+    );
+    if (this.messageCount >= this.maxMessagesPerMinute * 0.8) {
+      logger.warn(
+        `Cerca del límite de rate: ${this.messageCount}/${this.maxMessagesPerMinute} (último minuto)`
+      );
+    }
+  }
+
+  async waitForRateLimit() {
+    if (!this._checkRateLimit()) {
+      const waitTime = 60_000; // 1 min
+      logger.warn(`Rate limit alcanzado. Esperando ${waitTime / 1000} segundos...`);
+      await this._delay(waitTime);
+      this.messageCount = 0;
+    }
+  }
+
+  // ========= Limpieza de sesión (archivos) =========
+
+  async _deleteSessionFilesCompletely() {
+    try {
+      logger.info('Eliminando archivos de sesión COMPLETAMENTE...');
+      const sessionDir = this._getAuthDir();
+
+      if (!fs.existsSync(sessionDir)) {
+        logger.info('Directorio de sesiones no existe');
+        return;
+      }
+
+      let deleted = 0;
+      for (const entry of fs.readdirSync(sessionDir)) {
+        const p = path.join(sessionDir, entry);
+        try {
+          const stat = fs.lstatSync(p);
+          if (stat.isDirectory()) {
+            await fs.promises.rm(p, { recursive: true, force: true });
+            deleted++;
+          } else {
+            fs.unlinkSync(p);
+            deleted++;
+          }
+        } catch (error) {
+          logger.error({ p, err: error?.message }, 'Error eliminando archivo/directorio de sesión');
+        }
+      }
+
+      // Intentar eliminar el directorio padre si quedó vacío
+      try {
+        if (fs.existsSync(sessionDir) && fs.readdirSync(sessionDir).length === 0) {
+          fs.rmdirSync(sessionDir);
+          deleted++;
+        }
+      } catch {
+        /* noop */
+      }
+
+      // limpiar refs en memoria
+      this.authState = null;
+      this.saveCreds = null;
+
+      logger.info({ deleted, sessionDir }, 'Archivos de sesión eliminados COMPLETAMENTE');
+    } catch (error) {
+      logger.error(`Error al eliminar archivos de sesión completamente: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Compat: alias del viejo nombre (si alguien lo llama)
+  async deleteSessionFiles() {
+    return this._deleteSessionFilesCompletely();
+  }
+
+  // ========= Logout(s) =========
+
+  /**
+   * Logout básico (limpia socket + estado + archivos de sesión)
+   * Devuelve true si finaliza sin throw (aunque hubiese fallbacks).
+   */
   async logout() {
     try {
       logger.info(`Cerrando sesión de WhatsApp para usuario ${this.userId}`);
-      
-      // 1. Marcar como no listo inmediatamente
+
+      // marcar estado
       this.isReady = false;
       this.connectionState = 'logging_out';
-      
-      // 2. Si hay un socket activo, hacer logout AGRESIVO
+
+      // si hay socket, intentar logout; fallback: end/ws.close
       if (this.sock) {
         try {
           logger.info('Enviando logout a WhatsApp...');
-          
-          // NUEVO: Enviar mensaje de desconexión explícito antes del logout
-          try {
-            if (this.sock.user) {
-              await this.sock.sendMessage(this.sock.user.id, { 
-                text: '🚪 Cerrando sesión desde WhatsApp Web...' 
-              });
-            }
-          } catch (msgError) {
-            logger.warn('No se pudo enviar mensaje de despedida');
-          }
-          
-          // Logout principal
           await this.sock.logout();
           logger.info('Logout enviado exitosamente a WhatsApp');
-          
-          // NUEVO: Forzar cierre de conexión adicional
+
           if (this.sock.ws) {
             try {
               this.sock.ws.close(1000, 'User logout');
@@ -517,158 +552,131 @@ class WhatsAppManager {
               logger.warn('Error cerrando WebSocket manualmente');
             }
           }
-          
         } catch (logoutError) {
           logger.warn(`Error durante logout de WhatsApp: ${logoutError.message}`);
-          
-          // FALLBACK: Si el logout normal falla, forzar desconexión
           logger.info('Intentando desconexión forzada...');
           try {
-            if (this.sock.end && typeof this.sock.end === 'function') {
-              this.sock.end();
-            }
-            if (this.sock.ws && this.sock.ws.close) {
-              this.sock.ws.close(1000, 'Forced logout');
-            }
-          } catch (forceError) {
+            if (this.sock.end && typeof this.sock.end === 'function') this.sock.end();
+            if (this.sock.ws && this.sock.ws.close) this.sock.ws.close(1000, 'Forced logout');
+          } catch {
             logger.warn('Error en desconexión forzada');
           }
         }
-        
         this.sock = null;
       }
-      
-      // 3. Limpiar estado completamente
+
+      // limpiar estado
       this.isReady = false;
       this.connectionState = 'disconnected';
       this.userInfo = null;
       this.qrCode = null;
       this.isConnecting = false;
       this.connectionPromise = null;
-      
-      // 4. IMPORTANTE: Eliminar archivos de sesión COMPLETAMENTE
-      await this.deleteSessionFilesCompletely();
-      
-      // 5. Eliminar QR si existe
-      const userId = this.authPath ? path.basename(this.authPath).replace('user-', '') : this.userId;
-      const qrFileName = `qr-${userId}.png`;
-      const qrPath = path.join(publicDir, qrFileName);
-      
+
+      // borrar sesión y QR
+      await this._deleteSessionFilesCompletely();
+
+      const qrPath = this._getUserQrPath();
       try {
         if (fs.existsSync(qrPath)) {
           fs.unlinkSync(qrPath);
           logger.info(`QR eliminado: ${qrPath}`);
         }
-      } catch (qrError) {
-        logger.warn(`Error eliminando QR: ${qrError.message}`);
+      } catch {
+        /* noop */
       }
-      
+
       logger.info(`Sesión de WhatsApp cerrada COMPLETAMENTE para usuario ${this.userId}`);
       return true;
-      
     } catch (error) {
       logger.error(`Error durante logout completo: ${error.message}`, error);
-      
-      // Forzar limpieza aunque haya errores
+
+      // forzar limpieza aun con error
       this.isReady = false;
       this.connectionState = 'disconnected';
       this.sock = null;
-      await this.deleteSessionFilesCompletely();
-      
+      await this._deleteSessionFilesCompletely();
       throw error;
     }
   }
 
-  // Método de logout robusto con múltiples intentos y verificación
+  /**
+   * Logout robusto: varios intentos + verificación + cleanup forzado si hace falta.
+   */
   async robustLogout() {
-    console.log(`🚪 [${this.userId}] Iniciando logout robusto de WhatsApp...`);
-    
+    logger.info(`🚪 [${this.userId}] Iniciando logout robusto de WhatsApp...`);
+
     const maxAttempts = 3;
-    const results = {
-      success: false,
-      attempts: [],
-      finalState: null
-    };
-    
+    const results = { success: false, attempts: [], finalState: null };
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      console.log(`🔄 [${this.userId}] Intento de logout ${attempt}/${maxAttempts}`);
-      
+      logger.info(`🔄 [${this.userId}] Intento de logout ${attempt}/${maxAttempts}`);
       try {
-        const attemptResult = await this.performLogoutAttempt(attempt);
+        const attemptResult = await this._performLogoutAttempt(attempt);
         results.attempts.push(attemptResult);
-        
-        // Verificar estado después del intento
+
         const stateCheck = await this.verifyLogoutState();
-        
         if (stateCheck.fullyDisconnected) {
-          console.log(`✅ [${this.userId}] Logout exitoso en intento ${attempt}`);
+          logger.info(`✅ [${this.userId}] Logout exitoso en intento ${attempt}`);
           results.success = true;
           results.finalState = stateCheck;
           break;
-        } else {
-          console.log(`⚠️ [${this.userId}] Intento ${attempt} incompleto, reintentando...`);
-          await this.delay(2000 * attempt); // Delay progresivo
         }
-        
+
+        logger.warn(`⚠️ [${this.userId}] Intento ${attempt} incompleto, reintentando...`);
+        await this._delay(2000 * attempt);
       } catch (error) {
-        console.error(`❌ [${this.userId}] Error en intento ${attempt}:`, error);
+        logger.error(`❌ [${this.userId}] Error en intento ${attempt}: ${error.message}`);
         results.attempts.push({ attempt, error: error.message, success: false });
-        
-        if (attempt < maxAttempts) {
-          await this.delay(3000 * attempt);
-        }
+        if (attempt < maxAttempts) await this._delay(3000 * attempt);
       }
     }
-    
+
     // Verificación final
     results.finalState = await this.verifyLogoutState();
-    
+
     if (!results.success) {
-      console.log(`🔧 [${this.userId}] Logout robusto falló, aplicando limpieza forzada...`);
+      logger.warn(`🔧 [${this.userId}] Logout robusto falló, aplicando limpieza forzada...`);
       await this.forceCleanup();
       results.finalState = await this.verifyLogoutState();
     }
-    
-    console.log(`🎯 [${this.userId}] Logout robusto completado:`, results);
+
+    logger.info(`🎯 [${this.userId}] Logout robusto completado`);
     return results;
   }
-  
-  // Realizar un intento individual de logout
-  async performLogoutAttempt(attemptNumber) {
+
+  async _performLogoutAttempt(attemptNumber) {
     const result = { attempt: attemptNumber, steps: [], success: false };
-    
     try {
-      // Usar el método logout existente como base
       const logoutResult = await this.logout();
       result.steps.push('base_logout_executed');
-      result.success = logoutResult;
-      
-      // Verificaciones adicionales específicas del intento
+      result.success = !!logoutResult;
+
+      // Si por algún motivo todavía hay socket, intentar matar ws
       if (this.sock) {
-        // Intentar desconexión adicional si aún hay socket
         try {
           if (this.sock.ws && this.sock.ws.readyState === 1) {
-            this.sock.ws.terminate();
+            this.sock.ws.terminate?.();
             result.steps.push('websocket_terminated');
           }
-        } catch (wsError) {
+        } catch {
           result.steps.push('websocket_error');
         }
-        
         this.sock = null;
         result.steps.push('socket_nullified');
       }
-      
+
       return result;
-      
     } catch (error) {
       result.error = error.message;
       result.steps.push('attempt_failed');
       return result;
     }
   }
-  
-  // Verificar estado de logout
+
+  /**
+   * Verifica que la sesión esté completamente cerrada.
+   */
   async verifyLogoutState() {
     const state = {
       socketNull: this.sock === null,
@@ -677,182 +685,113 @@ class WhatsAppManager {
       noUserInfo: this.userInfo === null,
       filesClean: false,
       qrClean: false,
-      fullyDisconnected: false
+      fullyDisconnected: false,
     };
-    
-    // Verificar archivos de sesión
+
+    // archivos de sesión
     try {
-      const authDir = this.authPath;
+      const authDir = this._getAuthDir();
       const credsPath = path.join(authDir, 'creds.json');
       state.filesClean = !fs.existsSync(credsPath);
     } catch (error) {
-      console.log(`⚠️ [${this.userId}] Error verificando archivos:`, error.message);
-      state.filesClean = true; // Asumir limpio si hay error
+      logger.warn(`⚠️ [${this.userId}] Error verificando archivos: ${error.message}`);
+      state.filesClean = true;
     }
-    
-    // Verificar QR
+
+    // qr
     try {
-      const qrFileName = `qr-${this.userId}.png`;
-      const qrPath = path.join(publicDir, qrFileName);
+      const qrPath = this._getUserQrPath();
       state.qrClean = !fs.existsSync(qrPath);
-    } catch (error) {
+    } catch {
       state.qrClean = true;
     }
-    
-    // Estado completamente desconectado
-    state.fullyDisconnected = state.socketNull && 
-                              state.notReady && 
-                              state.disconnectedState && 
-                              state.noUserInfo && 
-                              state.filesClean && 
-                              state.qrClean;
-    
+
+    state.fullyDisconnected =
+      state.socketNull &&
+      state.notReady &&
+      state.disconnectedState &&
+      state.noUserInfo &&
+      state.filesClean &&
+      state.qrClean;
+
     return state;
   }
-  
-  // Limpieza forzada como último recurso
+
+  /**
+   * Limpieza forzada (sin depender de logout).
+   * Verifica y elimina: socket, estado, auth files, QR.
+   */
   async forceCleanup() {
-    console.log(`🔨 [${this.userId}] Aplicando limpieza forzada...`);
-    
+    logger.warn(`🔨 [${this.userId}] Aplicando limpieza forzada...`);
     try {
-      // Forzar cierre de socket
+      // socket
       if (this.sock) {
         try {
-          if (this.sock.ws) {
-            this.sock.ws.terminate();
-          }
-          if (this.sock.end && typeof this.sock.end === 'function') {
-            this.sock.end();
-          }
-        } catch (e) {
-          console.log(`⚠️ [${this.userId}] Error terminando socket:`, e.message);
+          this.sock.ws?.terminate?.();
+        } catch {
+          /* noop */
         }
-        
+        try {
+          if (this.sock.end && typeof this.sock.end === 'function') this.sock.end();
+        } catch {
+          /* noop */
+        }
         this.sock = null;
       }
-      
-      // Resetear todo el estado agresivamente
+
+      // estado
       this.isReady = false;
       this.connectionState = 'disconnected';
       this.userInfo = null;
       this.qrCode = null;
       this.isConnecting = false;
       this.connectionPromise = null;
-      
-      // Eliminar archivos de sesión de forma agresiva
-      if (this.authPath && fs.existsSync(this.authPath)) {
-        await fs.promises.rm(this.authPath, { recursive: true, force: true });
-        console.log(`🗑️ [${this.userId}] Carpeta de sesión eliminada forzadamente`);
-      }
-      
-      // Eliminar QR
-      const qrFileName = `qr-${this.userId}.png`;
-      const qrPath = path.join(publicDir, qrFileName);
-      if (fs.existsSync(qrPath)) {
-        fs.unlinkSync(qrPath);
-        console.log(`🗑️ [${this.userId}] QR eliminado forzadamente`);
-      }
-      
-      console.log(`✅ [${this.userId}] Limpieza forzada completada`);
-      
-    } catch (error) {
-      console.error(`❌ [${this.userId}] Error en limpieza forzada:`, error);
-    }
-  }
-  
-  // Método utilitario para delays
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
 
-  // Método mejorado para eliminar archivos de sesión COMPLETAMENTE
-  async deleteSessionFilesCompletely() {
-    try {
-      logger.info('Eliminando archivos de sesión COMPLETAMENTE...');
-      const sessionDir = this.authPath || path.join(publicDir, '..', 'auth_info');
-      
-      if (!fs.existsSync(sessionDir)) {
-        logger.info('Directorio de sesiones no existe');
-        return;
-      }
+      // archivos de sesión
+      await this._deleteSessionFilesCompletely();
 
-      let deleted = 0;
-      const files = fs.readdirSync(sessionDir);
-      
-      for (const file of files) {
-        const filePath = path.join(sessionDir, file);
-        try {
-          const stat = fs.lstatSync(filePath);
-          
-          if (stat.isDirectory()) {
-            // Eliminar contenido del directorio recursivamente
-            const subFiles = fs.readdirSync(filePath);
-            for (const subFile of subFiles) {
-              const subFilePath = path.join(filePath, subFile);
-              fs.unlinkSync(subFilePath);
-              deleted++;
-            }
-            fs.rmdirSync(filePath);
-            deleted++;
-          } else {
-            fs.unlinkSync(filePath);
-            deleted++;
-          }
-        } catch (error) {
-          logger.error(`Error eliminando ${filePath}: ${error.message}`);
-        }
-      }
-      
-      // Intentar eliminar el directorio padre si está vacío
+      // qr
+      const qrPath = this._getUserQrPath();
       try {
-        if (fs.readdirSync(sessionDir).length === 0) {
-          fs.rmdirSync(sessionDir);
-          deleted++;
+        if (fs.existsSync(qrPath)) {
+          fs.unlinkSync(qrPath);
+          logger.info(`🗑️ [${this.userId}] QR eliminado forzadamente`);
         }
-      } catch (dirError) {
-        logger.warn('No se pudo eliminar directorio padre (puede no estar vacío)');
+      } catch {
+        /* noop */
       }
-      
-      logger.info(`Archivos de sesión eliminados COMPLETAMENTE: ${deleted} elementos`);
-      
-      // NUEVO: También limpiar cualquier archivo de credenciales en memoria
-      this.authState = null;
-      this.saveCreds = null;
-      
+
+      logger.info(`✅ [${this.userId}] Limpieza forzada completada`);
     } catch (error) {
-      logger.error(`Error al eliminar archivos de sesión completamente: ${error.message}`);
-      throw error;
+      logger.error(`❌ [${this.userId}] Error en limpieza forzada: ${error.message}`);
     }
   }
 
-  // Método para forzar desconexión sin logout (para casos de emergencia)
+  /**
+   * Desconexión rápida sin logout (emergencias).
+   */
   async forceDisconnect() {
     try {
       logger.info(`Forzando desconexión para usuario ${this.userId}`);
-      
       if (this.sock) {
         try {
-          if (this.sock.end && typeof this.sock.end === 'function') {
-            this.sock.end();
-          }
+          if (this.sock.end && typeof this.sock.end === 'function') this.sock.end();
         } catch (error) {
           logger.warn(`Error en force disconnect: ${error.message}`);
         }
         this.sock = null;
       }
-      
+
       this.isReady = false;
       this.connectionState = 'disconnected';
       this.userInfo = null;
       this.qrCode = null;
       this.isConnecting = false;
       this.connectionPromise = null;
-      
-      this.deleteSessionFiles();
-      
+
+      await this._deleteSessionFilesCompletely();
       logger.info(`Desconexión forzada completada para usuario ${this.userId}`);
       return true;
-      
     } catch (error) {
       logger.error(`Error durante desconexión forzada: ${error.message}`);
       return false;

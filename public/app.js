@@ -704,7 +704,18 @@ function initializeQR() {
   }
 }
 
+// Variable para prevenir llamadas simultáneas
+let isRefreshingQR = false;
+
 async function refreshQR() {
+  // Prevenir múltiples llamadas simultáneas
+  if (isRefreshingQR) {
+    console.log('🚫 Ya hay un refresh de QR en progreso, ignorando llamada adicional');
+    return;
+  }
+  
+  isRefreshingQR = true;
+  
   const refreshBtn = document.getElementById('refreshQrBtn');
   const qrImage = document.getElementById('qrImage');
   
@@ -738,6 +749,9 @@ async function refreshQR() {
     console.error('Error al actualizar QR:', error);
     showAlert('Error al solicitar nuevo código QR', 'error', 'Error QR');
   } finally {
+    // Restablecer estado y botón
+    isRefreshingQR = false;
+    
     if (refreshBtn) {
       refreshBtn.disabled = false;
       refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i><span>Refrescar código</span>';

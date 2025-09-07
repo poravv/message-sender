@@ -8,6 +8,9 @@ const logger = require('./logger');
 const { checkJwt, requireRole } = require('./auth');
 const sessionManager = require('./sessionManager');
 
+// Map para rastrear operaciones de refresh-qr en progreso por usuario
+const qrRefreshInProgress = new Map();
+
 // Middleware condicional para desarrollo
 const conditionalAuth = (req, res, next) => {
   const isDevelopment = process.env.NODE_ENV !== 'production';
@@ -243,10 +246,36 @@ function buildRoutes() {
 
   router.post('/refresh-qr', conditionalAuth, async (req, res) => {
     try {
-      const whatsappManager = await sessionManager.getSessionByToken(req);
       const userId = req.auth?.sub;
+      if (!userId) {
+        return res.status(401).json({ 
+          success: false, 
+          message: 'Usuario no autenticado' 
+        });
+      }
+      
+      // Verificar si ya hay una operación de refresh en progreso para este usuario
+      if (qrRefreshInProgress.has(userId)) {
+        logger.warn({ userId }, 'Refresh QR ya en progreso para usuario, ignorando solicitud duplicada');
+        return res.status(429).json({ 
+          success: false, 
+          message: 'Ya hay una operación de refresh en progreso. Por favor espera.',
+          retryAfter: 3
+        });
+      }
+      
+      // Marcar como en progreso
+      qrRefreshInProgress.set(userId, Date.now());
+      
+      // Limpiar el marcador después de 30 segundos como medida de seguridad
+      setTimeout(() => {
+        qrRefreshInProgress.delete(userId);
+      }, 30000);
+      
+      const whatsappManager = await sessionManager.getSessionByToken(req);
       
       if (whatsappManager.isReady) {
+        qrRefreshInProgress.delete(userId); // Limpiar inmediatamente si ya está conectado
         return res.status(400).json({ 
           success: false, 
           message: 'No se puede actualizar el QR si ya estás conectado' 
@@ -260,6 +289,7 @@ function buildRoutes() {
       const wrote = await whatsappManager.captureQrToDisk(userId);
 
       if (wrote) {
+        qrRefreshInProgress.delete(userId); // Limpiar al completar exitosamente
         return res.json({ 
           success: true, 
           message: 'QR actualizado',
@@ -270,6 +300,7 @@ function buildRoutes() {
       // Plan B: regenerar QR si no hay uno en memoria
       const ok = await whatsappManager.refreshQR();
       if (ok) {
+        qrRefreshInProgress.delete(userId); // Limpiar al completar exitosamente
         return res.json({ 
           success: true, 
           message: 'Solicitando nuevo código QR...',
@@ -277,12 +308,19 @@ function buildRoutes() {
         });
       }
 
+      qrRefreshInProgress.delete(userId); // Limpiar si falla
       return res.status(400).json({ 
         success: false, 
         message: 'No se pudo refrescar el QR en este momento' 
       });
     } catch (e) {
-      logger.error({ err: e?.message, userId: req.auth?.sub }, 'Error en refresh-qr');
+      // Asegurar limpieza en caso de error
+      const userId = req.auth?.sub;
+      if (userId) {
+        qrRefreshInProgress.delete(userId);
+      }
+      
+      logger.error({ err: e?.message, userId }, 'Error en refresh-qr');
       res.status(500).json({ success: false, message: e.message || 'Error al refrescar QR' });
     }
   });
@@ -353,13 +391,25 @@ function buildRoutes() {
       const userId = req.auth.sub;
       console.log(`🚪 [${userId}] Solicitud de logout robusto de WhatsApp recibida`);
       
-      const manager = sessionManager.getSession(userId);
+      const manager = await sessionManager.getSession(userId);
       if (!manager) {
         console.log(`⚠️ [${userId}] No hay sesión activa para logout`);
         return res.json({ 
           success: true, 
           message: 'No hay sesión activa',
           state: 'no_session'
+        });
+      }
+      
+      // Verificar si el manager tiene el método robustLogout
+      if (typeof manager.robustLogout !== 'function') {
+        console.log(`⚠️ [${userId}] Manager no tiene método robustLogout, usando logout normal`);
+        const result = await manager.logout();
+        return res.json({
+          success: result.success || result,
+          message: result.message || 'Logout de WhatsApp completado',
+          timestamp: new Date().toISOString(),
+          fallback: true
         });
       }
       
@@ -408,7 +458,7 @@ function buildRoutes() {
         return res.status(403).json({ error: 'No autorizado para consultar otro usuario' });
       }
       
-      const manager = sessionManager.getSession(userId);
+      const manager = await sessionManager.getSession(userId);
       if (!manager) {
         return res.json({ 
           userId,
@@ -431,6 +481,48 @@ function buildRoutes() {
     } catch (error) {
       console.error('❌ Error verificando estado de logout:', error);
       res.status(500).json({ 
+        error: 'Error interno del servidor',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
+  // Endpoint temporal para resetear cooldown (útil para debugging)
+  router.post('/reset-cooldown', checkJwt, async (req, res) => {
+    try {
+      const userId = req.user.sub;
+      console.log(`🔄 [${userId}] Solicitud de reset de cooldown recibida`);
+      
+      const manager = await sessionManager.getSession(userId);
+      if (!manager) {
+        return res.json({ 
+          success: false, 
+          message: 'No hay sesión activa' 
+        });
+      }
+      
+      // Resetear cooldown
+      if (typeof manager.resetCooldown === 'function') {
+        manager.resetCooldown();
+        console.log(`✅ [${userId}] Cooldown reseteado exitosamente`);
+        
+        res.json({
+          success: true,
+          message: 'Cooldown reseteado exitosamente',
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        res.json({
+          success: false,
+          message: 'Manager no tiene método resetCooldown',
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+    } catch (error) {
+      console.error('❌ Error reseteando cooldown:', error);
+      res.status(500).json({ 
+        success: false, 
         error: 'Error interno del servidor',
         timestamp: new Date().toISOString()
       });
