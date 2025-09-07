@@ -35,8 +35,23 @@ const conditionalRole = (role) => (req, res, next) => {
     return next(); // En desarrollo, omitir verificación de roles
   }
   
-  // En producción, usar verificación real de roles
-  return requireRole(role)(req, res, next);
+  // En producción, verificar múltiples roles posibles
+  const allowedRoles = ['sender_api', 'sender']; // Aceptar cualquiera de los dos
+  const { all } = req.userRoles || {};
+  
+  const hasValidRole = allowedRoles.some(r => all?.includes(r));
+  
+  if (!hasValidRole) {
+    logger.info({ 
+      sub: req.auth?.sub, 
+      requestedRole: role, 
+      allowedRoles, 
+      userRoles: all 
+    }, 'Forbidden: missing required role');
+    return res.status(403).json({ error: 'Forbidden: missing role' });
+  }
+  
+  return next();
 };
 
 function buildRoutes() {

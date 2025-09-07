@@ -4,6 +4,38 @@ const { convertAudioToOpus } = require('./media');
 const { messageDelay } = require('./config');
 const logger = require('./logger');
 
+// Función para procesar variables en el mensaje
+function processMessageVariables(message, variables) {
+  if (!message) {
+    return message;
+  }
+  
+  let processedMessage = message;
+  
+  // Si hay variables disponibles, reemplazarlas
+  if (variables && Object.keys(variables).length > 0) {
+    Object.entries(variables).forEach(([key, value]) => {
+      if (value) { // Solo reemplazar si el valor no está vacío
+        const placeholder = `{${key}}`;
+        const regex = new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'gi');
+        processedMessage = processedMessage.replace(regex, value);
+      }
+    });
+  }
+  
+  // Limpiar variables que no fueron reemplazadas (quedaron vacías)
+  // Eliminar variables con espacios alrededor: " {variable} " → " "
+  processedMessage = processedMessage.replace(/\s*\{[^}]+\}\s*/g, ' ');
+  
+  // Limpiar múltiples espacios consecutivos
+  processedMessage = processedMessage.replace(/\s+/g, ' ');
+  
+  // Limpiar espacios al inicio y final
+  processedMessage = processedMessage.trim();
+  
+  return processedMessage;
+}
+
 // Derivados del delay base
 const LOOP_IDLE_MS   = Math.max(500, messageDelay);
 const IMG_PREFIX_MS  = Math.max(0, Math.floor(messageDelay/2));
@@ -26,9 +58,22 @@ class MessageQueue {
 
   async add(numbers, message, images, singleImage, audioFile) {
     this.messageStats = { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false };
-    const items = numbers.map((number, i) => ({
-      number, message, images, singleImage, audioFile, attempts: 0, originalIndex: i
-    }));
+    const items = numbers.map((entry, i) => {
+      // Soporte para formato legacy (solo números) y nuevo formato (con variables)
+      const number = typeof entry === 'string' ? entry : entry.number;
+      const variables = typeof entry === 'object' && entry.variables ? entry.variables : {};
+      
+      return {
+        number, 
+        message, 
+        variables,
+        images, 
+        singleImage, 
+        audioFile, 
+        attempts: 0, 
+        originalIndex: i
+      };
+    });
     this.queue.push(...items);
     if (!this.isProcessing) await this.processQueue();
   }
@@ -109,11 +154,19 @@ class MessageQueue {
   }
 
   async sendMessage(item) {
-    const { number, message, images, singleImage, audioFile, originalIndex } = item;
+    const { number, message, variables, images, singleImage, audioFile, originalIndex } = item;
     logger.info(`Enviando mensaje a ${number} (posición original: ${originalIndex + 1})`);
 
     try {
       if (!this.client || !this.client.user) throw new Error('Socket de WhatsApp no está listo');
+
+      // Procesar variables en el mensaje
+      const processedMessage = processMessageVariables(message, variables || {});
+      
+      // Log para debug de variables
+      if (variables && Object.keys(variables).length > 0) {
+        logger.info({ number, variables, originalMessage: message, processedMessage }, 'Variables procesadas en mensaje');
+      }
 
       // Formatear número para Baileys (agregar @s.whatsapp.net si no lo tiene)
       const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
@@ -146,9 +199,9 @@ class MessageQueue {
         }
 
         // Enviar texto después del audio si existe
-        if (message && message.trim()) {
+        if (processedMessage && processedMessage.trim()) {
           await sleep(SEND_BETWEEN_MS);
-          await this.client.sendMessage(jid, { text: message.trim() });
+          await this.client.sendMessage(jid, { text: processedMessage.trim() });
         }
         return true;
       }
@@ -161,7 +214,7 @@ class MessageQueue {
         
         await this.client.sendMessage(jid, {
           image: imageBuffer,
-          caption: message || ''
+          caption: processedMessage || ''
         });
         return true;
       }
@@ -178,7 +231,7 @@ class MessageQueue {
           
           await this.client.sendMessage(jid, {
             image: imageBuffer,
-            caption: i === 0 ? message || '' : '' // Solo agregar el mensaje a la primera imagen
+            caption: i === 0 ? processedMessage || '' : '' // Solo agregar el mensaje a la primera imagen
           });
           
           // Pequeña pausa entre imágenes para evitar límites de velocidad
@@ -190,8 +243,8 @@ class MessageQueue {
       }
 
       // SOLO TEXTO
-      if (message && message.trim()) {
-        await this.client.sendMessage(jid, { text: message.trim() });
+      if (processedMessage && processedMessage.trim()) {
+        await this.client.sendMessage(jid, { text: processedMessage.trim() });
         return true;
       }
 

@@ -5,10 +5,13 @@ const CONFIG = {
   keycloakConfig: {
     url: 'https://kc.mindtechpy.net',
     realm: 'message-sender',
-    clientId: 'message-sender-web'
+    clientId: 'message-sender-web'  // Usar el cliente web correcto
   },
   // Development mode fallback
-  isDevelopment: window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  isDevelopment: false, // Siempre usar Keycloak
+  // Prevent auth loops
+  maxAuthAttempts: 3,
+  authAttemptKey: 'keycloak_auth_attempts'
 };
 
 /** ======== Debug Helper ======== */
@@ -49,23 +52,63 @@ let refreshTimer = null;
 // Inicializa Keycloak OBLIGATORIAMENTE (como en app-old.js)
 async function initKeycloak() {
   try {
+    // Verificar si ya estamos en un loop de autenticación
+    const authAttempts = parseInt(sessionStorage.getItem(CONFIG.authAttemptKey) || '0');
+    if (authAttempts >= CONFIG.maxAuthAttempts) {
+      console.error('❌ Demasiados intentos de autenticación. Parando para evitar bucle.');
+      hideLoadingScreen();
+      showAlert('Error de autenticación persistente. Verifica la configuración de Keycloak.', 'error', 'Error crítico');
+      return false;
+    }
+    
     showLoadingScreen('Inicializando autenticación...');
+    
+    console.log('🔧 Configuración Keycloak:', CONFIG.keycloakConfig);
+    console.log('🔄 Intento de autenticación:', authAttempts + 1);
+    
+    // Incrementar contador de intentos
+    sessionStorage.setItem(CONFIG.authAttemptKey, (authAttempts + 1).toString());
     
     keycloak = new Keycloak(CONFIG.keycloakConfig);
     
+    console.log('🔄 Iniciando Keycloak...');
     const authenticated = await keycloak.init({
-      onLoad: 'login-required',
+      onLoad: 'check-sso', // Cambiar de 'login-required' a 'check-sso'
       checkLoginIframe: false,
-      pkceMethod: 'S256'
+      pkceMethod: 'S256',
+      enableLogging: true // Habilitar logging de Keycloak
     });
 
+    console.log('✅ Keycloak inicializado. Autenticado:', authenticated);
+
     if (!authenticated) {
-      // Una sola redirección si no hay sesión
-      return keycloak.login();
+      console.log('🔐 Usuario no autenticado, redirigiendo al login...');
+      hideLoadingScreen();
+      
+      // Verificar si venimos de una redirección de login fallida
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('error')) {
+        console.error('❌ Error en la redirección de Keycloak:', urlParams.get('error'));
+        showAlert('Error de autenticación. Verifica tus credenciales.', 'error', 'Error de login');
+        sessionStorage.removeItem(CONFIG.authAttemptKey);
+        return false;
+      }
+      
+      // Usar setTimeout para evitar loops inmediatos
+      setTimeout(() => {
+        keycloak.login({
+          redirectUri: window.location.origin + window.location.pathname
+        });
+      }, 1000);
+      return false;
     }
 
+    // Si llegamos aquí, la autenticación fue exitosa - resetear contador
+    sessionStorage.removeItem(CONFIG.authAttemptKey);
+    
     isAuthenticated = true;
     console.log('✅ Autenticación exitosa');
+    console.log('🔍 Token info:', keycloak.tokenParsed);
     
     // Extraer información del usuario
     if (keycloak.tokenParsed) {
@@ -82,27 +125,40 @@ async function initKeycloak() {
     keycloak.onTokenExpired = async () => {
       if (refreshing) return;
       refreshing = true;
+      console.log('🔄 Token expirado, renovando...');
       try {
         await keycloak.updateToken(30); // renueva si quedan <30s
+        console.log('✅ Token renovado exitosamente');
       } catch (e) {
-        console.error('Fallo refrescando token', e);
+        console.error('❌ Fallo refrescando token', e);
         showAlert('Sesión expirada. Inicia sesión nuevamente.', 'warning');
+        sessionStorage.removeItem(CONFIG.authAttemptKey); // Reset counter
+        setTimeout(() => {
+          keycloak.login();
+        }, 2000);
       } finally {
         refreshing = false;
       }
     };
 
-    // "Pulso" suave: cada 20s, si faltan <60s de token, intenta renovar
+    // "Pulso" suave: cada 30s, si faltan <60s de token, intenta renovar
     const tick = async () => {
       clearTimeout(refreshTimer);
       try {
+        if (!keycloak.authenticated) return;
+        
         const expMs = keycloak.tokenParsed?.exp ? keycloak.tokenParsed.exp * 1000 : 0;
         if (expMs) {
           const delta = expMs - Date.now();
-          if (delta < 60_000) await keycloak.updateToken(30);
+          if (delta < 60_000 && !refreshing) {
+            console.log('🔄 Token próximo a expirar, renovando preventivamente...');
+            await keycloak.updateToken(30);
+          }
         }
-      } catch { /* no crítico */ }
-      refreshTimer = setTimeout(tick, 20_000);
+      } catch (e) {
+        console.warn('⚠️ Error en renovación preventiva:', e.message);
+      }
+      refreshTimer = setTimeout(tick, 30_000); // Aumentado a 30 segundos
     };
     tick();
     
@@ -112,8 +168,22 @@ async function initKeycloak() {
   } catch (error) {
     console.error('❌ Error de autenticación:', error);
     hideLoadingScreen();
-    showAlert('Error en la autenticación. Recargando...', 'error', 'Error de autenticación');
-    setTimeout(() => window.location.reload(), 2000);
+    
+    // Reset contador en caso de error crítico
+    sessionStorage.removeItem(CONFIG.authAttemptKey);
+    
+    // Verificar tipo de error
+    if (error.message?.includes('CORS') || error.message?.includes('network')) {
+      showAlert('Error de conectividad con Keycloak. Verifica tu conexión.', 'error', 'Error de red');
+    } else if (error.message?.includes('client')) {
+      showAlert('Error de configuración del cliente Keycloak.', 'error', 'Error de configuración');
+    } else {
+      showAlert('Error inesperado en la autenticación.', 'error', 'Error de autenticación');
+    }
+    
+    // No recargar automáticamente para evitar loops
+    console.log('🛑 Deteniendo para evitar bucle infinito. Revisa la configuración de Keycloak.');
+    return false;
   }
 }
 
@@ -669,24 +739,34 @@ function setupFileInputHandlers() {
   });
 }
 
-function setupMessageTextarea() {
+function updateCharacterCount() {
   const textarea = document.getElementById('message');
   const charCount = document.getElementById('charCount');
   
   if (textarea && charCount) {
-    textarea.addEventListener('input', (e) => {
-      const length = e.target.value.length;
-      charCount.textContent = length;
-      
-      // Color coding for character limit
-      if (length > 3500) {
-        charCount.style.color = 'var(--error-500)';
-      } else if (length > 3000) {
-        charCount.style.color = 'var(--warning-500)';
-      } else {
-        charCount.style.color = 'var(--text-tertiary)';
-      }
-    });
+    const length = textarea.value.length;
+    charCount.textContent = length;
+    
+    // Color coding for character limit
+    if (length > 3500) {
+      charCount.style.color = 'var(--error-500)';
+    } else if (length > 3000) {
+      charCount.style.color = 'var(--warning-500)';
+    } else {
+      charCount.style.color = 'var(--text-tertiary)';
+    }
+  }
+}
+
+function setupMessageTextarea() {
+  const textarea = document.getElementById('message');
+  
+  if (textarea) {
+    // Solo agregar el listener de character count, no input
+    // El highlighting se maneja en setupVariablesSystem
+    textarea.addEventListener('input', updateCharacterCount);
+    // Initialize character count
+    updateCharacterCount();
   }
 }
 
@@ -1141,6 +1221,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupMessageTypeHandlers();
   setupFileInputHandlers();
   setupMessageTextarea();
+  setupVariablesSystem();
   setupEmojiPicker();
   
   // Setup theme toggle
@@ -1169,3 +1250,93 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Global functions for HTML onclick handlers
 window.showTab = showTab;
 window.refreshQR = refreshQR;
+
+/** ======== Variables System ======== */
+
+function setupVariablesSystem() {
+  const variablesBtn = document.getElementById('variablesBtn');
+  const variablesHelper = document.getElementById('variablesHelper');
+  const messageTextarea = document.getElementById('message');
+  
+  if (!variablesBtn || !variablesHelper || !messageTextarea) {
+    return;
+  }
+  
+  // Toggle variables helper
+  variablesBtn.addEventListener('click', () => {
+    variablesHelper.classList.toggle('d-none');
+  });
+  
+  // Insert variables into message
+  const variableBtns = variablesHelper.querySelectorAll('.variable-btn');
+  variableBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const variable = btn.getAttribute('data-variable');
+      const start = messageTextarea.selectionStart;
+      const end = messageTextarea.selectionEnd;
+      const text = messageTextarea.value;
+      
+      // Insert variable at cursor position
+      const newText = text.substring(0, start) + variable + text.substring(end);
+      messageTextarea.value = newText;
+      
+      // Update character count
+      updateCharacterCount();
+      
+      // Set cursor position after inserted variable
+      const newCursorPos = start + variable.length;
+      messageTextarea.setSelectionRange(newCursorPos, newCursorPos);
+      messageTextarea.focus();
+      
+      // Hide helper after insertion
+      variablesHelper.classList.add('d-none');
+    });
+  });
+  
+  // Hide helper when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!variablesHelper.contains(e.target) && !variablesBtn.contains(e.target)) {
+      variablesHelper.classList.add('d-none');
+    }
+  });
+}
+
+// Add to the DOMContentLoaded event listener
+document.addEventListener('DOMContentLoaded', async () => {
+  // Initialize authentication first
+  await initKeycloak();
+  
+  // Setup all event listeners
+  setupEventListeners();
+  
+  // Setup form handlers
+  setupMessageTypeHandlers();
+  setupFileInputHandlers();
+  setupMessageTextarea();
+  setupEmojiPicker();
+  
+  // Setup variables system
+  setupVariablesSystem();
+  
+  // Setup theme toggle
+  setupThemeToggle();
+  
+  // Initially disable send tab until WhatsApp is connected
+  const sendTabBtn = document.querySelector('[data-tab="send"]');
+  if (sendTabBtn) {
+    sendTabBtn.classList.add('disabled');
+  }
+  
+  // Start status checking
+  startStatusCheck();
+  
+  // Initialize tab from hash
+  const hash = window.location.hash.substring(1);
+  if (hash && ['link', 'send', 'analytics'].includes(hash)) {
+    showTab(hash);
+  } else {
+    showTab('link');
+  }
+  
+  console.log('🚀 WhatsApp Sender Pro initialized successfully');
+});

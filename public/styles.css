@@ -2276,3 +2276,264 @@ body::before {
   }
 }
 
+/* =========== VARIABLES SYSTEM =========== */
+
+/* Message Textarea with Highlighting */
+.message-textarea-container {
+  position: relative;
+  width: 100%;
+}
+
+.message-highlight {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: var(--spacing-lg);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: hidden;
+  pointer-events: none;
+  color: transparent;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-lg);
+  z-index: 1;
+}
+
+.message-textarea {
+  position: relative;
+  z-index: 2;
+  background: transparent;
+}
+
+/* Variable highlighting */
+.variable-highlight {
+  background: linear-gradient(135deg, rgba(37, 211, 102, 0.2), rgba(37, 211, 102, 0.1));
+  color: var(--primary-500);
+  font-weight: var(--font-weight-semibold);
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid rgba(37, 211, 102, 0.3);
+  box-shadow: 0 1px 2px rgba(37, 211, 102, 0.1);
+}
+
+/* Variable animation */
+@keyframes variableGlow {
+  0% {
+    box-shadow: 0 1px 2px rgba(37, 211, 102, 0.1);
+  }
+  50% {
+    box-shadow: 0 2px 8px rgba(37, 211, 102, 0.3);
+  }
+  100% {
+    box-shadow: 0 1px 2px rgba(37, 211, 102, 0.1);
+  }
+}
+
+.variable-highlight.new-variable {
+  animation: variableGlow 1s ease-in-out;
+}
+
+/* CSV Variables Info */
+.csv-variables-info {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0.02));
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+}
+
+.csv-variables-info .info-header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  color: var(--info-500);
+  font-weight: var(--font-weight-semibold);
+}
+
+.csv-variables-info .info-content p {
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-sm);
+  font-size: 0.9rem;
+}
+
+.csv-examples {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.csv-examples .example {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.85rem;
+}
+
+.csv-examples .example strong {
+  color: var(--text-primary);
+  min-width: 140px;
+}
+
+.csv-examples .example code {
+  background: var(--bg-tertiary);
+  color: var(--primary-500);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.8rem;
+}
+
+.variables-note {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--text-tertiary);
+  font-size: 0.85rem;
+  margin-bottom: 0;
+}
+
+.variables-note code {
+  background: var(--bg-tertiary);
+  color: var(--warning-500);
+  padding: 1px 4px;
+  border-radius: var(--radius-sm);
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.8rem;
+}
+
+/* Message Tools Variables Button */
+.btn-variables {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  font-size: 1.1rem;
+  padding: var(--spacing-sm);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-variables:hover {
+  background: var(--bg-tertiary);
+  color: var(--primary-500);
+}
+
+.btn-variables:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-500);
+}
+
+/* Variables Helper */
+.variables-helper {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-secondary);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+  box-shadow: var(--shadow-lg);
+}
+
+.variables-helper .variables-header {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+  margin-bottom: var(--spacing-md);
+  font-size: 0.9rem;
+}
+
+.variables-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.variable-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  padding: var(--spacing-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.variable-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--primary-500);
+  transform: translateY(-1px);
+}
+
+.variable-btn:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-500);
+}
+
+.variable-btn code {
+  background: rgba(37, 211, 102, 0.1);
+  color: var(--primary-500);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-family: 'Monaco', 'Menlo', monospace;
+  font-size: 0.85rem;
+  font-weight: var(--font-weight-medium);
+}
+
+.variable-btn span {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.variables-footer {
+  padding-top: var(--spacing-md);
+  border-top: 1px solid var(--border-primary);
+}
+
+.variables-footer small {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 0.8rem;
+}
+
+/* Responsive Variables */
+@media (max-width: 768px) {
+  .csv-examples {
+    gap: var(--spacing-xs);
+  }
+  
+  .csv-examples .example {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+  
+  .csv-examples .example strong {
+    min-width: auto;
+  }
+  
+  .variables-list {
+    gap: var(--spacing-xs);
+  }
+  
+  .variable-btn {
+    padding: var(--spacing-sm);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
+  }
+}
+

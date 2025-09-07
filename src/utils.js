@@ -64,13 +64,63 @@ function loadNumbersFromCSV(filePath) {
       .pipe(csv({ skipLines: 0, headers: false }))
       .on('data', (row) => {
         line++;
-        const number = String(Object.values(row)[0] || '').trim();
-        if (number && /^\d+$/.test(number)) numbers.push({ number, index: line });
-        else logger.warn({ line, number }, 'Número inválido en CSV');
+        const values = Object.values(row);
+        const number = String(values[0] || '').trim();
+        
+        if (number && /^\d+$/.test(number)) {
+          const entry = {
+            number,
+            index: line,
+            variables: {} // Para almacenar las variables adicionales
+          };
+          
+          // Procesar columnas adicionales para variables
+          if (values.length > 1) {
+            const sustantivo = String(values[1] || '').trim();
+            if (sustantivo) {
+              entry.variables.sustantivo = sustantivo;
+            }
+          }
+          
+          if (values.length > 2) {
+            const nombre = String(values[2] || '').trim();
+            if (nombre) {
+              entry.variables.nombre = nombre;
+            }
+          }
+          
+          numbers.push(entry);
+          
+          // Log más detallado para debugging
+          const variablesInfo = Object.keys(entry.variables).length > 0 
+            ? entry.variables 
+            : 'sin variables';
+          logger.info({ 
+            line, 
+            number, 
+            variables: variablesInfo,
+            totalColumns: values.length
+          }, 'Número procesado');
+          
+        } else {
+          logger.warn({ line, number, values }, 'Número inválido en CSV');
+        }
       })
       .on('end', () => {
         if (numbers.length === 0) return reject(new Error('El archivo CSV no contiene números válidos.'));
-        resolve(numbers.sort((a,b)=>a.index-b.index).map(x=>x.number));
+        
+        const summary = numbers.reduce((acc, entry) => {
+          const hasVars = Object.keys(entry.variables).length > 0;
+          acc[hasVars ? 'withVariables' : 'withoutVariables']++;
+          return acc;
+        }, { withVariables: 0, withoutVariables: 0 });
+        
+        logger.info({ 
+          total: numbers.length,
+          ...summary
+        }, 'Resumen de procesamiento CSV');
+        
+        resolve(numbers.sort((a,b)=>a.index-b.index));
       })
       .on('error', (err) => {
         logger.error({ err: err?.message }, 'Error leyendo CSV');
