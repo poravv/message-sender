@@ -43,7 +43,7 @@ class SessionManager {
     // Crear directorio si no existe
     await fs.mkdir(sessionPath, { recursive: true });
     
-    const manager = new WhatsAppManager();
+    const manager = new WhatsAppManager(userId);
     // Modificar la ruta de autenticación para este usuario específico
     manager.authPath = sessionPath;
     

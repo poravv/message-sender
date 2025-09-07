@@ -44,8 +44,9 @@ const SEND_BETWEEN_MS = messageDelay;
 const backoffBase     = Math.max(1000, messageDelay);
 
 class MessageQueue {
-  constructor(client) {
+  constructor(client, userId = 'default') {
     this.client = client;
+    this.userId = userId;
     this.queue = [];
     this.retryQueue = [];
     this.isProcessing = false;
@@ -204,7 +205,7 @@ class MessageQueue {
     }
   }
 
-  // Limpiar directorio temp de archivos remanentes
+  // Limpiar directorio temp de archivos remanentes específicos del usuario
   cleanupTempDirectory() {
     try {
       const { tempDir } = require('./config');
@@ -214,8 +215,11 @@ class MessageQueue {
       const files = fs.readdirSync(tempDir);
       let cleanedCount = 0;
       
+      // Solo limpiar archivos de este usuario específico
+      const userPrefix = `audio_${this.userId}_`;
+      
       files.forEach(file => {
-        if (file.startsWith('audio_') && file.endsWith('.mp3')) {
+        if (file.startsWith(userPrefix) && file.endsWith('.mp3')) {
           const filePath = require('path').join(tempDir, file);
           try {
             fs.unlinkSync(filePath);
@@ -227,10 +231,10 @@ class MessageQueue {
       });
       
       if (cleanedCount > 0) {
-        logger.info(`Limpieza de directorio temp completada: ${cleanedCount} archivos eliminados`);
+        logger.info(`Limpieza de directorio temp completada para usuario ${this.userId}: ${cleanedCount} archivos eliminados`);
       }
     } catch (error) {
-      logger.warn(`Error durante limpieza del directorio temp: ${error.message}`);
+      logger.warn(`Error durante limpieza del directorio temp para usuario ${this.userId}: ${error.message}`);
     }
   }
 
@@ -256,7 +260,7 @@ class MessageQueue {
       if (audioFile) {
         if (!fs.existsSync(audioFile.path)) throw new Error('Archivo de audio no encontrado');
         
-        const converted = await convertAudioToOpus(audioFile.path);
+        const converted = await convertAudioToOpus(audioFile.path, this.userId);
         const audioBuffer = fs.readFileSync(converted);
         
         // Guardar la ruta del archivo convertido para limpieza posterior

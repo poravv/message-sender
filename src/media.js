@@ -7,11 +7,14 @@ const { tempDir, uploadsDir } = require('./config');
 const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
 ffmpeg.setFfmpegPath(ffmpegPath);
 
-async function convertAudioToOpus(inputPath) {
+async function convertAudioToOpus(inputPath, userId = 'default') {
   if (!fs.existsSync(inputPath)) throw new Error(`Archivo de entrada no encontrado: ${inputPath}`);
   !fs.existsSync(tempDir) && fs.mkdirSync(tempDir, { recursive: true });
 
-  const out = path.join(tempDir, `audio_${Date.now()}.mp3`);
+  // Incluir userId en el nombre del archivo para evitar conflictos entre usuarios
+  const timestamp = Date.now();
+  const fileName = `audio_${userId}_${timestamp}.mp3`;
+  const out = path.join(tempDir, fileName);
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .noVideo()
@@ -41,7 +44,9 @@ const storage = multer.diskStorage({
     if (file.fieldname === 'audioFile') {
       const ext = path.extname(file.originalname);
       const unique = `${Date.now()}-${Math.round(Math.random()*1e9)}`;
-      cb(null, `audio_${unique}${ext}`);
+      // Incluir userId para evitar conflictos entre usuarios
+      const userId = req.auth?.sub || req.auth?.id || 'default';
+      cb(null, `audio_${userId}_${unique}${ext}`);
     } else {
       cb(null, file.originalname);
     }

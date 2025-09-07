@@ -18,7 +18,8 @@ const { MessageQueue } = require('./queue');
 const logger = require('./logger');
 
 class WhatsAppManager {
-  constructor() {
+  constructor(userId = 'default') {
+    this.userId = userId;
     this.sock = null;
     this.isReady = false;
     this.qrCode = null;
@@ -269,8 +270,8 @@ class WhatsAppManager {
         }
       });
 
-      // Configurar cola de mensajes
-      this.messageQueue = new MessageQueue(this.sock);
+      // Configurar cola de mensajes con userId
+      this.messageQueue = new MessageQueue(this.sock, this.userId);
       
       return true;
     } catch (e) {
