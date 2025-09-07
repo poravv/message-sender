@@ -1,617 +1,771 @@
 <!DOCTYPE html>
-<html lang="es">
-
+<html lang="es" data-theme="dark">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Message-sender</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #e5ddd5;
-            margin-top: 50px;
-        }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>WhatsApp Message Sender Pro</title>
+  <meta name="description" content="Plataforma profesional para envío masivo de mensajes de WhatsApp">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2325D366'/><text x='50%' y='50%' text-anchor='middle' dy='.35em' font-size='50'>📱</text></svg>">
 
-        .tab-buttons button {
-            background-color: #25d366;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            margin: 0 10px;
-            padding: 10px 20px;
-            font-size: 16px;
-        }
+  <!-- Bootstrap + Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"/>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
-        .tab-buttons button:hover {
-            background-color: #128c7e;
-        }
-
-        .card {
-            background-color: #ffffff;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .card-body {
-            color: #075e54;
-        }
-
-        .form-label {
-            color: #128c7e;
-        }
-
-        .btn-success {
-            background-color: #25d366;
-            border: none;
-        }
-
-        .btn-success:hover {
-            background-color: #128c7e;
-        }
-
-        .alert {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            z-index: 9999;
-            padding: 15px;
-            border-radius: 5px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            display: none;
-        }
-
-        .loader {
-            border: 8px solid #f3f3f3;
-            border-top: 8px solid #25d366;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
-        #spinner {
-            text-align: center;
-            margin-top: 20px;
-            display: none;
-        }
-
-        .tab {
-            display: none;
-        }
-
-        .tab.active {
-            display: block;
-        }
-
-        #images {
-            margin-top: 10px;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        #connection-status {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            padding: 8px 15px;
-            border-radius: 5px;
-            font-weight: bold;
-        }
-
-        .status-connected {
-            background-color: #25d366;
-            color: white;
-        }
-
-        .status-disconnected {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        #messageStatus {
-            margin-top: 20px;
-            display: none;
-        }
-
-        .progress {
-            height: 25px;
-        }
-
-        .status-table {
-            margin-top: 20px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-
-        .status-row-success {
-            background-color: #d4edda;
-        }
-
-        .status-row-error {
-            background-color: #f8d7da;
-        }
-
-        .status-badge {
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .badge-queued {
-            background-color: #ffc107;
-            color: black;
-        }
-
-        .badge-sending {
-            background-color: #17a2b8;
-            color: white;
-        }
-
-        .badge-sent {
-            background-color: #28a745;
-            color: white;
-        }
-
-        .badge-error {
-            background-color: #dc3545;
-            color: white;
-        }
-    </style>
+  <!-- Estilos personalizados -->
+  <link rel="stylesheet" href="/styles.css"/>
 </head>
 
 <body>
-    <div id="connection-status" class="status-disconnected">Desconectado</div>
-    <div id="connection-status"></div>
-    <div id="alert" class="alert"></div>
+  <!-- Loading Screen -->
+  <div id="loading-screen" class="loading-screen">
+    <div class="loading-content">
+      <div class="loading-logo">
+        <i class="bi bi-whatsapp"></i>
+      </div>
+      <div class="loading-text">WhatsApp Sender Pro</div>
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+      </div>
+    </div>
+  </div>
 
+  <!-- Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-transparent fixed-top">
     <div class="container">
-        <h1 class="text-center mb-4">Envío de mensaje sobre lista</h1>
-
-        <div class="tab-buttons text-center mb-4">
-            <button class="btn btn-primary" onclick="showTab('link')">Enlazar Whatsapp</button>
-            <button class="btn btn-secondary" onclick="showTab('send')">Enviar Mensaje</button>
-            <button id="toggleBaileys" class="" onclick="toggleBaileys()">Habilitar</button>
+      <a class="navbar-brand d-flex align-items-center" href="#">
+        <div class="brand-icon me-2">
+          <i class="bi bi-whatsapp"></i>
         </div>
-
-        <div id="link" class="tab active">
-            <div class="card text-center shadow-sm p-4">
-                <div class="card-body">
-                    <p class="card-text">Escanea el QR en tu dispositivo para enlazar el sender</p>
-                    <div id="qr">
-                        <img id="qrImage" src="/qr" alt="QR Code" class="img-fluid">
-                    </div>
-                </div>
-            </div>
+        <span class="brand-text">WhatsApp Sender Pro</span>
+      </a>
+      
+      <div class="navbar-nav ms-auto d-flex flex-row align-items-center">
+        <!-- User Info -->
+        <div id="user-info" class="user-info me-3 d-none">
+          <div class="user-avatar">
+            <i class="bi bi-person-circle"></i>
+          </div>
+          <div class="user-details">
+            <span id="user-name" class="user-name">Usuario</span>
+            <small id="user-email" class="user-email">email@ejemplo.com</small>
+          </div>
+          <div class="user-actions">
+            <button id="logout-btn" class="btn-logout" title="Cerrar sesión">
+              <i class="bi bi-box-arrow-right"></i>
+            </button>
+          </div>
         </div>
-
-        <div id="send" class="tab">
-            <div class="card shadow-sm p-4">
-                <div class="card-body">
-                    <h5 class="card-title">Formulario de Envío de Mensaje</h5>
-                    <form id="messageForm" enctype="multipart/form-data">
-                        <div class="mb-3">
-                            <label for="csvFile" class="form-label">Cargar archivo CSV con números:
-                                <b>5959xxxxxxxx</b></label>
-                            <input type="file" id="csvFile" name="csvFile" class="form-control" accept=".csv" required>
-                        </div>
-
-                        <div class="mb-3">
-                            <b><label for="imageOption" class="form-label">Selecciona tipo de imagen:</label></b>
-                            <select id="imageOption" class="form-select" onchange="toggleImageFields()">
-                                <option value="none">Ninguna</option>
-                                <option value="multiple">Cargar múltiples imágenes</option>
-                                <option value="single">Cargar una imagen con comentario</option>
-                            </select>
-                        </div>
-
-                        <div class="mb-3 hidden" id="multipleImagesField">
-                            <b><label for="images" class="form-label">Cargar múltiples imágenes (opcional):</label></b>
-                            <input type="file" id="images" name="images" class="form-control" accept="image/*" multiple>
-                        </div>
-
-                        <div class="mb-3 hidden" id="singleImageField">
-                            <b><label for="singleImage" class="form-label">Cargar una imagen con comentario
-                                    (opcional):</label></b>
-                            <input type="file" id="singleImage" name="singleImage" class="form-control"
-                                accept="image/*">
-                        </div>
-
-                        <div class="mb-3">
-                            <b><label for="message" class="form-label">Mensaje:</label></b>
-                            <textarea id="message" name="message" rows="4" class="form-control" required></textarea>
-                        </div>
-                        <button type="submit" class="btn btn-success">Enviar Mensaje</button>
-                    </form>
-
-                    <div id="spinner">
-                        <p>Enviando mensajes, por favor espere...</p>
-                        <div class="loader"></div>
-                    </div>
-                </div>
-
-
-                <!-- Nuevo componente de estado de mensajes -->
-                <div id="messageStatus" class="mt-4">
-                    <h5>Estado del Envío</h5>
-                    <div class="progress mb-3">
-                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar"
-                            aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">0%</div>
-                    </div>
-                    <div class="d-flex justify-content-between mb-3">
-                        <span>Enviados: <span id="sentCount">0</span>/<span id="totalCount">0</span></span>
-                        <span>Errores: <span id="errorCount">0</span></span>
-                    </div>
-                    <div class="status-table">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Número</th>
-                                    <th>Estado</th>
-                                    <th>Mensaje</th>
-                                </tr>
-                            </thead>
-                            <tbody id="statusTableBody"></tbody>
-                        </table>
-                    </div>
-                </div>
-
-
-            </div>
+        
+        <!-- Connection Status -->
+        <div id="connection-status" class="connection-status me-3">
+          <div class="status-indicator"></div>
+          <span class="status-text">Desconectado</span>
         </div>
+        
+        <!-- Theme Toggle -->
+        <div class="theme-toggle">
+          <input type="checkbox" id="themeSwitch" class="theme-switch-checkbox">
+          <label for="themeSwitch" class="theme-switch-label">
+            <span class="theme-switch-inner">
+              <i class="bi bi-sun-fill"></i>
+              <i class="bi bi-moon-fill"></i>
+            </span>
+            <span class="theme-switch-switch"></span>
+          </label>
+        </div>
+      </div>
     </div>
+  </nav>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Alert System -->
+  <div id="alert-container" class="alert-container"></div>
 
-    <script>
-        // Variables globales
-        let connectionCheckInterval;
-        let qrCheckInterval;
-        let isEnablingBaileys = false;
-
-        // Función para actualizar el estado de la UI basado en el estado del backend
-        async function updateUIState() {
-            try {
-                const response = await fetch('/baileys-status');
-                const status = await response.json();
-
-                const statusElement = document.getElementById('connection-status');
-                const button = document.getElementById('toggleBaileys');
-
-                if (status.isEnabled) {
-                    button.textContent = 'Deshabilitar';
-                    statusElement.textContent = 'Conectado';
-                    statusElement.className = 'status-connected';
-                } else {
-                    button.textContent = 'Habilitar';
-                    statusElement.textContent = 'Desconectado';
-                    statusElement.className = 'status-disconnected';
-                }
-
-                // Si hay inactividad prolongada, mostrar alerta
-                const inactivityTime = (Date.now() - new Date(status.lastActivity)) / 1000;
-                if (inactivityTime > 1800 && status.isEnabled) { // 30 minutos
-                    showAlert('La conexión ha estado inactiva por mucho tiempo. Considere reiniciarla.', 'warning');
-                }
-            } catch (error) {
-                console.error('Error actualizando estado:', error);
-            }
-        }
-
-        // Iniciar verificación periódica del estado
-        function startStatusCheck() {
-            updateUIState(); // Verificación inicial
-            connectionCheckInterval = setInterval(updateUIState, 30000); // Cada 30 segundos
-        }
-
-        // Función para mostrar alertas
-        function showAlert(message, type = 'success') {
-            const alert = document.getElementById('alert');
-            alert.textContent = message;
-            alert.className = `alert alert-${type}`;
-            alert.style.display = 'block';
-
-            setTimeout(() => {
-                alert.style.display = 'none';
-            }, 5000);
-        }
-
-        async function submitBaileys() {
-            const password = document.getElementById('adminPassword').value.trim();
-            if (!password) {
-                showAlert('Debe ingresar una clave.', 'danger');
-                return;
-            }
-
-            const button = document.getElementById('toggleBaileys');
-            const isEnabling = button.textContent.includes('Habilitar');
-
-            try {
-                if (isEnabling) {
-                    const response = await fetch('/toggle-baileys', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            enable: true,
-                            password
-                        })
-                    });
-
-                    const result = await response.json();
-                    if (result.success) {
-                        showAlert('Servicio habilitado correctamente', 'success');
-                        await updateUIState();
-                    } else {
-                        showAlert(result.message || 'Error al habilitar el servicio', 'danger');
-                    }
-                } else {
-                    try {
-                        showAlert('Deteniendo servidor...', 'warning');
-                        
-                        const response = await fetch('/restart-server', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ password })
-                        });
-
-                        const result = await response.json();
-                        if (result.success) {
-                            showAlert('El servidor se está deteniendo...', 'success');
-                            // Esperar 3 segundos y recargar la página
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 3000);
-                        }
-                    } catch (error) {
-                        // Si hay un error de conexión, asumimos que el servidor se está reiniciando
-                        showAlert('El servidor se está deteniendo...', 'success');
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 3000);
-                    }
-                }
-
-                // Cerrar el modal
-                const modal = bootstrap.Modal.getInstance(document.getElementById('passwordModal'));
-                if (modal) {
-                    modal.hide();
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                // Si hay un error de conexión durante el reinicio, lo manejamos como éxito
-                if (!isEnabling) {
-                    showAlert('El servidor se está deteniendo...', 'success');
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 3000);
-                } else {
-                    showAlert('Error en la operación: ' + (error.message || 'Error desconocido'), 'danger');
-                }
-            }
-        }
-
-        // Función para cambiar entre pestañas con verificación de estado
-        async function showTab(tabId) {
-            if (tabId === 'send') {
-                // Verificar estado antes de cambiar a la pestaña de envío
-                const response = await fetch('/baileys-status');
-                const status = await response.json();
-
-                if (!status.isEnabled) {
-                    showAlert('Debe habilitar el servicio de WhatsApp primero', 'warning');
-                    return;
-                }
-            }
-
-            document.querySelectorAll('.tab').forEach(tab => {
-                tab.classList.remove('active');
-            });
-            document.getElementById(tabId).classList.add('active');
-        }
-
-        async function toggleBaileys() {
-            const button = document.getElementById('toggleBaileys');
-            isEnablingBaileys = button.textContent.includes('Habilitar');
-            const modal = new bootstrap.Modal(document.getElementById('passwordModal'));
-            modal.show();
-        }
-
-        // Función para alternar campos de imagen
-        function toggleImageFields() {
-            const imageOption = document.getElementById('imageOption').value;
-            const multipleImagesField = document.getElementById('multipleImagesField');
-            const singleImageField = document.getElementById('singleImageField');
-
-            multipleImagesField.classList.add('hidden');
-            singleImageField.classList.add('hidden');
-
-            if (imageOption === 'multiple') {
-                multipleImagesField.classList.remove('hidden');
-            } else if (imageOption === 'single') {
-                singleImageField.classList.remove('hidden');
-            }
-        }
-
-        // Manejador del formulario
-        document.getElementById('messageForm').addEventListener('submit', async (event) => {
-            event.preventDefault();
-
-            const messageStatus = document.getElementById('messageStatus');
-            messageStatus.style.display = 'block';
-            document.getElementById('statusTableBody').innerHTML = '';
-
-            const formData = new FormData();
-            formData.append('message', document.getElementById('message').value);
-            formData.append('csvFile', document.getElementById('csvFile').files[0]);
-
-            const imageOption = document.getElementById('imageOption').value;
-            if (imageOption === 'single') {
-                const singleImage = document.getElementById('singleImage').files[0];
-                if (singleImage) formData.append('singleImage', singleImage);
-            } else if (imageOption === 'multiple') {
-                const images = document.getElementById('images').files;
-                for (let i = 0; i < images.length; i++) {
-                    formData.append('images', images[i]);
-                }
-            }
-
-            const spinner = document.getElementById('spinner');
-            spinner.style.display = 'block';
-
-            try {
-                const response = await fetch('/send-messages', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    // Mostrar estado inicial
-                    if (result.initialStats) {
-                        updateMessageStatus(result.initialStats);
-                    }
-
-                    let isCompleted = false;
-                    const pollInterval = setInterval(async () => {
-                        try {
-                            const statusResponse = await fetch('/message-status');
-                            if (!statusResponse.ok) throw new Error('Error al obtener estado');
-
-                            const statusData = await statusResponse.json();
-                            console.log('Estado actual:', statusData);
-
-                            updateMessageStatus(statusData);
-
-                            // Verificar si el proceso está completado
-                            if (statusData.completed) {
-                                if (!isCompleted) {
-                                    isCompleted = true;
-                                    showAlert('Envío completado exitosamente', 'success');
-                                    spinner.style.display = 'none';
-                                }
-                                clearInterval(pollInterval);
-                            }
-                        } catch (error) {
-                            console.error('Error en polling:', error);
-                            clearInterval(pollInterval);
-                            showAlert('Error al actualizar estado: ' + error.message, 'danger');
-                        }
-                    }, 1000);
-                } else {
-                    showAlert(result.error || 'Error al enviar los mensajes', 'danger');
-                    spinner.style.display = 'none';
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                showAlert('Error al enviar los mensajes: ' + error.message, 'danger');
-                spinner.style.display = 'none';
-            }
-        });
-
-        // Verificar el estado de Baileys al cargar la página
-        document.addEventListener('DOMContentLoaded', () => {
-            startStatusCheck();
-        });
-
-        // Limpiar intervalos al salir
-        window.addEventListener('beforeunload', () => {
-            if (connectionCheckInterval) clearInterval(connectionCheckInterval);
-            if (qrCheckInterval) clearInterval(qrCheckInterval);
-        });
-
-        // Función para actualizar el estado de los mensajes
-        function updateMessageStatus(status) {
-            const { sent, total, errors, messages, completed } = status;
-
-            // Actualizar progreso
-            const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
-            const progressBar = document.querySelector('.progress-bar');
-            progressBar.style.width = `${progress}%`;
-            progressBar.textContent = `${progress}%`;
-
-            // Actualizar contadores
-            document.getElementById('sentCount').textContent = sent;
-            document.getElementById('totalCount').textContent = total;
-            document.getElementById('errorCount').textContent = errors;
-
-            // Actualizar tabla de estado
-            const statusTableBody = document.getElementById('statusTableBody');
-
-            if (messages && messages.length > 0) {
-                // Limpiar filas existentes si es necesario
-                if (completed) {
-                    statusTableBody.innerHTML = '';
-                }
-
-                messages.forEach(msg => {
-                    let row = statusTableBody.querySelector(`[data-number="${msg.number}"]`);
-                    if (!row) {
-                        row = document.createElement('tr');
-                        row.setAttribute('data-number', msg.number);
-                        statusTableBody.appendChild(row);
-                    }
-
-                    const statusClass = msg.status === 'error' ? 'status-row-error' : 'status-row-success';
-                    const badgeClass = {
-                        'queued': 'badge-queued',
-                        'sending': 'badge-sending',
-                        'sent': 'badge-sent',
-                        'error': 'badge-error'
-                    }[msg.status] || 'badge-queued';
-
-                    row.innerHTML = `
-                <td>${msg.number}</td>
-                <td><span class="status-badge ${badgeClass}">${msg.status}</span></td>
-                <td>${msg.message || ''}</td>
-            `;
-                    row.className = statusClass;
-                });
-            }
-
-            // Si está completado, actualizar la UI acordemente
-            if (completed) {
-                document.getElementById('spinner').style.display = 'none';
-                if (errors === 0) {
-                    showAlert('Todos los mensajes fueron enviados exitosamente', 'success');
-                } else {
-                    showAlert(`Envío completado con ${errors} errores`, 'warning');
-                }
-            }
-        }
-    </script>
-
-    <div class="modal fade" id="passwordModal" tabindex="-1" aria-labelledby="passwordModalLabel" aria-hidden="true">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="passwordModalLabel">Ingresar Clave</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="password" id="adminPassword" class="form-control" placeholder="Ingrese la clave" />
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="submitBaileys()">Confirmar</button>
-                </div>
+  <!-- Main Content -->
+  <main class="main-content">
+    <div class="container">
+      <!-- Header Section -->
+      <section class="hero-section text-center mb-5">
+        <div class="hero-content">
+          <h1 class="hero-title">
+            <span class="title-highlight">Envío Masivo</span> de Mensajes
+          </h1>
+          <p class="hero-subtitle">
+            Plataforma profesional para envío controlado y seguro de mensajes de WhatsApp
+          </p>
+          <div class="hero-stats">
+            <div class="stat-item">
+              <div class="stat-number" id="totalSentToday">0</div>
+              <div class="stat-label">Enviados hoy</div>
             </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <div class="stat-number" id="successRate">99.8%</div>
+              <div class="stat-label">Tasa de éxito</div>
+            </div>
+            <div class="stat-divider"></div>
+            <div class="stat-item">
+              <div class="stat-number" id="avgSpeed">2.5s</div>
+              <div class="stat-label">Tiempo promedio</div>
+            </div>
+          </div>
         </div>
+      </section>
+
+      <!-- Tab Navigation -->
+      <div class="tab-navigation">
+        <div class="tab-nav-container">
+          <button class="tab-nav-btn active" data-tab="link" id="linkBtn">
+            <div class="tab-icon">
+              <i class="bi bi-qr-code-scan"></i>
+            </div>
+            <div class="tab-content">
+              <div class="tab-title">Conectar WhatsApp</div>
+              <div class="tab-description">Escanear código QR</div>
+            </div>
+          </button>
+          
+          <button class="tab-nav-btn" data-tab="send" id="sendBtn">
+            <div class="tab-icon">
+              <i class="bi bi-send-fill"></i>
+            </div>
+            <div class="tab-content">
+              <div class="tab-title">Enviar Mensajes</div>
+              <div class="tab-description" id="sendTabDescription">Configurar y enviar</div>
+            </div>
+          </button>
+          
+          <!-- <button class="tab-nav-btn" data-tab="analytics" id="analyticsBtn">
+            <div class="tab-icon">
+              <i class="bi bi-bar-chart-fill"></i>
+            </div>
+            <div class="tab-content">
+              <div class="tab-title">Estadísticas</div>
+              <div class="tab-description">Ver resultados</div>
+            </div>
+          </button> -->
+        </div>
+      </div>
+
+      <!-- Tab Content -->
+      <div class="tab-content-container">
+        <!-- Link Tab -->
+        <div id="link" class="tab-pane active">
+          <div class="connection-card">
+            <div class="card-header">
+              <div class="card-icon">
+                <i class="bi bi-whatsapp"></i>
+              </div>
+              <div class="card-title-section">
+                <h3 class="card-title">Conectar WhatsApp</h3>
+                <p class="card-subtitle">Vincula tu cuenta de WhatsApp para comenzar</p>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <div id="qr-container" class="qr-section">
+                <div class="qr-instructions">
+                  <div class="instruction-steps">
+                    <div class="step">
+                      <div class="step-number">1</div>
+                      <div class="step-text">Abre WhatsApp en tu teléfono</div>
+                    </div>
+                    <div class="step">
+                      <div class="step-number">2</div>
+                      <div class="step-text">Ve a Configuración > Dispositivos vinculados</div>
+                    </div>
+                    <div class="step">
+                      <div class="step-number">3</div>
+                      <div class="step-text">Escanea el código QR a continuación</div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="qr-code-container">
+                  <div class="qr-wrapper">
+                    <img id="qrImage" src="/qr" alt="Código QR de WhatsApp" class="qr-image">
+                    <div class="qr-overlay">
+                      <div class="qr-scanning-line"></div>
+                    </div>
+                  </div>
+                  
+                  <div class="qr-actions">
+                    <button id="refreshQrBtn" class="btn-refresh" onclick="refreshQR()">
+                      <i class="bi bi-arrow-clockwise"></i>
+                      <span>Refrescar código</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div id="authenticated-message" class="authenticated-section d-none">
+                <div class="success-animation">
+                  <div class="success-checkmark">
+                    <i class="bi bi-check-circle-fill"></i>
+                  </div>
+                </div>
+                
+                <div class="connection-info">
+                  <h4 class="connection-title">¡Conectado exitosamente!</h4>
+                  <p class="connection-description" id="connectionDescription">Tu WhatsApp está vinculado y listo para enviar mensajes</p>
+                  
+                  <div class="user-info-card">
+                    <div class="user-avatar">
+                      <i class="bi bi-person-circle"></i>
+                    </div>
+                    <div class="user-details">
+                      <div class="user-name">
+                        <span class="label">Usuario:</span>
+                        <span id="user-nickname" class="value">Cargando...</span>
+                      </div>
+                      <div class="user-phone">
+                        <span class="label">Número:</span>
+                        <span id="user-phone" class="value">Cargando...</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="next-steps">
+                  <button class="btn-primary-action" onclick="showTab('send')">
+                    <i class="bi bi-send-fill me-2"></i>
+                    Comenzar a enviar mensajes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Send Tab -->
+        <div id="send" class="tab-pane">
+          <div class="send-message-card">
+            <div class="card-header">
+              <div class="card-icon">
+                <i class="bi bi-send-fill"></i>
+              </div>
+              <div class="card-title-section">
+                <h3 class="card-title">Enviar Mensajes</h3>
+                <p class="card-subtitle">Configura y envía mensajes masivos de forma controlada</p>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <form id="messageForm" enctype="multipart/form-data" class="message-form">
+                <!-- CSV Upload Section -->
+                <div class="form-section">
+                  <div class="section-header">
+                    <div class="section-icon">
+                      <i class="bi bi-file-earmark-spreadsheet"></i>
+                    </div>
+                    <div class="section-title">
+                      <h4>Lista de destinatarios</h4>
+                      <p>Carga un archivo CSV con los números de teléfono</p>
+                    </div>
+                  </div>
+                  
+                  <div class="file-upload-area">
+                    <input type="file" id="csvFile" name="csvFile" class="file-input" accept=".csv" required>
+                    <label for="csvFile" class="file-upload-label">
+                      <div class="upload-icon">
+                        <i class="bi bi-cloud-upload"></i>
+                      </div>
+                      <div class="upload-text">
+                        <div class="upload-title">Arrastra o selecciona tu archivo CSV</div>
+                        <div class="upload-subtitle">Formato: 5959xxxxxxxx (un número por línea)</div>
+                      </div>
+                    </label>
+                    <div class="file-info" id="csvFileInfo"></div>
+                    
+                    <!-- Información sobre variables -->
+                    <div class="csv-variables-info mt-3">
+                      <div class="info-header">
+                        <i class="bi bi-info-circle text-info"></i>
+                        <strong>Personalización con variables</strong>
+                      </div>
+                      <div class="info-content">
+                        <p class="mb-2">Tu CSV puede incluir columnas adicionales para personalizar mensajes:</p>
+                        <div class="csv-examples">
+                          <div class="example">
+                            <strong>Formato básico:</strong>
+                            <code>595992756462</code>
+                            <small>→ Las variables se eliminarán del mensaje</small>
+                          </div>
+                          <div class="example">
+                            <strong>Con tratamiento:</strong>
+                            <code>595992756462,Sr</code>
+                            <small>→ Solo {sustantivo} será reemplazado</small>
+                          </div>
+                          <div class="example">
+                            <strong>Con tratamiento y nombre:</strong>
+                            <code>595992756462,Sr,Andrés Vera</code>
+                            <small>→ Ambas variables serán reemplazadas</small>
+                          </div>
+                        </div>
+                        <p class="variables-note">
+                          <i class="bi bi-lightbulb text-warning"></i>
+                          Usa <code>{sustantivo}</code> y <code>{nombre}</code> en tu mensaje. Las variables sin datos se eliminarán automáticamente.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Message Type Section -->
+                <div class="form-section">
+                  <div class="section-header">
+                    <div class="section-icon">
+                      <i class="bi bi-chat-dots"></i>
+                    </div>
+                    <div class="section-title">
+                      <h4>Tipo de mensaje</h4>
+                      <p>Selecciona el formato del contenido a enviar</p>
+                    </div>
+                  </div>
+                  
+                  <div class="message-type-grid">
+                    <div class="message-type-option">
+                      <input type="radio" id="type-text" name="messageType" value="none" checked>
+                      <label for="type-text" class="type-option-label">
+                        <div class="type-icon">
+                          <i class="bi bi-chat-text"></i>
+                        </div>
+                        <div class="type-content">
+                          <div class="type-title">Solo texto</div>
+                          <div class="type-description">Enviar únicamente mensaje de texto</div>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    <div class="message-type-option">
+                      <input type="radio" id="type-single-image" name="messageType" value="single">
+                      <label for="type-single-image" class="type-option-label">
+                        <div class="type-icon">
+                          <i class="bi bi-image"></i>
+                        </div>
+                        <div class="type-content">
+                          <div class="type-title">Imagen + texto</div>
+                          <div class="type-description">Una imagen con comentario</div>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    <div class="message-type-option">
+                      <input type="radio" id="type-multiple-images" name="messageType" value="multiple">
+                      <label for="type-multiple-images" class="type-option-label">
+                        <div class="type-icon">
+                          <i class="bi bi-images"></i>
+                        </div>
+                        <div class="type-content">
+                          <div class="type-title">Múltiples imágenes</div>
+                          <div class="type-description">Varias imágenes en un envío</div>
+                        </div>
+                      </label>
+                    </div>
+                    
+                    <div class="message-type-option">
+                      <input type="radio" id="type-audio" name="messageType" value="audio">
+                      <label for="type-audio" class="type-option-label">
+                        <div class="type-icon">
+                          <i class="bi bi-mic-fill"></i>
+                        </div>
+                        <div class="type-content">
+                          <div class="type-title">Mensaje de audio</div>
+                          <div class="type-description">Enviar archivo de audio</div>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Media Upload Sections -->
+                <div class="media-upload-sections">
+                  <div id="singleImageSection" class="media-section d-none">
+                    <div class="file-upload-area media-upload">
+                      <input type="file" id="singleImage" name="singleImage" class="file-input" accept="image/*">
+                      <label for="singleImage" class="file-upload-label">
+                        <div class="upload-icon">
+                          <i class="bi bi-image"></i>
+                        </div>
+                        <div class="upload-text">
+                          <div class="upload-title">Seleccionar imagen</div>
+                          <div class="upload-subtitle">JPG, PNG, GIF (máx. 16MB)</div>
+                        </div>
+                      </label>
+                      <div class="file-info" id="singleImageInfo"></div>
+                    </div>
+                  </div>
+                  
+                  <div id="multipleImagesSection" class="media-section d-none">
+                    <div class="file-upload-area media-upload">
+                      <input type="file" id="images" name="images" class="file-input" accept="image/*" multiple>
+                      <label for="images" class="file-upload-label">
+                        <div class="upload-icon">
+                          <i class="bi bi-images"></i>
+                        </div>
+                        <div class="upload-text">
+                          <div class="upload-title">Seleccionar múltiples imágenes</div>
+                          <div class="upload-subtitle">JPG, PNG, GIF (máx. 16MB cada una)</div>
+                        </div>
+                      </label>
+                      <div class="file-info" id="multipleImagesInfo"></div>
+                    </div>
+                  </div>
+                  
+                  <div id="audioSection" class="media-section d-none">
+                    <div class="file-upload-area media-upload">
+                      <input type="file" id="audioFile" name="audioFile" class="file-input" accept="audio/*">
+                      <label for="audioFile" class="file-upload-label">
+                        <div class="upload-icon">
+                          <i class="bi bi-mic-fill"></i>
+                        </div>
+                        <div class="upload-text">
+                          <div class="upload-title">Seleccionar archivo de audio</div>
+                          <div class="upload-subtitle">MP3, WAV, M4A, OGG (máx. 16MB)</div>
+                        </div>
+                      </label>
+                      <div class="file-info" id="audioFileInfo"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Message Content Section -->
+                <div class="form-section">
+                  <div class="section-header">
+                    <div class="section-icon">
+                      <i class="bi bi-pencil-square"></i>
+                    </div>
+                    <div class="section-title">
+                      <h4>Contenido del mensaje</h4>
+                      <p>Escribe el texto que acompañará tu envío</p>
+                    </div>
+                  </div>
+                  
+                  <div class="message-composer">
+                    <div class="message-textarea-container">
+                      <div id="messageHighlight" class="message-highlight"></div>
+                      <textarea 
+                        id="message" 
+                        name="message" 
+                        class="message-textarea"
+                        placeholder="Escribe tu mensaje aquí... Puedes usar emojis y saltos de línea.&#10;&#10;Variables disponibles:&#10;{sustantivo} - Sr, Sra, Dr, etc.&#10;{nombre} - Nombre de la persona&#10;&#10;Ejemplo: 'Buen día {sustantivo} {nombre}, le escribo para...'"
+                        rows="4"
+                      ></textarea>
+                    </div>
+                    <div class="message-tools">
+                      <div class="character-counter">
+                        <span id="charCount">0</span>/4096 caracteres
+                      </div>
+                      <div class="message-actions">
+                        <button type="button" class="btn-emoji" id="emojiBtn">
+                          <i class="bi bi-emoji-smile"></i>
+                        </button>
+                        <button type="button" class="btn-variables" id="variablesBtn" title="Insertar variables">
+                          <i class="bi bi-braces"></i>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <!-- Variables Helper -->
+                    <div id="variablesHelper" class="variables-helper d-none">
+                      <div class="variables-header">
+                        <strong>Variables disponibles:</strong>
+                      </div>
+                      <div class="variables-list">
+                        <button type="button" class="variable-btn" data-variable="{sustantivo}">
+                          <code>{sustantivo}</code>
+                          <span>Tratamiento (Sr, Sra, Dr)</span>
+                        </button>
+                        <button type="button" class="variable-btn" data-variable="{nombre}">
+                          <code>{nombre}</code>
+                          <span>Nombre de la persona</span>
+                        </button>
+                      </div>
+                      <div class="variables-footer">
+                        <small class="text-muted">
+                          <i class="bi bi-info-circle"></i>
+                          Las variables se reemplazarán automáticamente según los datos del CSV
+                        </small>
+                      </div>
+                    </div>
+                    
+                    <!-- Emoji Picker -->
+                    <div id="emojiPicker" class="emoji-picker d-none">
+                      <div class="emoji-picker-header">
+                        <div class="emoji-categories">
+                          <button class="emoji-category active" data-category="smileys">😀</button>
+                          <button class="emoji-category" data-category="people">👤</button>
+                          <button class="emoji-category" data-category="nature">🌱</button>
+                          <button class="emoji-category" data-category="food">🍎</button>
+                          <button class="emoji-category" data-category="activities">⚽</button>
+                          <button class="emoji-category" data-category="travel">🚗</button>
+                          <button class="emoji-category" data-category="objects">💡</button>
+                          <button class="emoji-category" data-category="symbols">❤️</button>
+                          <button class="emoji-category" data-category="flags">🏁</button>
+                        </div>
+                      </div>
+                      <div class="emoji-picker-body">
+                        <div class="emoji-grid" id="emojiGrid">
+                          <!-- Emojis will be populated by JavaScript -->
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Send Button -->
+                <div class="form-actions">
+                  <button type="submit" class="btn-send-message" id="sendMessageBtn">
+                    <span class="btn-content">
+                      <i class="bi bi-send-fill"></i>
+                      <span class="btn-text">Enviar mensajes</span>
+                    </span>
+                    <div class="btn-loading">
+                      <div class="btn-spinner"></div>
+                      <span>Enviando...</span>
+                    </div>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- Progress Section -->
+          <div id="messageStatus" class="progress-card d-none">
+            <div class="card-header">
+              <div class="card-icon">
+                <i class="bi bi-graph-up"></i>
+              </div>
+              <div class="card-title-section">
+                <h3 class="card-title">Progreso del envío</h3>
+                <p class="card-subtitle">Seguimiento en tiempo real del estado de los mensajes</p>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <!-- Overall Progress -->
+              <div class="overall-progress">
+                <div class="progress-header">
+                  <div class="progress-title">Progreso general</div>
+                  <div class="progress-percentage">0%</div>
+                </div>
+                <div class="progress-bar-container">
+                  <div class="progress-bar" id="overallProgressBar">
+                    <div class="progress-fill"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Stats Grid -->
+              <div class="stats-grid">
+                <div class="stat-card stat-total">
+                  <div class="stat-icon">
+                    <i class="bi bi-list-ul"></i>
+                  </div>
+                  <div class="stat-content">
+                    <div class="stat-number" id="totalCount">0</div>
+                    <div class="stat-label">Total</div>
+                  </div>
+                </div>
+                
+                <div class="stat-card stat-sent">
+                  <div class="stat-icon">
+                    <i class="bi bi-check-circle-fill"></i>
+                  </div>
+                  <div class="stat-content">
+                    <div class="stat-number" id="sentCount">0</div>
+                    <div class="stat-label">Enviados</div>
+                  </div>
+                </div>
+                
+                <div class="stat-card stat-errors">
+                  <div class="stat-icon">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                  </div>
+                  <div class="stat-content">
+                    <div class="stat-number" id="errorCount">0</div>
+                    <div class="stat-label">Errores</div>
+                  </div>
+                </div>
+                
+                <div class="stat-card stat-speed">
+                  <div class="stat-icon">
+                    <i class="bi bi-speedometer2"></i>
+                  </div>
+                  <div class="stat-content">
+                    <div class="stat-number" id="currentSpeed">0</div>
+                    <div class="stat-label">msg/min</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Status Table -->
+              <div class="status-table-container">
+                <div class="table-header">
+                  <h4>Detalle de envíos</h4>
+                  <div class="table-actions">
+                    <button class="btn-export" id="exportBtn">
+                      <i class="bi bi-download"></i>
+                      Exportar
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="table-wrapper">
+                  <table class="status-table">
+                    <thead>
+                      <tr>
+                        <th>Número</th>
+                        <th>Estado</th>
+                        <th>Hora</th>
+                        <th>Respuesta</th>
+                      </tr>
+                    </thead>
+                    <tbody id="statusTableBody">
+                      <!-- Dynamic content -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div id="analytics" class="tab-pane">
+          <div class="analytics-card">
+            <div class="card-header">
+              <div class="card-icon">
+                <i class="bi bi-bar-chart-fill"></i>
+              </div>
+              <div class="card-title-section">
+                <h3 class="card-title">Estadísticas y análisis</h3>
+                <p class="card-subtitle">Métricas detalladas de rendimiento y uso</p>
+              </div>
+            </div>
+            
+            <div class="card-body">
+              <div class="analytics-grid">
+                <!-- Daily Stats -->
+                <div class="analytics-section">
+                  <h4 class="analytics-title">Resumen diario</h4>
+                  <div class="analytics-stats">
+                    <div class="analytics-stat">
+                      <div class="stat-value">1,247</div>
+                      <div class="stat-label">Mensajes enviados hoy</div>
+                      <div class="stat-change positive">+12.5%</div>
+                    </div>
+                    <div class="analytics-stat">
+                      <div class="stat-value">98.7%</div>
+                      <div class="stat-label">Tasa de entrega</div>
+                      <div class="stat-change positive">+2.1%</div>
+                    </div>
+                    <div class="analytics-stat">
+                      <div class="stat-value">2.3s</div>
+                      <div class="stat-label">Tiempo promedio</div>
+                      <div class="stat-change negative">-0.4s</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Charts Placeholder -->
+                <div class="analytics-section">
+                  <h4 class="analytics-title">Tendencias de uso</h4>
+                  <div class="chart-placeholder">
+                    <i class="bi bi-graph-up"></i>
+                    <p>Próximamente: Gráficos interactivos de uso y rendimiento</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-section company-info">
+          <div class="company-logo">
+            <div class="brand-icon">
+              <i class="bi bi-whatsapp"></i>
+            </div>
+            <span class="brand-text">WhatsApp Sender Pro</span>
+          </div>
+          <p class="company-description">
+            Plataforma profesional para envío masivo de mensajes de WhatsApp. 
+            Desarrollado por MindTechPy para optimizar tu comunicación empresarial.
+          </p>
+          <div class="company-website">
+            <i class="bi bi-globe2"></i>
+            <a href="https://mindtechpy.net" target="_blank" rel="noopener">mindtechpy.net</a>
+          </div>
+        </div>
+        
+        <div class="footer-section contact-info">
+          <h4 class="footer-title">Contacto</h4>
+          <div class="contact-item">
+            <i class="bi bi-person-circle"></i>
+            <span>Andrés Vera</span>
+          </div>
+          <div class="contact-item">
+            <i class="bi bi-telephone"></i>
+            <a href="tel:+595992756462">+595 992 756462</a>
+          </div>
+          <div class="contact-item">
+            <i class="bi bi-whatsapp"></i>
+            <a href="https://wa.me/595992756462" target="_blank" rel="noopener">WhatsApp</a>
+          </div>
+        </div>
+        
+        <div class="footer-section social-info">
+          <h4 class="footer-title">Síguenos</h4>
+          <div class="social-links">
+            <a href="https://www.instagram.com/_vienecadames_/" target="_blank" rel="noopener" class="social-link instagram">
+              <i class="bi bi-instagram"></i>
+              <span>Instagram</span>
+            </a>
+            <a href="https://www.facebook.com/profile.php?id=61552838014512" target="_blank" rel="noopener" class="social-link facebook">
+              <i class="bi bi-facebook"></i>
+              <span>Facebook</span>
+            </a>
+          </div>
+        </div>
+      </div>
+      
+      <div class="footer-bottom">
+        <div class="footer-copyright">
+          <p>&copy; 2025 MindTechPy. Todos los derechos reservados.</p>
+        </div>
+        <div class="footer-tech">
+          <p>Desarrollado por Andrés Vera</p>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Loading Overlay for Actions -->
+  <div id="loading-overlay" class="loading-overlay d-none">
+    <div class="loading-content">
+      <div class="loading-spinner">
+        <div class="spinner-ring"></div>
+      </div>
+      <div class="loading-text">Procesando...</div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/keycloak-js@latest/dist/keycloak.min.js"></script>
+  <script src="/app.js"></script>
 </body>
-
 </html>

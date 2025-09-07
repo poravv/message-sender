@@ -1,171 +1,301 @@
 # WhatsApp Message Sender
 
-Sistema de envío masivo de mensajes por WhatsApp con gestión de cola, manejo de sesiones y reinicio seguro.
+Sistema profesional de envío masivo de mensajes por WhatsApp con arquitectura multi-cliente, gestión de cola inteligente y deployment automatizado. Implementado con Baileys y diseñado para producción.
 
-## Características Técnicas
+## 🚀 Características Principales
 
-- Sistema de cola con procesamiento ordenado
-- Gestión de sesiones WhatsApp (Baileys)
-- Reinicio seguro del servidor
-- Manejo de conexiones persistentes
-- Sistema de reconexión automática
-- Monitoreo de estado en tiempo real
-- Despliegue con Docker
-- Gestión de inactividad automática
+### 📨 **Envío de Mensajes**
+- **Envío masivo** desde archivos CSV con orden preservado
+- **Mensajes de texto** con soporte para emojis
+- **Imágenes individuales** con caption personalizado
+- **Múltiples imágenes** por mensaje
+- **Mensajes de voz** (audio MP3/M4A con conversión automática a Opus)
+- **Sistema de cola** con procesamiento ordenado y reintentos automáticos
+- **Limpieza automática** de archivos de audio después del envío
 
-## Requisitos
+### 🔧 **Arquitectura Técnica**
+- **Backend**: Node.js 20+ con Express
+- **WhatsApp Integration**: @whiskeysockets/baileys (socket-based)
+- **Autenticación**: Keycloak con bypass para desarrollo
+- **Frontend**: Bootstrap con emoji picker y actualizaciones en tiempo real
+- **Containerización**: Docker con multi-stage builds
+- **CI/CD**: GitHub Actions para deployment automático
 
-- Node.js >= 18
-- Docker y Docker Compose (para despliegue con contenedores)
-- NPM o Yarn
+### 🏢 **Multi-Cliente**
+- **Arquitectura de ramas**: Una rama por cliente (`cliente-3009`, `cliente-3011`, etc.)
+- **Configuración independiente**: Cada cliente con su `.env` y puerto específico
+- **Deployment aislado**: GitHub Actions deploy por rama automáticamente
+- **Nginx Proxy Manager**: Compatible para gestión de dominios
 
-## Instalación
+## 📋 Requisitos
 
-### 1. Clonar el repositorio
+- **Node.js**: >= 20 (requerido por Baileys)
+- **Docker & Docker Compose**: Para deployment en producción
+- **Git**: Para manejo de ramas por cliente
+- **Nginx Proxy Manager**: Recomendado para gestión de dominios
+
+## 🛠️ Instalación y Configuración
+
+### 1. **Setup de Desarrollo**
 ```bash
-git clone <url-del-repositorio>
+git clone https://github.com/poravv/message-sender.git
 cd message-sender
-```
-
-### 2. Configurar variables de entorno
-```bash
-cp .env.example .env
-```
-
-Variables importantes en `.env`:
-```env
-PORT=3009                           # Puerto del servidor
-RAILWAY_STATIC_URL=http://localhost # URL base
-PUBLIC_URL=http://localhost         # URL pública
-RESTART_PASSWORD=tu_clave_secreta   # Clave para reinicio/deshabilitación
-ALLOWED_ORIGINS=http://dominio.com  # CORS permitidos
-NODE_ENV=production                 # Entorno
-```
-
-### 3. Instalación de dependencias
-```bash
 npm install --legacy-peer-deps
-```
-
-### 4. Iniciar en desarrollo
-```bash
+cp .env.example .env
 npm start
 ```
 
-## Despliegue con Docker
+### 2. **Variables de Entorno (.env)**
+```env
+# Configuración del servidor
+PORT=3009
+NODE_ENV=production
+PUBLIC_URL=http://localhost
+ALLOWED_ORIGINS=http://localhost:3009,http://localhost
 
-1. Construir imagen:
-```bash
-docker build -t message-sender .
+# Configuración de Seguridad y Rendimiento
+MAX_RETRIES=3
+BATCH_SIZE=100
+INACTIVITY_TIMEOUT=1800000
+AUTHORIZED_PHONES=595992756462,595976947110
+FILE_RETENTION_HOURS=24
+MESSAGE_DELAY_MS=2000
+
+# Keycloak Configuration (OBLIGATORIO para producción)
+KEYCLOAK_URL=https://kc.mindtechpy.net
+KEYCLOAK_REALM=message-sender
+KEYCLOAK_AUDIENCE=message-sender-api
 ```
 
-2. Ejecutar con docker-compose:
-```bash
-docker-compose up -d
+## 🏗️ Deployment en Producción
+
+### **Arquitectura Multi-Cliente**
+```
+/home/elporavv/workspaceandre/clientes/
+├── cliente-3009/message-sender/  # Cliente A (Puerto 3009)
+├── cliente-3011/message-sender/  # Cliente B (Puerto 3011)
+└── cliente-3012/message-sender/  # Cliente C (Puerto 3012)
 ```
 
-## Sistema de Reinicio
+### **Setup Manual por Cliente (Una sola vez)**
+```bash
+# En el servidor de producción
+CLIENT_ID="3009"  # Cambiar por el ID del cliente
+mkdir -p /home/elporavv/workspaceandre/clientes/cliente-${CLIENT_ID}
+cd /home/elporavv/workspaceandre/clientes/cliente-${CLIENT_ID}
 
-El sistema implementa un mecanismo de reinicio seguro que:
+# Clonar rama específica del cliente
+git clone -b cliente-${CLIENT_ID} https://github.com/poravv/message-sender.git message-sender
+cd message-sender
 
-1. Cierra correctamente las conexiones HTTP
-2. Limpia los recursos de Baileys
-3. Desconecta WhatsApp de forma segura
-4. Reinicia el proceso completo
+# Configurar .env específico del cliente
+cat > .env << EOF
+PORT=${CLIENT_ID}
+NODE_ENV=production
+PUBLIC_URL=http://localhost
+KEYCLOAK_URL=https://kc.mindtechpy.net
+KEYCLOAK_REALM=message-sender
+KEYCLOAK_AUDIENCE=message-sender-api
+ALLOWED_ORIGINS=http://localhost:${CLIENT_ID},http://localhost
+MAX_RETRIES=3
+BATCH_SIZE=100
+INACTIVITY_TIMEOUT=1800000
+FILE_RETENTION_HOURS=24
+MESSAGE_DELAY_MS=2000
+EOF
 
-Para reiniciar manualmente:
-1. Usar el botón "Deshabilitar" en la interfaz
-2. Ingresar la clave de administrador
-3. El sistema se reiniciará automáticamente
+# Crear directorios necesarios
+mkdir -p uploads bot_sessions temp logs
 
-## Características Funcionales
+# Iniciar servicio
+docker compose up -d
+```
 
-### Gestión de Mensajes
-- Envío masivo desde CSV
-- Soporte para mensajes de texto
-- Envío de imágenes individuales con texto
-- Envío de múltiples imágenes
-- Cola de procesamiento ordenado
-- Sistema de reintentos automáticos
-- Monitoreo en tiempo real del progreso
+### **GitHub Actions - Deployment Automático**
 
-### Gestión de Conexión
-- Reconexión automática
-- Detección de inactividad (30 minutos)
-- Cierre seguro de sesiones
-- Monitoreo de estado de conexión
-- QR dinámico para reconexión
+**Configurar Secrets en GitHub:**
+```
+SSH_HOST=tu-servidor.com
+SSH_USER=elporavv
+SSH_KEY=-----BEGIN OPENSSH PRIVATE KEY-----...
+SSH_PORT=22
+```
 
-### Interfaz de Usuario
-- Panel de control intuitivo
-- Visualización de estado de conexión
-- Progreso de envío en tiempo real
-- Estadísticas de envío
-- Gestión de sesión WhatsApp
+**Flujo automático:**
+```bash
+# Hacer cambios en código
+git checkout cliente-3009
+# ... realizar modificaciones ...
+git add .
+git commit -m "feat: nueva funcionalidad"
+git push origin cliente-3009
 
-## Estructura de Archivos CSV
+# 🚀 GitHub Actions se ejecuta automáticamente:
+# ✅ Detecta rama cliente-3009 → CLIENT_ID=3009
+# ✅ Busca /home/elporavv/workspaceandre/clientes/cliente-3009/message-sender
+# ✅ Preserva .env local
+# ✅ Actualiza código (git pull)
+# ✅ Redeploya con Docker Compose
+# ✅ Verifica estado y muestra logs
+```
 
-El archivo debe contener una columna con números de teléfono:
+## 🌐 Configuración con Nginx Proxy Manager
+
+```bash
+# Ejemplo de configuración por cliente:
+Domain Name: cliente3009.tudominio.com
+Scheme: http
+Forward Hostname/IP: localhost
+Forward Port: 3009
+
+# SSL: Activar Force SSL y HTTP/2 Support
+# Certificado: Let's Encrypt automático
+```
+
+## 📊 Características Funcionales
+
+### **Gestión de Mensajes**
+- ✅ **CSV Processing**: Carga y valida números desde CSV
+- ✅ **Queue Management**: Cola FIFO con manejo de errores
+- ✅ **Retry Logic**: 3 reintentos automáticos con backoff exponencial
+- ✅ **Progress Tracking**: Monitoreo en tiempo real del progreso
+- ✅ **Audio Processing**: Conversión automática a formato Opus
+- ✅ **File Cleanup**: Eliminación automática de archivos temporales
+
+### **Conexión WhatsApp**
+- ✅ **Baileys Integration**: Socket-based connection con Node.js 20
+- ✅ **Session Management**: Persistencia de sesiones en bot_sessions/
+- ✅ **QR Generation**: Generación automática de QR para autenticación
+- ✅ **Auto Reconnection**: Reconexión automática con exponential backoff
+- ✅ **User Info Capture**: Captura de número y nombre del usuario conectado
+- ✅ **Inactivity Management**: Desconexión automática después de 30 minutos
+
+### **Frontend Interactivo**
+- ✅ **Responsive Design**: Bootstrap 5 con diseño mobile-first
+- ✅ **Emoji Picker**: 9 categorías de emojis con búsqueda
+- ✅ **Real-time Updates**: Polling cada 15 segundos para estado
+- ✅ **Progress Bar**: Visualización del progreso de envío en tiempo real
+- ✅ **Error Handling**: Manejo elegante de errores con alertas
+- ✅ **Keycloak Integration**: Autenticación empresarial opcional
+
+## 📁 Estructura de Archivos CSV
+
 ```csv
-5959XXXXXXXX
-5959XXXXXXXX
+595992756462
+595976947110
+595984123456
 ```
 
-## Rendimiento y Límites
+- **Formato**: Un número por línea
+- **Prefijo**: Incluir código de país (595 para Paraguay)
+- **Sin símbolos**: Solo números, sin + ni espacios
 
-- Mensajes de texto: ~500/10 segundos
-- Mensajes con imagen: ~500/8 minutos
-- Tamaño máximo de imagen: 10MB
-- Reconexiones automáticas: 5 intentos
-- Reintentos por mensaje: 3 intentos
-- Tamaño de lote: 100 mensajes
+## ⚡ Rendimiento y Límites
 
-## Logs y Monitoreo
+| Tipo de Mensaje | Velocidad | Límite |
+|-----------------|-----------|---------|
+| Texto | ~500/10 segundos | WhatsApp API |
+| Imagen | ~500/8 minutos | Tamaño: 16MB |
+| Audio | ~300/10 minutos | Duración: 2min |
+| Reconexiones | 5 intentos | Backoff exponencial |
+| Reintentos | 3 por mensaje | Cola automática |
 
-### Archivos de Log
-- `baileys.log`: Conexión WhatsApp
-- `core.class.log`: Núcleo del sistema 
-- `queue.class.log`: Cola de mensajes
+## 🔧 Monitoreo y Logs
 
-### Directorios Importantes
-- `/uploads`: Archivos temporales
-- `/bot_sessions`: Datos de sesión
-- `/public`: Interfaz web
+### **Logs del Sistema**
+```bash
+# Ver logs en tiempo real
+docker compose logs -f
 
-## Seguridad
+# Logs específicos por contenedor
+docker compose logs audio-sender
 
-- Protección con contraseña para reinicio
-- Validación de origen de peticiones (CORS)
-- Límite de tamaño de archivos
-- Limpieza automática de archivos temporales
-- Cierre seguro de sesiones
+# Logs de deployment
+# Se muestran automáticamente en GitHub Actions
+```
 
-## Solución de Problemas
+### **Directorios Importantes**
+- 📁 `/uploads/`: Archivos temporales (auto-limpieza)
+- 📁 `/bot_sessions/`: Datos de sesión WhatsApp (persistente)
+- 📁 `/temp/`: Archivos de audio convertidos (auto-limpieza)
+- 📁 `/logs/`: Logs de aplicación (rotación automática)
 
-1. Error de conexión:
-   - Verificar conexión a internet
-   - Comprobar estado en panel de control
-   - Usar botón "Deshabilitar" y volver a habilitar
-   - Revisar logs para detalles
+## 🔒 Seguridad
 
-2. Mensajes no enviados:
-   - Verificar formato de números: 5959XXXXXXXX
-   - Comprobar estado de conexión WhatsApp
-   - Revisar límites de envío
-   - Consultar logs de errores
+- 🔐 **Keycloak Authentication**: Autenticación empresarial obligatoria en producción
+- 🛡️ **CORS Protection**: Orígenes permitidos configurables
+- 📝 **Input Validation**: Validación de archivos y números de teléfono
+- 🧹 **Auto Cleanup**: Limpieza automática de archivos sensibles
+- 🔄 **Session Management**: Manejo seguro de sesiones WhatsApp
+- 🚫 **Rate Limiting**: Protección contra abuso (configurable)
 
-## Mantenimiento
+## 🐛 Solución de Problemas
 
-1. Monitoreo regular:
-   - Revisar logs periódicamente
-   - Verificar espacio en /uploads
-   - Monitorear uso de recursos
+### **Problemas de Conexión**
+```bash
+# Verificar estado del contenedor
+docker compose ps
 
-2. Reinicio preventivo:
-   - Recomendado cada 24-48 horas
-   - Usar botón "Deshabilitar" para reinicio seguro
-   - Verificar recuperación automática
+# Ver logs detallados
+docker compose logs --tail=50
 
-## Licencia
+# Reiniciar servicio
+docker compose restart
 
-ISC License
+# Verificar conectividad
+curl http://localhost:3009/connection-status
+```
+
+### **Problemas de Audio**
+- ✅ **Formatos soportados**: MP3, M4A, WAV, OGG
+- ✅ **Conversión automática**: A formato Opus para WhatsApp
+- ✅ **Limpieza automática**: Archivos eliminados después del envío
+- ❌ **Error común**: Verificar permisos de directorio `/temp/`
+
+### **Problemas de Deployment**
+```bash
+# Error: Directorio no existe
+# Solución: Ejecutar setup manual primero
+
+# Error: .env no encontrado  
+# Solución: Crear .env con variables requeridas
+
+# Error: Puerto en uso
+# Solución: Verificar conflictos con netstat -tuln | grep :3009
+```
+
+## 🔄 Mantenimiento
+
+### **Tareas Regulares**
+- 📅 **Monitoring**: Verificar estado de contenedores diariamente
+- 🧹 **Cleanup**: Los archivos temporales se limpian automáticamente
+- 🔄 **Updates**: Deployment automático via GitHub Actions
+- 💾 **Backups**: Respaldar `/bot_sessions/` semanalmente
+
+### **Comandos Útiles**
+```bash
+# Estado de todos los clientes
+for dir in /home/elporavv/workspaceandre/clientes/*/message-sender; do
+    echo "=== $(basename $(dirname $dir)) ==="
+    cd "$dir" && docker compose ps
+done
+
+# Logs de todos los clientes
+for dir in /home/elporavv/workspaceandre/clientes/*/message-sender; do
+    echo "=== $(basename $(dirname $dir)) ==="
+    cd "$dir" && docker compose logs --tail=10
+done
+```
+
+## 📞 Soporte
+
+**Desarrollado por**: Andrés Vera  
+**WhatsApp**: +595 992 756462  
+**Website**: mindtechpy.net  
+**GitHub**: poravv/message-sender
+
+---
+
+## 📄 Licencia
+
+ISC License - Ver archivo LICENSE para más detalles.
