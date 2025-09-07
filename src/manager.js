@@ -32,6 +32,19 @@ class WhatsAppManager {
     this.authState = null;
     this.saveCreds = null;
     this.authPath = null; // Ruta personalizable para autenticación
+    
+    // Rate limiting y control de conflictos
+    this.lastMessageTime = 0;
+    this.messageCount = 0;
+    this.maxMessagesPerMinute = 15; // Límite más conservador
+    this.conflictCount = 0;
+    this.lastConflictTime = 0;
+    this.isInCooldown = false;
+    
+    // Mutex para prevenir conexiones concurrentes
+    this.isConnecting = false;
+    this.connectionPromise = null;
+    this.lastDisconnectReason = null;
 
     // Comp. para controlar cuándo guardar el PNG
     this.qrCaptureRequested = false;
@@ -108,6 +121,42 @@ class WhatsAppManager {
     }
   }
 
+  // Método seguro para inicializar que evita conexiones concurrentes
+  async safeInitialize() {
+    // Si ya hay una conexión en progreso, esperar a que termine
+    if (this.isConnecting) {
+      logger.warn('Conexión ya en progreso, esperando...');
+      if (this.connectionPromise) {
+        try {
+          await this.connectionPromise;
+        } catch (err) {
+          logger.warn('Conexión anterior falló, continuando con nueva conexión');
+        }
+      }
+      return;
+    }
+
+    // Si está en cooldown, no conectar
+    if (this.isInCooldown) {
+      logger.warn('En cooldown, cancelando intento de conexión');
+      return;
+    }
+
+    // Marcar como conectando y guardar promesa
+    this.isConnecting = true;
+    this.connectionPromise = this.initialize()
+      .catch(err => {
+        logger.error({ err: err?.message }, 'Error en inicialización segura');
+        throw err;
+      })
+      .finally(() => {
+        this.isConnecting = false;
+        this.connectionPromise = null;
+      });
+
+    return this.connectionPromise;
+  }
+
   async initialize() {
     if (this.sock) {
       logger.info('Socket ya inicializado, reutilizando...');
@@ -170,6 +219,8 @@ class WhatsAppManager {
           const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
           const reason = lastDisconnect?.error?.message;
           
+          this.lastDisconnectReason = reason;
+          
           logger.warn({ 
             reason,
             shouldReconnect,
@@ -180,19 +231,60 @@ class WhatsAppManager {
           this.connectionState = 'disconnected';
           this.userInfo = null;
           this.sock = null;
+          this.isConnecting = false; // Reset mutex
+
+          // Manejar diferentes tipos de desconexión
+          if (reason && reason.includes('QR refs attempts ended')) {
+            logger.warn('Sesión cerrada por timeout de QR. Esperando antes de reconectar...');
+            // QR timeout - esperar más tiempo antes de reconectar
+            if (shouldReconnect) {
+              setTimeout(() => {
+                logger.info('Reintentando conexión tras QR timeout...');
+                this.safeInitialize();
+              }, 30000); // 30 segundos para QR timeout
+            }
+            return;
+          }
 
           // Evitar reconexión en caso de conflictos
           if (reason && reason.includes('conflict')) {
-            logger.warn('Conflicto detectado, no reintentando conexión automáticamente');
+            this.conflictCount++;
+            this.lastConflictTime = Date.now();
+            
+            logger.warn(`Conflicto detectado (#${this.conflictCount}). Implementando estrategia de reconexión inteligente`);
+            
+            // Cooldown escalado basado en número de conflictos
+            const cooldownMinutes = Math.min(this.conflictCount * 2, 10); // Máximo 10 minutos
+            const cooldownMs = cooldownMinutes * 60 * 1000;
+            
+            this.isInCooldown = true;
+            
+            logger.info(`Entrando en cooldown por ${cooldownMinutes} minutos debido a conflicto`);
+            
+            setTimeout(() => {
+              this.isInCooldown = false;
+              logger.info('Cooldown terminado, intentando reconexión después de conflicto');
+              this.safeInitialize();
+            }, cooldownMs);
+            
             return;
           }
 
           if (shouldReconnect) {
-            // Delay más largo para evitar conflictos
+            // Reset contador de conflictos en desconexiones normales
+            if (!reason || !reason.includes('conflict')) {
+              this.conflictCount = Math.max(0, this.conflictCount - 1);
+            }
+            
+            // Delay más largo para evitar conflictos, escalado si hay historial de conflictos
+            const baseDelay = 15000; // 15 segundos base
+            const conflictPenalty = this.conflictCount * 5000; // 5 segundos adicionales por conflicto previo
+            const totalDelay = baseDelay + conflictPenalty;
+            
             setTimeout(() => {
-              logger.info('Reintentando conexión...');
-              this.initialize().catch(err => logger.error({ err: err?.message }, 'Error en reconexión'));
-            }, 10000); // Aumentado a 10 segundos
+              logger.info(`Reintentando conexión (delay: ${totalDelay}ms, conflictos previos: ${this.conflictCount})...`);
+              this.safeInitialize();
+            }, totalDelay);
           }
         } else if (connection === 'open') {
           logger.info('Conexión abierta');
@@ -319,13 +411,73 @@ class WhatsAppManager {
 
       await new Promise(r => setTimeout(r, 2000));
       logger.info({ userId }, 'Inicializando nuevo socket...');
-      await this.initialize();
+      await this.safeInitialize();
       logger.info({ userId }, 'Nuevo socket inicializado, esperando QR...');
       return true;
     } catch (e) {
       logger.error({ err: e?.message }, 'Error al refrescar QR');
       return false;
     }
+  }
+
+  // Métodos para rate limiting y manejo de conflictos
+  checkRateLimit() {
+    const now = Date.now();
+    const oneMinuteAgo = now - (60 * 1000);
+    
+    // Reset contador si ha pasado más de un minuto
+    if (now - this.lastMessageTime > 60000) {
+      this.messageCount = 0;
+    }
+    
+    return this.messageCount < this.maxMessagesPerMinute;
+  }
+  
+  recordMessage() {
+    const now = Date.now();
+    this.lastMessageTime = now;
+    this.messageCount++;
+    
+    logger.info(`Mensaje registrado: ${this.messageCount}/${this.maxMessagesPerMinute} en la última hora`);
+    
+    // Si estamos cerca del límite, registrar advertencia
+    if (this.messageCount >= this.maxMessagesPerMinute * 0.8) {
+      logger.warn(`Cerca del límite de rate: ${this.messageCount}/${this.maxMessagesPerMinute}`);
+    }
+  }
+  
+  async waitForRateLimit() {
+    if (!this.checkRateLimit()) {
+      const waitTime = 60000; // Esperar 1 minuto
+      logger.warn(`Rate limit alcanzado. Esperando ${waitTime/1000} segundos...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+      this.messageCount = 0; // Reset contador después del cooldown
+    }
+  }
+  
+  isInConflictCooldown() {
+    if (!this.isInCooldown) return false;
+    
+    const now = Date.now();
+    const timeSinceLastConflict = now - this.lastConflictTime;
+    const cooldownDuration = Math.min(this.conflictCount * 2 * 60 * 1000, 10 * 60 * 1000);
+    
+    return timeSinceLastConflict < cooldownDuration;
+  }
+  
+  getConnectionHealth() {
+    return {
+      isReady: this.isReady,
+      connectionState: this.connectionState,
+      conflictCount: this.conflictCount,
+      messageCount: this.messageCount,
+      maxMessagesPerMinute: this.maxMessagesPerMinute,
+      isInCooldown: this.isInCooldown,
+      lastConflictTime: this.lastConflictTime,
+      isConnecting: this.isConnecting,
+      lastDisconnectReason: this.lastDisconnectReason,
+      canSendMessages: this.isReady && !this.isInCooldown && this.checkRateLimit() && !this.isConnecting
+    };
   }
 }
 

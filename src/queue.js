@@ -36,12 +36,12 @@ function processMessageVariables(message, variables) {
   return processedMessage;
 }
 
-// Derivados del delay base
-const LOOP_IDLE_MS   = Math.max(500, messageDelay);
-const IMG_PREFIX_MS  = Math.max(0, Math.floor(messageDelay/2));
-const IMG_BETWEEN_MS = messageDelay;
-const SEND_BETWEEN_MS = messageDelay;
-const backoffBase     = Math.max(1000, messageDelay);
+// Derivados del delay base - Aumentados para evitar conflictos de WhatsApp
+const LOOP_IDLE_MS   = Math.max(1000, messageDelay * 2); // Duplicado
+const IMG_PREFIX_MS  = Math.max(1000, Math.floor(messageDelay));
+const IMG_BETWEEN_MS = messageDelay * 2; // Duplicado
+const SEND_BETWEEN_MS = messageDelay * 3; // Triplicado para audio
+const backoffBase     = Math.max(2000, messageDelay * 2);
 
 class MessageQueue {
   constructor(client, userId = 'default') {
@@ -262,6 +262,11 @@ class MessageQueue {
 
     try {
       if (!this.client || !this.client.user) throw new Error('Socket de WhatsApp no está listo');
+      
+      // Verificar si el manager tiene rate limiting
+      if (this.client.manager && typeof this.client.manager.waitForRateLimit === 'function') {
+        await this.client.manager.waitForRateLimit();
+      }
 
       // Procesar variables en el mensaje
       const processedMessage = processMessageVariables(message, variables || {});
@@ -319,6 +324,12 @@ class MessageQueue {
             });
             
             logger.info(`Audio enviado exitosamente a ${number} con mimetype ${mimetype} (destinatario ${originalIndex + 1})`);
+            
+            // Registrar mensaje para rate limiting
+            if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+              this.client.manager.recordMessage();
+            }
+            
             sendSuccess = true;
             break;
           } catch (mimeError) {
@@ -340,6 +351,11 @@ class MessageQueue {
         if (processedMessage && processedMessage.trim()) {
           await sleep(SEND_BETWEEN_MS);
           await this.client.sendMessage(jid, { text: processedMessage.trim() });
+          
+          // Registrar mensaje adicional para rate limiting
+          if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+            this.client.manager.recordMessage();
+          }
         }
         return true;
       }
@@ -354,6 +370,12 @@ class MessageQueue {
           image: imageBuffer,
           caption: processedMessage || ''
         });
+        
+        // Registrar mensaje para rate limiting
+        if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+          this.client.manager.recordMessage();
+        }
+        
         return true;
       }
 
@@ -372,9 +394,14 @@ class MessageQueue {
             caption: i === 0 ? processedMessage || '' : '' // Solo agregar el mensaje a la primera imagen
           });
           
-          // Pequeña pausa entre imágenes para evitar límites de velocidad
+          // Registrar mensaje para rate limiting
+          if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+            this.client.manager.recordMessage();
+          }
+          
+          // Pausa más larga entre imágenes para evitar límites de velocidad
           if (i < images.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, SEND_BETWEEN_MS));
           }
         }
         return true;
@@ -383,6 +410,12 @@ class MessageQueue {
       // SOLO TEXTO
       if (processedMessage && processedMessage.trim()) {
         await this.client.sendMessage(jid, { text: processedMessage.trim() });
+        
+        // Registrar mensaje para rate limiting
+        if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+          this.client.manager.recordMessage();
+        }
+        
         return true;
       }
 

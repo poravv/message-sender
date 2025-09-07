@@ -56,7 +56,7 @@ class SessionManager {
       // No inicializar automáticamente para evitar conflictos
     } else {
       // Inicializar la sesión solo si no hay otras activas
-      await manager.initialize();
+      await manager.safeInitialize();
     }
     
     this.sessions.set(userId, manager);
@@ -131,7 +131,7 @@ class SessionManager {
     const manager = this.sessions.get(userId);
     if (manager && !manager.sock) {
       try {
-        await manager.initialize();
+        await manager.safeInitialize();
         logger.info({ userId }, 'Sesión inicializada manualmente');
         return true;
       } catch (error) {

@@ -69,6 +69,8 @@ function buildRoutes() {
       
       const whatsappManager = await sessionManager.getSessionByToken(req);
       const s = whatsappManager.getState();
+      const health = whatsappManager.getConnectionHealth ? whatsappManager.getConnectionHealth() : {};
+      
       const resp = {
         status: s.connectionState,
         isReady: s.isReady,
@@ -77,7 +79,23 @@ function buildRoutes() {
         hasQR: !!s.qrCode,
         connectionState: s.connectionState,
         userId: req.auth?.sub,
-        userName: req.auth?.name || req.auth?.preferred_username
+        userName: req.auth?.name || req.auth?.preferred_username,
+        // Información de rate limiting y conflictos
+        rateLimit: {
+          messageCount: health.messageCount || 0,
+          maxMessagesPerMinute: health.maxMessagesPerMinute || 15,
+          canSendMessages: health.canSendMessages !== false,
+          isInCooldown: health.isInCooldown || false
+        },
+        conflicts: {
+          count: health.conflictCount || 0,
+          lastConflictTime: health.lastConflictTime || null,
+          isInConflictCooldown: health.isInCooldown || false
+        },
+        connection: {
+          isConnecting: health.isConnecting || false,
+          lastDisconnectReason: health.lastDisconnectReason || null
+        }
       };
       
       if (s.userInfo) {
