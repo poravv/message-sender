@@ -337,6 +337,15 @@ async function showTab(tabName) {
     }
   });
   
+  // Reinitialize interactive components when showing send tab
+  if (tabName === 'send') {
+    // Small delay to ensure DOM is ready
+    setTimeout(() => {
+      setupVariablesSystem();
+      setupEmojiPicker();
+    }, 100);
+  }
+  
   // Update URL hash
   window.location.hash = tabName;
 }
@@ -784,14 +793,25 @@ const emojiCategories = {
 };
 
 let currentEmojiCategory = 'smileys';
+let emojiSystemInitialized = false;
 
 function setupEmojiPicker() {
+  // Evitar inicialización múltiple
+  if (emojiSystemInitialized) {
+    return;
+  }
+  
   const emojiBtn = document.getElementById('emojiBtn');
   const emojiPicker = document.getElementById('emojiPicker');
   const emojiGrid = document.getElementById('emojiGrid');
   const textarea = document.getElementById('message');
   
-  if (!emojiBtn || !emojiPicker || !emojiGrid || !textarea) return;
+  if (!emojiBtn || !emojiPicker || !emojiGrid || !textarea) {
+    return;
+  }
+  
+  // Marcar como inicializado
+  emojiSystemInitialized = true;
   
   // Toggle emoji picker
   emojiBtn.addEventListener('click', (e) => {
@@ -1252,8 +1272,14 @@ window.showTab = showTab;
 window.refreshQR = refreshQR;
 
 /** ======== Variables System ======== */
+let variablesSystemInitialized = false;
 
 function setupVariablesSystem() {
+  // Evitar inicialización múltiple
+  if (variablesSystemInitialized) {
+    return;
+  }
+  
   const variablesBtn = document.getElementById('variablesBtn');
   const variablesHelper = document.getElementById('variablesHelper');
   const messageTextarea = document.getElementById('message');
@@ -1262,8 +1288,13 @@ function setupVariablesSystem() {
     return;
   }
   
+  // Marcar como inicializado
+  variablesSystemInitialized = true;
+  
   // Toggle variables helper
-  variablesBtn.addEventListener('click', () => {
+  variablesBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     variablesHelper.classList.toggle('d-none');
   });
   
