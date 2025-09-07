@@ -66,11 +66,31 @@ class SessionManager {
   // Obtener sesión por token JWT (después de validar con Keycloak)
   async getSessionByToken(req) {
     const userId = req.auth?.sub || req.auth?.id; // Desde JWT de Keycloak
+    
+    logger.info('Getting session by token', {
+      userId,
+      userName: req.auth?.name || req.auth?.preferred_username,
+      email: req.auth?.email,
+      authPresent: !!req.auth,
+      availableFields: Object.keys(req.auth || {})
+    });
+    
     if (!userId) {
+      logger.error('Usuario no autenticado - no se encontró userId en token', {
+        auth: req.auth
+      });
       throw new Error('Usuario no autenticado');
     }
     
-    return await this.getSession(userId);
+    const session = await this.getSession(userId);
+    
+    logger.info('Session obtained for user', {
+      userId,
+      sessionExists: !!session,
+      isReady: session?.getState()?.isReady
+    });
+    
+    return session;
   }
 
   // Listar sesiones activas

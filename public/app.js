@@ -29,6 +29,51 @@ let currentUser = {
 };
 
 /** ======== User Interface Functions ======== */
+
+// Función de diagnóstico para debug
+function diagnoseKeycloak() {
+  console.log('🔍 Diagnóstico de Keycloak:', {
+    keycloakInitialized: !!keycloak,
+    authenticated: keycloak?.authenticated,
+    token: keycloak?.token ? 'Presente (longitud: ' + keycloak.token.length + ')' : 'Ausente',
+    tokenParsed: keycloak?.tokenParsed,
+    currentUser,
+    config: CONFIG.keycloakConfig,
+    url: window.location.href
+  });
+  
+  if (keycloak?.token) {
+    try {
+      const payload = JSON.parse(atob(keycloak.token.split('.')[1]));
+      console.log('📋 Payload del token:', payload);
+    } catch (e) {
+      console.error('❌ Error decodificando token:', e);
+    }
+  }
+}
+
+// Función de diagnóstico específica para el botón de logout
+function diagnoseLogoutButton() {
+  const logoutBtn = document.getElementById('logout-btn');
+  console.log('🔍 Diagnóstico del botón de logout:', {
+    buttonExists: !!logoutBtn,
+    buttonVisible: logoutBtn?.offsetParent !== null,
+    buttonDisabled: logoutBtn?.disabled,
+    eventListeners: logoutBtn ? getEventListeners(logoutBtn) : 'N/A',
+    buttonHTML: logoutBtn?.outerHTML
+  });
+  
+  if (logoutBtn) {
+    console.log('🖱️ Intentando hacer click programático...');
+    logoutBtn.click();
+  }
+}
+
+// Hacer disponible globalmente para debug
+window.diagnoseKeycloak = diagnoseKeycloak;
+window.diagnoseLogoutButton = diagnoseLogoutButton;
+window.logoutKeycloak = logoutKeycloak;
+
 function updateUserInfoNavbar(user) {
   const userInfoElement = document.getElementById('user-info');
   const userNameElement = document.getElementById('user-name');
@@ -64,7 +109,13 @@ async function initKeycloak() {
     showLoadingScreen('Inicializando autenticación...');
     
     console.log('🔧 Configuración Keycloak:', CONFIG.keycloakConfig);
+    console.log('🌍 URL actual:', window.location.href);
     console.log('🔄 Intento de autenticación:', authAttempts + 1);
+    console.log('🌐 Entorno detectado:', {
+      hostname: window.location.hostname,
+      origin: window.location.origin,
+      nodeEnv: 'production (configurado en .env)'
+    });
     
     // Incrementar contador de intentos
     sessionStorage.setItem(CONFIG.authAttemptKey, (authAttempts + 1).toString());
@@ -72,14 +123,44 @@ async function initKeycloak() {
     keycloak = new Keycloak(CONFIG.keycloakConfig);
     
     console.log('🔄 Iniciando Keycloak...');
+    
+    // Configuración dinámica basada en el entorno
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const baseUrl = window.location.origin;
+    
+    console.log('🌍 Entorno detectado:', {
+      hostname: window.location.hostname,
+      isLocalhost,
+      baseUrl,
+      keycloakUrl: CONFIG.keycloakConfig.url
+    });
+    
     const authenticated = await keycloak.init({
-      onLoad: 'check-sso', // Cambiar de 'login-required' a 'check-sso'
+      onLoad: 'login-required', // Forzar login para asegurar autenticación
       checkLoginIframe: false,
       pkceMethod: 'S256',
-      enableLogging: true // Habilitar logging de Keycloak
+      enableLogging: true,
+      redirectUri: baseUrl + '/',
+      silentCheckSsoRedirectUri: baseUrl + '/silent-check-sso.html',
+      // Configuraciones específicas para producción
+      flow: 'standard',
+      responseMode: 'fragment'
     });
 
     console.log('✅ Keycloak inicializado. Autenticado:', authenticated);
+    console.log('🔐 Token disponible:', !!keycloak.token);
+    console.log('🎯 Token length:', keycloak.token ? keycloak.token.length : 0);
+    
+    if (keycloak.token) {
+      console.log('📋 Info del token:', {
+        sub: keycloak.tokenParsed?.sub,
+        name: keycloak.tokenParsed?.name,
+        email: keycloak.tokenParsed?.email,
+        exp: new Date(keycloak.tokenParsed?.exp * 1000),
+        aud: keycloak.tokenParsed?.aud,
+        iss: keycloak.tokenParsed?.iss
+      });
+    }
 
     if (!authenticated) {
       console.log('🔐 Usuario no autenticado, redirigiendo al login...');
@@ -113,12 +194,30 @@ async function initKeycloak() {
     // Extraer información del usuario
     if (keycloak.tokenParsed) {
       currentUser.id = keycloak.tokenParsed.sub;
-      currentUser.name = keycloak.tokenParsed.name || keycloak.tokenParsed.preferred_username;
+      currentUser.name = keycloak.tokenParsed.name || keycloak.tokenParsed.preferred_username || keycloak.tokenParsed.email;
       currentUser.email = keycloak.tokenParsed.email;
-      logDebug('Usuario autenticado:', currentUser);
+      
+      console.log('👤 Usuario autenticado exitosamente:', {
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        roles: keycloak.tokenParsed.resource_access,
+        tokenExpires: new Date(keycloak.tokenParsed.exp * 1000).toLocaleString()
+      });
       
       // Actualizar navbar con información del usuario de Keycloak
       updateUserInfoNavbar(currentUser);
+      
+      // Verificar que el usuario tiene los roles necesarios
+      const hasApiRole = keycloak.tokenParsed.resource_access?.['message-sender-api']?.roles?.includes('sender_api');
+      if (!hasApiRole) {
+        console.warn('⚠️ Usuario no tiene el rol sender_api en message-sender-api');
+        showAlert('Tu usuario no tiene permisos para usar esta aplicación. Contacta al administrador.', 'warning', 'Permisos insuficientes');
+      } else {
+        console.log('✅ Usuario tiene los permisos necesarios');
+      }
+    } else {
+      console.error('❌ No se pudo obtener información del token');
     }
     
     // Renueva justo antes de expirar (sin loops)
@@ -165,6 +264,9 @@ async function initKeycloak() {
     hideLoadingScreen();
     showAlert('Bienvenido al sistema', 'success', 'Autenticación exitosa');
     
+    console.log('✅ Inicialización de Keycloak completada exitosamente');
+    return true; // Retornar true en caso de éxito
+    
   } catch (error) {
     console.error('❌ Error de autenticación:', error);
     hideLoadingScreen();
@@ -189,35 +291,119 @@ async function initKeycloak() {
 
 // Helper: fetch con Authorization OBLIGATORIO (como en app-old.js)
 async function authFetch(url, options = {}) {
-  const headers = new Headers(options.headers || {});
-  if (keycloak?.token) headers.set('Authorization', `Bearer ${keycloak.token}`);
-  return fetch(url, { ...options, headers });
+  try {
+    // Verificar que Keycloak esté inicializado
+    if (!keycloak) {
+      console.error('❌ Keycloak no está inicializado');
+      throw new Error('Keycloak no está inicializado');
+    }
+
+    // Verificar autenticación
+    if (!keycloak.authenticated) {
+      console.error('❌ Usuario no autenticado');
+      throw new Error('Usuario no autenticado');
+    }
+
+    // Intentar actualizar token si es necesario (30 segundos antes de expirar)
+    try {
+      const tokenRefreshed = await keycloak.updateToken(30);
+      if (tokenRefreshed) {
+        console.log('🔄 Token renovado automáticamente');
+      }
+    } catch (refreshError) {
+      console.error('❌ Error renovando token:', refreshError);
+      // Si falla la renovación, redirigir al login
+      keycloak.login();
+      throw new Error('Token expirado, redirigiendo al login');
+    }
+
+    // Verificar que tenemos un token válido
+    if (!keycloak.token) {
+      console.error('❌ No hay token disponible después de la renovación');
+      keycloak.login();
+      throw new Error('No hay token de autenticación disponible');
+    }
+
+    const headers = new Headers(options.headers || {});
+    headers.set('Authorization', `Bearer ${keycloak.token}`);
+    
+    console.log('🔐 Enviando petición autenticada:', {
+      url,
+      userId: keycloak.tokenParsed?.sub,
+      userName: keycloak.tokenParsed?.name || keycloak.tokenParsed?.preferred_username,
+      tokenExpires: new Date(keycloak.tokenParsed?.exp * 1000).toLocaleString()
+    });
+    
+    const response = await fetch(url, { ...options, headers });
+    
+    // Si recibimos 401, el token puede estar inválido
+    if (response.status === 401) {
+      console.error('❌ Respuesta 401 - Token inválido o expirado');
+      keycloak.login();
+      throw new Error('Token inválido, redirigiendo al login');
+    }
+    
+    return response;
+    
+  } catch (error) {
+    console.error('❌ Error en authFetch:', error);
+    throw error;
+  }
 }
 
 // Función para cerrar sesión de Keycloak
 async function logoutKeycloak() {
   try {
-    console.log('🚪 Cerrando sesión de Keycloak...');
+    console.log('🚪 Iniciando proceso de logout...');
+    
+    // Verificar que Keycloak esté disponible
+    if (!keycloak) {
+      console.error('❌ Keycloak no está disponible para logout');
+      showAlert('Error: Sistema de autenticación no disponible', 'error');
+      return;
+    }
     
     // Mostrar confirmación
     const confirmLogout = confirm('¿Estás seguro de que deseas cerrar sesión?');
-    if (!confirmLogout) return;
+    if (!confirmLogout) {
+      console.log('🚫 Logout cancelado por el usuario');
+      return;
+    }
     
-    showLoadingScreen();
+    console.log('✅ Confirmación de logout recibida, procediendo...');
+    showLoadingScreen('Cerrando sesión...');
     
     // Limpiar datos locales
+    console.log('🧹 Limpiando datos locales...');
     sessionStorage.removeItem(CONFIG.authAttemptKey);
+    sessionStorage.clear();
     localStorage.clear();
     
-    // Cerrar sesión en Keycloak
-    await keycloak.logout({
-      redirectUri: window.location.origin
+    // Reiniciar estado de la aplicación
+    isAuthenticated = false;
+    currentUser = { id: null, name: null, email: null };
+    
+    console.log('🔄 Iniciando logout en Keycloak...');
+    
+    // Cerrar sesión en Keycloak con URL de redirección
+    const logoutUrl = keycloak.createLogoutUrl({
+      redirectUri: window.location.origin + window.location.pathname
     });
     
+    console.log('🌐 Redirigiendo a:', logoutUrl);
+    
+    // Redireccionar manualmente para mayor control
+    window.location.href = logoutUrl;
+    
   } catch (error) {
-    console.error('❌ Error al cerrar sesión:', error);
+    console.error('❌ Error durante el logout:', error);
     hideLoadingScreen();
     showAlert('Error al cerrar sesión. Inténtalo nuevamente.', 'error', 'Error de logout');
+    
+    // Como fallback, recargar la página
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
   }
 }
 
@@ -709,14 +895,33 @@ async function checkStatus() {
 
 async function performStatusCheck() {
   try {
+    console.log('🔄 Realizando status check...');
+    console.log('🔐 Estado de autenticación:', {
+      keycloakExists: !!keycloak,
+      isAuthenticated: keycloak?.authenticated,
+      hasToken: !!keycloak?.token,
+      tokenLength: keycloak?.token?.length || 0
+    });
+    
     const url = `${CONFIG.statusEndpoint}?t=${Date.now()}`;
+    console.log('📡 Enviando petición a:', url);
+    
     const res = await authFetch(url);
+    
+    console.log('📨 Respuesta recibida:', {
+      status: res.status,
+      ok: res.ok,
+      headers: Object.fromEntries(res.headers.entries())
+    });
+    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const status = await res.json();
+    
+    console.log('✅ Status obtenido:', status);
     updateInterface(status);
     return status;
   } catch (e) {
-    console.error('Status check error:', e);
+    console.error('❌ Status check error:', e);
     return null;
   }
 }
@@ -1304,10 +1509,47 @@ function setupEventListeners() {
     exportBtn.addEventListener('click', exportResults);
   }
 
-  // Logout button
+  // Logout button  
+  console.log('🔍 Buscando botón de logout...');
   const logoutBtn = document.getElementById('logout-btn');
+  console.log('🔍 Estado del botón:', {
+    exists: !!logoutBtn,
+    visible: logoutBtn?.offsetParent !== null,
+    disabled: logoutBtn?.disabled,
+    classList: logoutBtn?.classList.toString(),
+    parentElement: logoutBtn?.parentElement?.tagName
+  });
+  
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', logoutKeycloak);
+    console.log('✅ Botón de logout encontrado, configurando event listener...');
+    
+    // Remover event listeners previos si existen
+    logoutBtn.replaceWith(logoutBtn.cloneNode(true));
+    const newLogoutBtn = document.getElementById('logout-btn');
+    
+    newLogoutBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🖱️ Click en botón de logout detectado');
+      console.log('🔍 Event details:', e);
+      logoutKeycloak();
+    });
+    
+    // Agregar también el event listener para debug
+    newLogoutBtn.addEventListener('mousedown', () => {
+      console.log('👆 Mouse down en botón de logout');
+    });
+    
+    newLogoutBtn.addEventListener('mouseup', () => {
+      console.log('👆 Mouse up en botón de logout');
+    });
+    
+    console.log('✅ Event listeners configurados en botón de logout');
+  } else {
+    console.warn('⚠️ Botón de logout no encontrado en el DOM');
+    console.log('🔍 Elementos disponibles con ID:', 
+      Array.from(document.querySelectorAll('[id]')).map(el => el.id)
+    );
   }
 }
 
@@ -1343,8 +1585,17 @@ function exportResults() {
 
 /** ======== Application Initialization ======== */
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('🚀 Iniciando aplicación...');
+  
   // Initialize authentication first
-  await initKeycloak();
+  const authSuccess = await initKeycloak();
+  
+  if (!authSuccess) {
+    console.error('❌ Falló la inicialización de Keycloak, deteniendo la carga de la aplicación');
+    return;
+  }
+  
+  console.log('✅ Keycloak inicializado correctamente, continuando con la aplicación...');
   
   // Setup all event listeners
   setupEventListeners();
@@ -1365,7 +1616,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     sendTabBtn.classList.add('disabled');
   }
   
-  // Start status checking
+  // Start status checking ONLY after successful authentication
+  console.log('🔄 Iniciando verificación de estado...');
   startStatusCheck();
   
   // Initialize tab from hash
@@ -1443,43 +1695,3 @@ function setupVariablesSystem() {
     }
   });
 }
-
-// Add to the DOMContentLoaded event listener
-document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize authentication first
-  await initKeycloak();
-  
-  // Setup all event listeners
-  setupEventListeners();
-  
-  // Setup form handlers
-  setupMessageTypeHandlers();
-  setupFileInputHandlers();
-  setupMessageTextarea();
-  setupEmojiPicker();
-  
-  // Setup variables system
-  setupVariablesSystem();
-  
-  // Setup theme toggle
-  setupThemeToggle();
-  
-  // Initially disable send tab until WhatsApp is connected
-  const sendTabBtn = document.querySelector('[data-tab="send"]');
-  if (sendTabBtn) {
-    sendTabBtn.classList.add('disabled');
-  }
-  
-  // Start status checking
-  startStatusCheck();
-  
-  // Initialize tab from hash
-  const hash = window.location.hash.substring(1);
-  if (hash && ['link', 'send', 'analytics'].includes(hash)) {
-    showTab(hash);
-  } else {
-    showTab('link');
-  }
-  
-  console.log('🚀 WhatsApp Sender Pro initialized successfully');
-});

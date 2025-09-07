@@ -60,6 +60,13 @@ function buildRoutes() {
   // Estado de la sesión del usuario autenticado
   router.get('/connection-status', conditionalAuth, async (req, res) => {
     try {
+      logger.info('Connection status request', {
+        userId: req.auth?.sub,
+        userName: req.auth?.name || req.auth?.preferred_username,
+        userAgent: req.headers['user-agent'],
+        ip: req.ip
+      });
+      
       const whatsappManager = await sessionManager.getSessionByToken(req);
       const s = whatsappManager.getState();
       const resp = {
@@ -80,9 +87,20 @@ function buildRoutes() {
         };
       }
       
+      logger.info('Connection status response', {
+        userId: req.auth?.sub,
+        status: resp.status,
+        isReady: resp.isReady,
+        hasQR: resp.hasQR
+      });
+      
       res.json(resp);
     } catch (error) {
-      logger.error({ err: error?.message }, 'Error en /connection-status');
+      logger.error({ 
+        err: error?.message,
+        userId: req.auth?.sub,
+        stack: error?.stack
+      }, 'Error en /connection-status');
       res.status(500).json({ error: error.message });
     }
   });

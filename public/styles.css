@@ -370,6 +370,9 @@ body::before {
   align-items: center;
   justify-content: center;
   font-size: 1rem;
+  pointer-events: auto;
+  z-index: 1000;
+  position: relative;
 }
 
 .btn-logout:hover {
