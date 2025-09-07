@@ -390,6 +390,52 @@ body::before {
   color: var(--danger-600);
 }
 
+/* WhatsApp logout button styles */
+#logout-whatsapp-btn {
+  background: linear-gradient(135deg, #ff8c00, #ff6b00);
+  border: 1px solid rgba(255, 140, 0, 0.3);
+  color: white;
+  font-size: 0.875rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-normal);
+  position: relative;
+  overflow: hidden;
+}
+
+#logout-whatsapp-btn:hover {
+  background: linear-gradient(135deg, #ff6b00, #ff4500);
+  border-color: rgba(255, 75, 0, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 140, 0, 0.3);
+}
+
+#logout-whatsapp-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(255, 140, 0, 0.2);
+}
+
+#logout-whatsapp-btn .bi-whatsapp {
+  color: #25d366;
+  filter: drop-shadow(0 0 2px rgba(37, 211, 102, 0.5));
+}
+
+#logout-whatsapp-btn .bi-x-circle-fill {
+  color: #ff4444;
+  margin-left: 0.25rem;
+}
+
+/* Dark theme adjustments */
+[data-theme="dark"] #logout-whatsapp-btn {
+  background: linear-gradient(135deg, #ff8c00, #ff6b00);
+  border-color: rgba(255, 140, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(255, 140, 0, 0.2);
+}
+
+[data-theme="dark"] #logout-whatsapp-btn:hover {
+  box-shadow: 0 4px 16px rgba(255, 140, 0, 0.4);
+}
+
 /* Theme Toggle */
 .theme-toggle {
   margin-left: var(--spacing-md);

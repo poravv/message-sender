@@ -167,6 +167,56 @@ class SessionManager {
       }
     }
   }
+
+  // Cerrar sesión de WhatsApp para un usuario específico
+  async logoutUser(userId) {
+    try {
+      logger.info(`Iniciando logout de WhatsApp para usuario: ${userId}`);
+      
+      const manager = this.sessions.get(userId);
+      if (!manager) {
+        logger.info(`No hay sesión activa para usuario: ${userId}`);
+        return { success: true, message: 'No había sesión activa' };
+      }
+
+      // Llamar al método logout del manager
+      await manager.logout();
+      
+      // Remover la sesión del mapa
+      this.sessions.delete(userId);
+      
+      logger.info(`Logout completado para usuario: ${userId}`);
+      return { success: true, message: 'Sesión de WhatsApp cerrada exitosamente' };
+      
+    } catch (error) {
+      logger.error(`Error durante logout de usuario ${userId}: ${error.message}`, error);
+      
+      // Limpiar sesión aunque haya errores
+      if (this.sessions.has(userId)) {
+        try {
+          const manager = this.sessions.get(userId);
+          await manager.forceDisconnect();
+        } catch (forceError) {
+          logger.error(`Error en force disconnect: ${forceError.message}`);
+        }
+        this.sessions.delete(userId);
+      }
+      
+      return { success: false, message: error.message };
+    }
+  }
+
+  // Logout por token JWT
+  async logoutByToken(req) {
+    const userId = req.auth?.sub || req.auth?.id;
+    
+    if (!userId) {
+      throw new Error('Usuario no autenticado');
+    }
+    
+    logger.info(`Logout solicitado por token para usuario: ${userId}`);
+    return await this.logoutUser(userId);
+  }
 }
 
 // Singleton instance

@@ -479,6 +479,385 @@ class WhatsAppManager {
       canSendMessages: this.isReady && !this.isInCooldown && this.checkRateLimit() && !this.isConnecting
     };
   }
+
+  // Método para cerrar sesión de WhatsApp completamente
+  async logout() {
+    try {
+      logger.info(`Cerrando sesión de WhatsApp para usuario ${this.userId}`);
+      
+      // 1. Marcar como no listo inmediatamente
+      this.isReady = false;
+      this.connectionState = 'logging_out';
+      
+      // 2. Si hay un socket activo, hacer logout AGRESIVO
+      if (this.sock) {
+        try {
+          logger.info('Enviando logout a WhatsApp...');
+          
+          // NUEVO: Enviar mensaje de desconexión explícito antes del logout
+          try {
+            if (this.sock.user) {
+              await this.sock.sendMessage(this.sock.user.id, { 
+                text: '🚪 Cerrando sesión desde WhatsApp Web...' 
+              });
+            }
+          } catch (msgError) {
+            logger.warn('No se pudo enviar mensaje de despedida');
+          }
+          
+          // Logout principal
+          await this.sock.logout();
+          logger.info('Logout enviado exitosamente a WhatsApp');
+          
+          // NUEVO: Forzar cierre de conexión adicional
+          if (this.sock.ws) {
+            try {
+              this.sock.ws.close(1000, 'User logout');
+            } catch (wsError) {
+              logger.warn('Error cerrando WebSocket manualmente');
+            }
+          }
+          
+        } catch (logoutError) {
+          logger.warn(`Error durante logout de WhatsApp: ${logoutError.message}`);
+          
+          // FALLBACK: Si el logout normal falla, forzar desconexión
+          logger.info('Intentando desconexión forzada...');
+          try {
+            if (this.sock.end && typeof this.sock.end === 'function') {
+              this.sock.end();
+            }
+            if (this.sock.ws && this.sock.ws.close) {
+              this.sock.ws.close(1000, 'Forced logout');
+            }
+          } catch (forceError) {
+            logger.warn('Error en desconexión forzada');
+          }
+        }
+        
+        this.sock = null;
+      }
+      
+      // 3. Limpiar estado completamente
+      this.isReady = false;
+      this.connectionState = 'disconnected';
+      this.userInfo = null;
+      this.qrCode = null;
+      this.isConnecting = false;
+      this.connectionPromise = null;
+      
+      // 4. IMPORTANTE: Eliminar archivos de sesión COMPLETAMENTE
+      await this.deleteSessionFilesCompletely();
+      
+      // 5. Eliminar QR si existe
+      const userId = this.authPath ? path.basename(this.authPath).replace('user-', '') : this.userId;
+      const qrFileName = `qr-${userId}.png`;
+      const qrPath = path.join(publicDir, qrFileName);
+      
+      try {
+        if (fs.existsSync(qrPath)) {
+          fs.unlinkSync(qrPath);
+          logger.info(`QR eliminado: ${qrPath}`);
+        }
+      } catch (qrError) {
+        logger.warn(`Error eliminando QR: ${qrError.message}`);
+      }
+      
+      logger.info(`Sesión de WhatsApp cerrada COMPLETAMENTE para usuario ${this.userId}`);
+      return true;
+      
+    } catch (error) {
+      logger.error(`Error durante logout completo: ${error.message}`, error);
+      
+      // Forzar limpieza aunque haya errores
+      this.isReady = false;
+      this.connectionState = 'disconnected';
+      this.sock = null;
+      await this.deleteSessionFilesCompletely();
+      
+      throw error;
+    }
+  }
+
+  // Método de logout robusto con múltiples intentos y verificación
+  async robustLogout() {
+    console.log(`🚪 [${this.userId}] Iniciando logout robusto de WhatsApp...`);
+    
+    const maxAttempts = 3;
+    const results = {
+      success: false,
+      attempts: [],
+      finalState: null
+    };
+    
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      console.log(`🔄 [${this.userId}] Intento de logout ${attempt}/${maxAttempts}`);
+      
+      try {
+        const attemptResult = await this.performLogoutAttempt(attempt);
+        results.attempts.push(attemptResult);
+        
+        // Verificar estado después del intento
+        const stateCheck = await this.verifyLogoutState();
+        
+        if (stateCheck.fullyDisconnected) {
+          console.log(`✅ [${this.userId}] Logout exitoso en intento ${attempt}`);
+          results.success = true;
+          results.finalState = stateCheck;
+          break;
+        } else {
+          console.log(`⚠️ [${this.userId}] Intento ${attempt} incompleto, reintentando...`);
+          await this.delay(2000 * attempt); // Delay progresivo
+        }
+        
+      } catch (error) {
+        console.error(`❌ [${this.userId}] Error en intento ${attempt}:`, error);
+        results.attempts.push({ attempt, error: error.message, success: false });
+        
+        if (attempt < maxAttempts) {
+          await this.delay(3000 * attempt);
+        }
+      }
+    }
+    
+    // Verificación final
+    results.finalState = await this.verifyLogoutState();
+    
+    if (!results.success) {
+      console.log(`🔧 [${this.userId}] Logout robusto falló, aplicando limpieza forzada...`);
+      await this.forceCleanup();
+      results.finalState = await this.verifyLogoutState();
+    }
+    
+    console.log(`🎯 [${this.userId}] Logout robusto completado:`, results);
+    return results;
+  }
+  
+  // Realizar un intento individual de logout
+  async performLogoutAttempt(attemptNumber) {
+    const result = { attempt: attemptNumber, steps: [], success: false };
+    
+    try {
+      // Usar el método logout existente como base
+      const logoutResult = await this.logout();
+      result.steps.push('base_logout_executed');
+      result.success = logoutResult;
+      
+      // Verificaciones adicionales específicas del intento
+      if (this.sock) {
+        // Intentar desconexión adicional si aún hay socket
+        try {
+          if (this.sock.ws && this.sock.ws.readyState === 1) {
+            this.sock.ws.terminate();
+            result.steps.push('websocket_terminated');
+          }
+        } catch (wsError) {
+          result.steps.push('websocket_error');
+        }
+        
+        this.sock = null;
+        result.steps.push('socket_nullified');
+      }
+      
+      return result;
+      
+    } catch (error) {
+      result.error = error.message;
+      result.steps.push('attempt_failed');
+      return result;
+    }
+  }
+  
+  // Verificar estado de logout
+  async verifyLogoutState() {
+    const state = {
+      socketNull: this.sock === null,
+      notReady: !this.isReady,
+      disconnectedState: this.connectionState === 'disconnected',
+      noUserInfo: this.userInfo === null,
+      filesClean: false,
+      qrClean: false,
+      fullyDisconnected: false
+    };
+    
+    // Verificar archivos de sesión
+    try {
+      const authDir = this.authPath;
+      const credsPath = path.join(authDir, 'creds.json');
+      state.filesClean = !fs.existsSync(credsPath);
+    } catch (error) {
+      console.log(`⚠️ [${this.userId}] Error verificando archivos:`, error.message);
+      state.filesClean = true; // Asumir limpio si hay error
+    }
+    
+    // Verificar QR
+    try {
+      const qrFileName = `qr-${this.userId}.png`;
+      const qrPath = path.join(publicDir, qrFileName);
+      state.qrClean = !fs.existsSync(qrPath);
+    } catch (error) {
+      state.qrClean = true;
+    }
+    
+    // Estado completamente desconectado
+    state.fullyDisconnected = state.socketNull && 
+                              state.notReady && 
+                              state.disconnectedState && 
+                              state.noUserInfo && 
+                              state.filesClean && 
+                              state.qrClean;
+    
+    return state;
+  }
+  
+  // Limpieza forzada como último recurso
+  async forceCleanup() {
+    console.log(`🔨 [${this.userId}] Aplicando limpieza forzada...`);
+    
+    try {
+      // Forzar cierre de socket
+      if (this.sock) {
+        try {
+          if (this.sock.ws) {
+            this.sock.ws.terminate();
+          }
+          if (this.sock.end && typeof this.sock.end === 'function') {
+            this.sock.end();
+          }
+        } catch (e) {
+          console.log(`⚠️ [${this.userId}] Error terminando socket:`, e.message);
+        }
+        
+        this.sock = null;
+      }
+      
+      // Resetear todo el estado agresivamente
+      this.isReady = false;
+      this.connectionState = 'disconnected';
+      this.userInfo = null;
+      this.qrCode = null;
+      this.isConnecting = false;
+      this.connectionPromise = null;
+      
+      // Eliminar archivos de sesión de forma agresiva
+      if (this.authPath && fs.existsSync(this.authPath)) {
+        await fs.promises.rm(this.authPath, { recursive: true, force: true });
+        console.log(`🗑️ [${this.userId}] Carpeta de sesión eliminada forzadamente`);
+      }
+      
+      // Eliminar QR
+      const qrFileName = `qr-${this.userId}.png`;
+      const qrPath = path.join(publicDir, qrFileName);
+      if (fs.existsSync(qrPath)) {
+        fs.unlinkSync(qrPath);
+        console.log(`🗑️ [${this.userId}] QR eliminado forzadamente`);
+      }
+      
+      console.log(`✅ [${this.userId}] Limpieza forzada completada`);
+      
+    } catch (error) {
+      console.error(`❌ [${this.userId}] Error en limpieza forzada:`, error);
+    }
+  }
+  
+  // Método utilitario para delays
+  delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  // Método mejorado para eliminar archivos de sesión COMPLETAMENTE
+  async deleteSessionFilesCompletely() {
+    try {
+      logger.info('Eliminando archivos de sesión COMPLETAMENTE...');
+      const sessionDir = this.authPath || path.join(publicDir, '..', 'auth_info');
+      
+      if (!fs.existsSync(sessionDir)) {
+        logger.info('Directorio de sesiones no existe');
+        return;
+      }
+
+      let deleted = 0;
+      const files = fs.readdirSync(sessionDir);
+      
+      for (const file of files) {
+        const filePath = path.join(sessionDir, file);
+        try {
+          const stat = fs.lstatSync(filePath);
+          
+          if (stat.isDirectory()) {
+            // Eliminar contenido del directorio recursivamente
+            const subFiles = fs.readdirSync(filePath);
+            for (const subFile of subFiles) {
+              const subFilePath = path.join(filePath, subFile);
+              fs.unlinkSync(subFilePath);
+              deleted++;
+            }
+            fs.rmdirSync(filePath);
+            deleted++;
+          } else {
+            fs.unlinkSync(filePath);
+            deleted++;
+          }
+        } catch (error) {
+          logger.error(`Error eliminando ${filePath}: ${error.message}`);
+        }
+      }
+      
+      // Intentar eliminar el directorio padre si está vacío
+      try {
+        if (fs.readdirSync(sessionDir).length === 0) {
+          fs.rmdirSync(sessionDir);
+          deleted++;
+        }
+      } catch (dirError) {
+        logger.warn('No se pudo eliminar directorio padre (puede no estar vacío)');
+      }
+      
+      logger.info(`Archivos de sesión eliminados COMPLETAMENTE: ${deleted} elementos`);
+      
+      // NUEVO: También limpiar cualquier archivo de credenciales en memoria
+      this.authState = null;
+      this.saveCreds = null;
+      
+    } catch (error) {
+      logger.error(`Error al eliminar archivos de sesión completamente: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Método para forzar desconexión sin logout (para casos de emergencia)
+  async forceDisconnect() {
+    try {
+      logger.info(`Forzando desconexión para usuario ${this.userId}`);
+      
+      if (this.sock) {
+        try {
+          if (this.sock.end && typeof this.sock.end === 'function') {
+            this.sock.end();
+          }
+        } catch (error) {
+          logger.warn(`Error en force disconnect: ${error.message}`);
+        }
+        this.sock = null;
+      }
+      
+      this.isReady = false;
+      this.connectionState = 'disconnected';
+      this.userInfo = null;
+      this.qrCode = null;
+      this.isConnecting = false;
+      this.connectionPromise = null;
+      
+      this.deleteSessionFiles();
+      
+      logger.info(`Desconexión forzada completada para usuario ${this.userId}`);
+      return true;
+      
+    } catch (error) {
+      logger.error(`Error durante desconexión forzada: ${error.message}`);
+      return false;
+    }
+  }
 }
 
 module.exports = { WhatsAppManager };

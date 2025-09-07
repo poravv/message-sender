@@ -1,7 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
-const { upload } = require('./media');
+const { upload } = require('./    })
+  });
+
+  // Endpoint para logout robusto de WhatsApp
+  router.post('/logout-whatsapp', conditionalAuth, async (req, res) => {');
 const { cleanupOldFiles, loadNumbersFromCSV } = require('./utils');
 const { publicDir, retentionHours } = require('./config');
 const logger = require('./logger');
@@ -123,7 +127,95 @@ function buildRoutes() {
     }
   });
 
-  router.post('/send-messages', conditionalAuth, conditionalRole('sender_api'), upload.fields([
+// Endpoint para logout robusto de WhatsApp
+app.post('/logout-whatsapp', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.auth.sub;
+    console.log(`🚪 [${userId}] Solicitud de logout robusto de WhatsApp recibida`);
+    
+    const manager = sessionManager.getSession(userId);
+    if (!manager) {
+      console.log(`⚠️ [${userId}] No hay sesión activa para logout`);
+      return res.json({ 
+        success: true, 
+        message: 'No hay sesión activa',
+        state: 'no_session'
+      });
+    }
+    
+    // Usar logout robusto
+    const result = await manager.robustLogout();
+    
+    const response = {
+      success: result.success,
+      timestamp: new Date().toISOString(),
+      attempts: result.attempts.length,
+      finalState: result.finalState,
+      details: result
+    };
+    
+    if (result.success) {
+      console.log(`✅ [${userId}] Logout robusto de WhatsApp exitoso`);
+      response.message = 'Logout de WhatsApp completado exitosamente';
+      response.recommendation = result.finalState.fullyDisconnected ? 
+        'Dispositivo completamente desvinculado' : 
+        'Logout completado, puede tardar unos minutos en reflejarse en WhatsApp';
+    } else {
+      console.log(`⚠️ [${userId}] Logout robusto con problemas:`, result);
+      response.message = 'Logout completado con advertencias';
+      response.recommendation = 'Se recomienda verificar manualmente la desvinculación en WhatsApp';
+    }
+    
+    res.json(response);
+    
+  } catch (error) {
+    console.error('❌ Error en logout robusto de WhatsApp:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Error interno del servidor',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+  // Endpoint para verificar estado de logout
+  router.get('/logout-status/:userId?', conditionalAuth, async (req, res) => {
+  try {
+    const userId = req.params.userId || req.auth.sub;
+    
+    // Verificar autorización si se consulta otro usuario
+    if (userId !== req.auth.sub && !req.auth.roles?.includes('admin')) {
+      return res.status(403).json({ error: 'No autorizado para consultar otro usuario' });
+    }
+    
+    const manager = sessionManager.getSession(userId);
+    if (!manager) {
+      return res.json({ 
+        userId,
+        connected: false,
+        state: 'no_session',
+        message: 'No hay sesión activa'
+      });
+    }
+    
+    const state = await manager.verifyLogoutState();
+    
+    res.json({
+      userId,
+      connected: manager.isReady,
+      state: state.fullyDisconnected ? 'disconnected' : 'partially_connected',
+      details: state,
+      timestamp: new Date().toISOString()
+    });
+    
+  } catch (error) {
+    console.error('❌ Error verificando estado de logout:', error);
+    res.status(500).json({ 
+      error: 'Error interno del servidor',
+      timestamp: new Date().toISOString()
+    });
+  }
+});  router.post('/send-messages', conditionalAuth, conditionalRole('sender_api'), upload.fields([
     { name: 'csvFile', maxCount: 1 },
     { name: 'images', maxCount: 10 },
     { name: 'singleImage', maxCount: 1 },
@@ -344,96 +436,6 @@ function buildRoutes() {
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /my-session');
       res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Endpoint para logout robusto de WhatsApp
-  router.post('/logout-whatsapp', conditionalAuth, async (req, res) => {
-    try {
-      const userId = req.auth.sub;
-      console.log(`🚪 [${userId}] Solicitud de logout robusto de WhatsApp recibida`);
-      
-      const manager = sessionManager.getSession(userId);
-      if (!manager) {
-        console.log(`⚠️ [${userId}] No hay sesión activa para logout`);
-        return res.json({ 
-          success: true, 
-          message: 'No hay sesión activa',
-          state: 'no_session'
-        });
-      }
-      
-      // Usar logout robusto
-      const result = await manager.robustLogout();
-      
-      const response = {
-        success: result.success,
-        timestamp: new Date().toISOString(),
-        attempts: result.attempts.length,
-        finalState: result.finalState,
-        details: result
-      };
-      
-      if (result.success) {
-        console.log(`✅ [${userId}] Logout robusto de WhatsApp exitoso`);
-        response.message = 'Logout de WhatsApp completado exitosamente';
-        response.recommendation = result.finalState.fullyDisconnected ? 
-          'Dispositivo completamente desvinculado' : 
-          'Logout completado, puede tardar unos minutos en reflejarse en WhatsApp';
-      } else {
-        console.log(`⚠️ [${userId}] Logout robusto con problemas:`, result);
-        response.message = 'Logout completado con advertencias';
-        response.recommendation = 'Se recomienda verificar manualmente la desvinculación en WhatsApp';
-      }
-      
-      res.json(response);
-      
-    } catch (error) {
-      console.error('❌ Error en logout robusto de WhatsApp:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: 'Error interno del servidor',
-        timestamp: new Date().toISOString()
-      });
-    }
-  });
-
-  // Endpoint para verificar estado de logout
-  router.get('/logout-status/:userId?', conditionalAuth, async (req, res) => {
-    try {
-      const userId = req.params.userId || req.auth.sub;
-      
-      // Verificar autorización si se consulta otro usuario
-      if (userId !== req.auth.sub && !req.auth.roles?.includes('admin')) {
-        return res.status(403).json({ error: 'No autorizado para consultar otro usuario' });
-      }
-      
-      const manager = sessionManager.getSession(userId);
-      if (!manager) {
-        return res.json({ 
-          userId,
-          connected: false,
-          state: 'no_session',
-          message: 'No hay sesión activa'
-        });
-      }
-      
-      const state = await manager.verifyLogoutState();
-      
-      res.json({
-        userId,
-        connected: manager.isReady,
-        state: state.fullyDisconnected ? 'disconnected' : 'partially_connected',
-        details: state,
-        timestamp: new Date().toISOString()
-      });
-      
-    } catch (error) {
-      console.error('❌ Error verificando estado de logout:', error);
-      res.status(500).json({ 
-        error: 'Error interno del servidor',
-        timestamp: new Date().toISOString()
-      });
     }
   });
 
