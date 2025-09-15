@@ -109,17 +109,23 @@ jobs:
         kubectl delete secret backend-env-secrets -n ${{ env.NAMESPACE }} --ignore-not-found=true
         kubectl create secret generic backend-env-secrets \
           --namespace=${{ env.NAMESPACE }} \
-          --from-literal=DB_HOST="${{ secrets.DB_HOST }}" \
-          --from-literal=DB_PORT="${{ secrets.DB_PORT }}" \
-          --from-literal=DB_USER="${{ secrets.DB_USER }}" \
-          --from-literal=DB_PASSWORD="${{ secrets.DB_PASSWORD }}" \
-          --from-literal=DB_DATABASE="${{ secrets.DB_DATABASE }}" \
-          --from-literal=NODE_ENV="production" \
           --from-literal=PORT="3000" \
-          --from-literal=CLAVESECRETA="${{ secrets.CLAVESECRETA }}" \
-          --from-literal=REALM_PUBLICK_KEY="${{ secrets.REALM_PUBLICK_KEY }}" \
-          --from-literal=API_URL="${{ secrets.API_URL }}" \
+          --from-literal=NODE_ENV="${{ secrets.NODE_ENV }}" \
+          --from-literal=KEYCLOAK_URL="${{ secrets.KEYCLOAK_URL }}" \
+          --from-literal=KEYCLOAK_REALM="${{ secrets.KEYCLOAK_REALM }}" \
+          --from-literal=KEYCLOAK_AUDIENCE="${{ secrets.KEYCLOAK_AUDIENCE }}" \
+          --from-literal=SESSION_STORE="${{ secrets.SESSION_STORE }}" \
+          --from-literal=AUTHORIZED_PHONES="${{ secrets.AUTHORIZED_PHONES }}" \
+          --from-literal=FILE_RETENTION_HOURS="${{ secrets.FILE_RETENTION_HOURS }}" \
+          --from-literal=MESSAGE_DELAY_MS="${{ secrets.MESSAGE_DELAY_MS }}" \
+          --from-literal=LOG_LEVEL="${{ secrets.LOG_LEVEL }}" \
           --from-literal=REDIS_URL="${{ secrets.REDIS_URL }}" \
+          --from-literal=REDIS_HOST="${{ secrets.REDIS_HOST }}" \
+          --from-literal=REDIS_PORT="${{ secrets.REDIS_PORT }}" \
+          --from-literal=REDIS_DB="${{ secrets.REDIS_DB }}" \
+          --from-literal=REDIS_TLS="${{ secrets.REDIS_TLS }}" \
+          --from-literal=REDIS_TTL_SECONDS="${{ secrets.REDIS_TTL_SECONDS }}" \
+          --from-literal=REDIS_QR_TTL_SECONDS="${{ secrets.REDIS_QR_TTL_SECONDS }}" \
           --from-literal=REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
 
     - name: Create/Update MySQL secrets from GitHub Secrets
@@ -176,6 +182,16 @@ jobs:
           legajo-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${SHORT_SHA} \
           -n ${{ env.NAMESPACE }}
         kubectl rollout status deployment/legajo-backend -n ${{ env.NAMESPACE }} --timeout=300s
+    - name: Debug rollout failure
+      if: failure()
+      run: |
+        echo "🔎 Debugging rollout failure..."
+        kubectl describe deployment/legajo-backend -n ${{ env.NAMESPACE }} || true
+        POD=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=legajo-backend -o jsonpath='{.items[0].metadata.name}')
+        echo "📄 Pod: $POD"
+        kubectl describe pod "$POD" -n ${{ env.NAMESPACE }} || true
+        echo "📜 Last 200 log lines"
+        kubectl logs "$POD" -n ${{ env.NAMESPACE }} --tail=200 || true
 
     - name: Apply backend ingress
       run: |
