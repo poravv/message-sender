@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: legajo-backend
-  namespace: legajo-backend
+  name: sender-backend
+  namespace: sender
   labels:
-    app: legajo-backend
+    app: sender-backend
     tier: backend
 spec:
   replicas: 1
@@ -15,24 +15,24 @@ spec:
       maxUnavailable: 1
   selector:
     matchLabels:
-      app: legajo-backend
+      app: sender-backend
       tier: backend
   template:
     metadata:
       labels:
-        app: legajo-backend
+        app: sender-backend
         tier: backend
     spec:
       containers:
-      - name: legajo-backend
+      - name: sender-backend
         image: ghcr.io/poravv/message-sender:latest
         imagePullPolicy: Always
         ports:
-        - containerPort: 3000
+        - containerPort: 3010
           name: http
         env:
         - name: PORT
-          value: "3000"
+          value: "3010"
         envFrom:
         - secretRef:
             name: backend-env-secrets
@@ -48,7 +48,7 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 3000
+            port: 3010
           initialDelaySeconds: 30
           periodSeconds: 10
           timeoutSeconds: 5
@@ -56,7 +56,7 @@ spec:
         readinessProbe:
           httpGet:
             path: /health
-            port: 3000
+            port: 3010
           initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
@@ -71,31 +71,31 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: legajo-backend-service
-  namespace: legajo-backend
+  name: sender-backend-service
+  namespace: sender
   labels:
-    app: legajo-backend
+    app: sender-backend
     tier: backend
 spec:
   type: ClusterIP
   selector:
-    app: legajo-backend
+    app: sender-backend
     tier: backend
   ports:
-  - port: 3000
-    targetPort: 3000
+  - port: 3010
+    targetPort: 3010
     name: http
 ---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
-  name: legajo-backend-hpa
-  namespace: legajo-backend
+  name: sender-backend-hpa
+  namespace: sender
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
     kind: Deployment
-    name: legajo-backend
+    name: sender-backend
   minReplicas: 1
   maxReplicas: 10
   behavior:
