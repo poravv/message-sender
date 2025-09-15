@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: legajo-backend
+data:
+  # App config (non-sensitive)
+  NODE_ENV: "production"
+  PORT: "3000"
+  SESSION_STORE: "redis"
+  REDIS_TTL_SECONDS: "43200"
+  REDIS_QR_TTL_SECONDS: "180"
+  LOG_LEVEL: "info"
+
+  # Keycloak (override here if not provided via Secret)
+  KEYCLOAK_URL: "https://kc.mindtechpy.net"
+  KEYCLOAK_REALM: "message-sender"
+  KEYCLOAK_AUDIENCE: "message-sender-api"
+
