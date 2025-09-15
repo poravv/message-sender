@@ -86,7 +86,7 @@ RUN chown -R node:node /app
 # Usar usuario no root
 USER node
 
-EXPOSE ${PORT:-3009}
+EXPOSE ${PORT:-3000}
 
 # Comando de inicio optimizado para producción
 CMD ["node", "app.js"]

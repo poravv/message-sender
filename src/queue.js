@@ -36,12 +36,12 @@ function processMessageVariables(message, variables) {
   return processedMessage;
 }
 
-// Derivados del delay base
-const LOOP_IDLE_MS   = Math.max(500, messageDelay);
-const IMG_PREFIX_MS  = Math.max(0, Math.floor(messageDelay/2));
-const IMG_BETWEEN_MS = messageDelay;
-const SEND_BETWEEN_MS = messageDelay;
-const backoffBase     = Math.max(1000, messageDelay);
+// Derivados del delay base - Aumentados para evitar conflictos de WhatsApp
+const LOOP_IDLE_MS   = Math.max(1000, messageDelay * 2); // Duplicado
+const IMG_PREFIX_MS  = Math.max(1000, Math.floor(messageDelay));
+const IMG_BETWEEN_MS = messageDelay * 2; // Duplicado
+const SEND_BETWEEN_MS = messageDelay * 3; // Triplicado para audio
+const backoffBase     = Math.max(2000, messageDelay * 2);
 
 class MessageQueue {
   constructor(client, userId = 'default') {
@@ -52,6 +52,7 @@ class MessageQueue {
     this.isProcessing = false;
     this.batchSize = 1;
     this.messageStats = null;
+    this.maxRetries = 3;
     // Sistema de referencias de archivos
     this.fileReferences = new Map(); // { filePath: count }
     this.filesToCleanup = new Set(); // archivos marcados para limpieza
@@ -123,6 +124,15 @@ class MessageQueue {
       this.messageStats.completed = true;
       logger.info('Cola procesada completamente');
       
+      // Limpiar todos los archivos marcados para limpieza
+      if (this.filesToCleanup.size > 0) {
+        logger.info(`Limpiando ${this.filesToCleanup.size} archivos de audio`);
+        for (const audioFile of this.filesToCleanup) {
+          this.cleanupAudioFiles(audioFile);
+        }
+        this.filesToCleanup.clear();
+      }
+      
       // Limpiar archivos temp remanentes al finalizar
       this.cleanupTempDirectory();
     }
@@ -174,10 +184,18 @@ class MessageQueue {
     const currentCount = this.fileReferences.get(filePath) || 0;
     const newCount = Math.max(0, currentCount - 1);
     
+    logger.info(`Decrementando referencia de archivo: ${filePath}`, {
+      currentCount,
+      newCount,
+      willDelete: newCount === 0,
+      convertedPath: audioFile.convertedPath
+    });
+    
     if (newCount === 0) {
-      // No quedan referencias, eliminar archivo
+      // No quedan referencias, marcar para limpieza pero no eliminar inmediatamente
       this.fileReferences.delete(filePath);
-      this.cleanupAudioFiles(audioFile);
+      this.filesToCleanup.add(audioFile);
+      logger.info(`Archivo marcado para limpieza posterior: ${filePath}`);
     } else {
       // Aún hay referencias pendientes
       this.fileReferences.set(filePath, newCount);
@@ -219,7 +237,7 @@ class MessageQueue {
       const userPrefix = `audio_${this.userId}_`;
       
       files.forEach(file => {
-        if (file.startsWith(userPrefix) && file.endsWith('.mp3')) {
+        if (file.startsWith(userPrefix) && (file.endsWith('.m4a') || file.endsWith('.aac'))) {
           const filePath = require('path').join(tempDir, file);
           try {
             fs.unlinkSync(filePath);
@@ -244,6 +262,11 @@ class MessageQueue {
 
     try {
       if (!this.client || !this.client.user) throw new Error('Socket de WhatsApp no está listo');
+      
+      // Verificar si el manager tiene rate limiting
+      if (this.client.manager && typeof this.client.manager.waitForRateLimit === 'function') {
+        await this.client.manager.waitForRateLimit();
+      }
 
       // Procesar variables en el mensaje
       const processedMessage = processMessageVariables(message, variables || {});
@@ -260,25 +283,79 @@ class MessageQueue {
       if (audioFile) {
         if (!fs.existsSync(audioFile.path)) throw new Error('Archivo de audio no encontrado');
         
-        const converted = await convertAudioToOpus(audioFile.path, this.userId);
+        // Solo convertir una vez y reutilizar el archivo convertido
+        let converted;
+        if (!audioFile.convertedPath || !fs.existsSync(audioFile.convertedPath)) {
+          converted = await convertAudioToOpus(audioFile.path, this.userId);
+          audioFile.convertedPath = converted;
+          logger.info(`Audio convertido para envío múltiple: ${converted}`);
+        } else {
+          converted = audioFile.convertedPath;
+          logger.info(`Reutilizando audio convertido: ${converted}`);
+        }
+        
+        // Verificar que el archivo convertido existe antes de leer
+        if (!fs.existsSync(converted)) {
+          throw new Error(`Archivo de audio convertido no encontrado: ${converted}`);
+        }
+        
         const audioBuffer = fs.readFileSync(converted);
+        const stats = fs.statSync(converted);
         
-        // Guardar la ruta del archivo convertido para limpieza posterior
-        audioFile.convertedPath = converted;
-        
-        await this.client.sendMessage(jid, {
-          audio: audioBuffer,
-          mimetype: 'audio/mp4',
-          ptt: true // Enviar como mensaje de voz
+        logger.info(`Enviando audio a ${number}:`, {
+          originalFile: audioFile.path,
+          convertedFile: converted,
+          bufferSize: audioBuffer.length,
+          fileSize: stats.size,
+          destinatario: originalIndex + 1,
+          mimetype: 'audio/mp4'
         });
+        
+        // Intentar múltiples formatos de mimetype para máxima compatibilidad
+        let sendSuccess = false;
+        const mimetypes = ['audio/mp4', 'audio/aac', 'audio/mpeg'];
+        
+        for (const mimetype of mimetypes) {
+          try {
+            await this.client.sendMessage(jid, {
+              audio: audioBuffer,
+              mimetype: mimetype,
+              ptt: true // Enviar como mensaje de voz
+            });
+            
+            logger.info(`Audio enviado exitosamente a ${number} con mimetype ${mimetype} (destinatario ${originalIndex + 1})`);
+            
+            // Registrar mensaje para rate limiting
+            if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+              this.client.manager.recordMessage();
+            }
+            
+            sendSuccess = true;
+            break;
+          } catch (mimeError) {
+            logger.warn(`Fallo con mimetype ${mimetype} para ${number}: ${mimeError.message}`);
+            if (mimetype === mimetypes[mimetypes.length - 1]) {
+              throw mimeError; // Si es el último mimetype, lanzar el error
+            }
+          }
+        }
+        
+        if (!sendSuccess) {
+          throw new Error('No se pudo enviar el audio con ningún formato de mimetype');
+        }
 
-        // Decrementar referencia del archivo de audio
+        // Decrementar referencia del archivo de audio SOLO después del envío exitoso
         this.decrementFileReference(audioFile);
 
         // Enviar texto después del audio si existe
         if (processedMessage && processedMessage.trim()) {
           await sleep(SEND_BETWEEN_MS);
           await this.client.sendMessage(jid, { text: processedMessage.trim() });
+          
+          // Registrar mensaje adicional para rate limiting
+          if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+            this.client.manager.recordMessage();
+          }
         }
         return true;
       }
@@ -293,6 +370,12 @@ class MessageQueue {
           image: imageBuffer,
           caption: processedMessage || ''
         });
+        
+        // Registrar mensaje para rate limiting
+        if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+          this.client.manager.recordMessage();
+        }
+        
         return true;
       }
 
@@ -311,9 +394,14 @@ class MessageQueue {
             caption: i === 0 ? processedMessage || '' : '' // Solo agregar el mensaje a la primera imagen
           });
           
-          // Pequeña pausa entre imágenes para evitar límites de velocidad
+          // Registrar mensaje para rate limiting
+          if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+            this.client.manager.recordMessage();
+          }
+          
+          // Pausa más larga entre imágenes para evitar límites de velocidad
           if (i < images.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise(resolve => setTimeout(resolve, SEND_BETWEEN_MS));
           }
         }
         return true;
@@ -322,6 +410,12 @@ class MessageQueue {
       // SOLO TEXTO
       if (processedMessage && processedMessage.trim()) {
         await this.client.sendMessage(jid, { text: processedMessage.trim() });
+        
+        // Registrar mensaje para rate limiting
+        if (this.client.manager && typeof this.client.manager.recordMessage === 'function') {
+          this.client.manager.recordMessage();
+        }
+        
         return true;
       }
 

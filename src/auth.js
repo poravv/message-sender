@@ -91,7 +91,23 @@ function extractRoles(payload, clientId) {
 async function checkJwt(req, res, next) {
   try {
     const token = getBearerToken(req);
-    if (!token) return res.status(401).json({ error: 'Missing Bearer token' });
+    
+    if (!token) {
+      logger.warn('Missing Bearer token in request', {
+        url: req.url,
+        method: req.method,
+        headers: Object.keys(req.headers),
+        authHeader: req.headers['authorization'] ? 'present' : 'missing'
+      });
+      return res.status(401).json({ error: 'Missing Bearer token' });
+    }
+
+    logger.info('Verificando JWT token', {
+      url: req.url,
+      tokenLength: token.length,
+      issuer: ISSUER,
+      audience: KEYCLOAK_AUDIENCE
+    });
 
     const { jwtVerify } = await jose();
     const jwks = await getJWKS(JWKS_URI);
@@ -103,12 +119,26 @@ async function checkJwt(req, res, next) {
       clockTolerance: 10, // segundos de tolerancia de reloj
     });
 
+    logger.info('JWT verification successful', {
+      userId: payload.sub,
+      userName: payload.name || payload.preferred_username,
+      email: payload.email,
+      audience: payload.aud,
+      expires: new Date(payload.exp * 1000).toISOString()
+    });
+
     req.token = token;
     req.auth = payload;
     req.userRoles = extractRoles(payload, KEYCLOAK_AUDIENCE);
     return next();
   } catch (err) {
-    logger.warn({ err: err?.message }, 'JWT verification failed');
+    logger.warn({ 
+      err: err?.message,
+      url: req.url,
+      issuer: ISSUER,
+      audience: KEYCLOAK_AUDIENCE,
+      jwksUri: JWKS_URI
+    }, 'JWT verification failed');
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }

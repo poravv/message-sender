@@ -29,6 +29,52 @@ let currentUser = {
 };
 
 /** ======== User Interface Functions ======== */
+
+// Función de diagnóstico para debug
+function diagnoseKeycloak() {
+  console.log('🔍 Diagnóstico de Keycloak:', {
+    keycloakInitialized: !!keycloak,
+    authenticated: keycloak?.authenticated,
+    token: keycloak?.token ? 'Presente (longitud: ' + keycloak.token.length + ')' : 'Ausente',
+    tokenParsed: keycloak?.tokenParsed,
+    currentUser,
+    config: CONFIG.keycloakConfig,
+    url: window.location.href
+  });
+  
+  if (keycloak?.token) {
+    try {
+      const payload = JSON.parse(atob(keycloak.token.split('.')[1]));
+      console.log('📋 Payload del token:', payload);
+    } catch (e) {
+      console.error('❌ Error decodificando token:', e);
+    }
+  }
+}
+
+// Función de diagnóstico específica para el botón de logout
+function diagnoseLogoutButton() {
+  const logoutBtn = document.getElementById('logout-btn');
+  console.log('🔍 Diagnóstico del botón de logout:', {
+    buttonExists: !!logoutBtn,
+    buttonVisible: logoutBtn?.offsetParent !== null,
+    buttonDisabled: logoutBtn?.disabled,
+    eventListeners:
+      (logoutBtn && typeof getEventListeners !== 'undefined')
+        ? getEventListeners(logoutBtn)
+        : 'N/A (solo disponible en DevTools)',
+    buttonHTML: logoutBtn?.outerHTML
+  });
+
+  if (logoutBtn) {
+    console.log('🖱️ Intentando hacer click programático...');
+    logoutBtn.click();
+  }
+}// Hacer disponible globalmente para debug
+window.diagnoseKeycloak = diagnoseKeycloak;
+window.diagnoseLogoutButton = diagnoseLogoutButton;
+window.logoutKeycloak = logoutKeycloak;
+
 function updateUserInfoNavbar(user) {
   const userInfoElement = document.getElementById('user-info');
   const userNameElement = document.getElementById('user-name');
@@ -64,7 +110,13 @@ async function initKeycloak() {
     showLoadingScreen('Inicializando autenticación...');
     
     console.log('🔧 Configuración Keycloak:', CONFIG.keycloakConfig);
+    console.log('🌍 URL actual:', window.location.href);
     console.log('🔄 Intento de autenticación:', authAttempts + 1);
+    console.log('🌐 Entorno detectado:', {
+      hostname: window.location.hostname,
+      origin: window.location.origin,
+      nodeEnv: 'production (configurado en .env)'
+    });
     
     // Incrementar contador de intentos
     sessionStorage.setItem(CONFIG.authAttemptKey, (authAttempts + 1).toString());
@@ -72,14 +124,44 @@ async function initKeycloak() {
     keycloak = new Keycloak(CONFIG.keycloakConfig);
     
     console.log('🔄 Iniciando Keycloak...');
+    
+    // Configuración dinámica basada en el entorno
+    const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const baseUrl = window.location.origin;
+    
+    console.log('🌍 Entorno detectado:', {
+      hostname: window.location.hostname,
+      isLocalhost,
+      baseUrl,
+      keycloakUrl: CONFIG.keycloakConfig.url
+    });
+    
     const authenticated = await keycloak.init({
-      onLoad: 'check-sso', // Cambiar de 'login-required' a 'check-sso'
+      onLoad: 'login-required', // Forzar login para asegurar autenticación
       checkLoginIframe: false,
       pkceMethod: 'S256',
-      enableLogging: true // Habilitar logging de Keycloak
+      enableLogging: true,
+      redirectUri: baseUrl + '/',
+      silentCheckSsoRedirectUri: baseUrl + '/silent-check-sso.html',
+      // Configuraciones específicas para producción
+      flow: 'standard',
+      responseMode: 'fragment'
     });
 
     console.log('✅ Keycloak inicializado. Autenticado:', authenticated);
+    console.log('🔐 Token disponible:', !!keycloak.token);
+    console.log('🎯 Token length:', keycloak.token ? keycloak.token.length : 0);
+    
+    if (keycloak.token) {
+      console.log('📋 Info del token:', {
+        sub: keycloak.tokenParsed?.sub,
+        name: keycloak.tokenParsed?.name,
+        email: keycloak.tokenParsed?.email,
+        exp: new Date(keycloak.tokenParsed?.exp * 1000),
+        aud: keycloak.tokenParsed?.aud,
+        iss: keycloak.tokenParsed?.iss
+      });
+    }
 
     if (!authenticated) {
       console.log('🔐 Usuario no autenticado, redirigiendo al login...');
@@ -113,12 +195,30 @@ async function initKeycloak() {
     // Extraer información del usuario
     if (keycloak.tokenParsed) {
       currentUser.id = keycloak.tokenParsed.sub;
-      currentUser.name = keycloak.tokenParsed.name || keycloak.tokenParsed.preferred_username;
+      currentUser.name = keycloak.tokenParsed.name || keycloak.tokenParsed.preferred_username || keycloak.tokenParsed.email;
       currentUser.email = keycloak.tokenParsed.email;
-      logDebug('Usuario autenticado:', currentUser);
+      
+      console.log('👤 Usuario autenticado exitosamente:', {
+        id: currentUser.id,
+        name: currentUser.name,
+        email: currentUser.email,
+        roles: keycloak.tokenParsed.resource_access,
+        tokenExpires: new Date(keycloak.tokenParsed.exp * 1000).toLocaleString()
+      });
       
       // Actualizar navbar con información del usuario de Keycloak
       updateUserInfoNavbar(currentUser);
+      
+      // Verificar que el usuario tiene los roles necesarios
+      const hasApiRole = keycloak.tokenParsed.resource_access?.['message-sender-api']?.roles?.includes('sender_api');
+      if (!hasApiRole) {
+        console.warn('⚠️ Usuario no tiene el rol sender_api en message-sender-api');
+        showAlert('Tu usuario no tiene permisos para usar esta aplicación. Contacta al administrador.', 'warning', 'Permisos insuficientes');
+      } else {
+        console.log('✅ Usuario tiene los permisos necesarios');
+      }
+    } else {
+      console.error('❌ No se pudo obtener información del token');
     }
     
     // Renueva justo antes de expirar (sin loops)
@@ -165,6 +265,9 @@ async function initKeycloak() {
     hideLoadingScreen();
     showAlert('Bienvenido al sistema', 'success', 'Autenticación exitosa');
     
+    console.log('✅ Inicialización de Keycloak completada exitosamente');
+    return true; // Retornar true en caso de éxito
+    
   } catch (error) {
     console.error('❌ Error de autenticación:', error);
     hideLoadingScreen();
@@ -189,35 +292,243 @@ async function initKeycloak() {
 
 // Helper: fetch con Authorization OBLIGATORIO (como en app-old.js)
 async function authFetch(url, options = {}) {
-  const headers = new Headers(options.headers || {});
-  if (keycloak?.token) headers.set('Authorization', `Bearer ${keycloak.token}`);
-  return fetch(url, { ...options, headers });
-}
-
-// Función para cerrar sesión de Keycloak
-async function logoutKeycloak() {
   try {
-    console.log('🚪 Cerrando sesión de Keycloak...');
+    // Verificar que Keycloak esté inicializado
+    if (!keycloak) {
+      console.error('❌ Keycloak no está inicializado');
+      throw new Error('Keycloak no está inicializado');
+    }
+
+    // Verificar autenticación
+    if (!keycloak.authenticated) {
+      console.error('❌ Usuario no autenticado');
+      throw new Error('Usuario no autenticado');
+    }
+
+    // Intentar actualizar token si es necesario (30 segundos antes de expirar)
+    try {
+      const tokenRefreshed = await keycloak.updateToken(30);
+      if (tokenRefreshed) {
+        console.log('🔄 Token renovado automáticamente');
+      }
+    } catch (refreshError) {
+      console.error('❌ Error renovando token:', refreshError);
+      // Si falla la renovación, redirigir al login
+      keycloak.login();
+      throw new Error('Token expirado, redirigiendo al login');
+    }
+
+    // Verificar que tenemos un token válido
+    if (!keycloak.token) {
+      console.error('❌ No hay token disponible después de la renovación');
+      keycloak.login();
+      throw new Error('No hay token de autenticación disponible');
+    }
+
+    const headers = new Headers(options.headers || {});
+    headers.set('Authorization', `Bearer ${keycloak.token}`);
     
-    // Mostrar confirmación
-    const confirmLogout = confirm('¿Estás seguro de que deseas cerrar sesión?');
-    if (!confirmLogout) return;
-    
-    showLoadingScreen();
-    
-    // Limpiar datos locales
-    sessionStorage.removeItem(CONFIG.authAttemptKey);
-    localStorage.clear();
-    
-    // Cerrar sesión en Keycloak
-    await keycloak.logout({
-      redirectUri: window.location.origin
+    console.log('🔐 Enviando petición autenticada:', {
+      url,
+      userId: keycloak.tokenParsed?.sub,
+      userName: keycloak.tokenParsed?.name || keycloak.tokenParsed?.preferred_username,
+      tokenExpires: new Date(keycloak.tokenParsed?.exp * 1000).toLocaleString()
     });
     
+    const response = await fetch(url, { ...options, headers });
+    
+    // Si recibimos 401, el token puede estar inválido
+    if (response.status === 401) {
+      console.error('❌ Respuesta 401 - Token inválido o expirado');
+      keycloak.login();
+      throw new Error('Token inválido, redirigiendo al login');
+    }
+    
+    return response;
+    
   } catch (error) {
-    console.error('❌ Error al cerrar sesión:', error);
+    console.error('❌ Error en authFetch:', error);
+    throw error;
+  }
+}
+
+// Función para cerrar sesión de Keycloak con logout robusto de WhatsApp
+async function logoutKeycloak() {
+  try {
+    console.log('🚪 Iniciando proceso de logout robusto...');
+    
+    // Verificar que Keycloak esté disponible
+    if (!keycloak) {
+      console.error('❌ Keycloak no está disponible para logout');
+      showAlert('Error: Sistema de autenticación no disponible', 'error');
+      return;
+    }
+    
+    // Mostrar confirmación mejorada
+    const confirmLogout = confirm('¿Estás seguro de que deseas cerrar sesión?\n\n✅ Se cerrará tu sesión de Keycloak\n✅ Se desvinculará WhatsApp de este dispositivo (proceso robusto)\n✅ Tendrás que volver a escanear el código QR\n\n⏱️ Este proceso puede tomar unos segundos...');
+    if (!confirmLogout) {
+      console.log('🚫 Logout cancelado por el usuario');
+      return;
+    }
+    
+    console.log('✅ Confirmación de logout recibida, procediendo con proceso robusto...');
+    
+    // Crear indicador de progreso mejorado
+    showLoadingScreen('Iniciando logout robusto...');
+    
+    // Crear div de progreso detallado
+    const progressDiv = document.createElement('div');
+    progressDiv.id = 'logout-progress-detail';
+    progressDiv.innerHTML = `
+      <div style="position: fixed; top: 20px; right: 20px; 
+                  background: white; padding: 15px; border-radius: 8px; 
+                  box-shadow: 0 4px 6px rgba(0,0,0,0.1); z-index: 10001; 
+                  min-width: 300px; border-left: 4px solid #007bff;">
+        <h6 style="margin: 0 0 10px 0; color: #333;">🔄 Progreso del Logout</h6>
+        <div id="logout-step" style="font-size: 14px; margin-bottom: 8px;">Iniciando...</div>
+        <div style="height: 4px; background: #f0f0f0; border-radius: 2px; margin-bottom: 8px;">
+          <div id="logout-progress-bar" style="height: 100%; background: #007bff; border-radius: 2px; width: 0%; transition: width 0.3s;"></div>
+        </div>
+        <div id="logout-details" style="font-size: 12px; color: #666;"></div>
+      </div>
+    `;
+    document.body.appendChild(progressDiv);
+    
+    const updateProgress = (percent, step, details = '') => {
+      const stepEl = document.getElementById('logout-step');
+      const barEl = document.getElementById('logout-progress-bar');
+      const detailsEl = document.getElementById('logout-details');
+      
+      if (stepEl) stepEl.textContent = step;
+      if (barEl) barEl.style.width = percent + '%';
+      if (detailsEl) detailsEl.textContent = details;
+    };
+
+    // PASO 1: Cerrar sesión de WhatsApp con proceso robusto
+    try {
+      updateProgress(20, '📱 Cerrando sesión de WhatsApp...', 'Iniciando logout robusto...');
+      console.log('📱 Cerrando sesión de WhatsApp con proceso robusto...');
+      
+      const whatsappLogout = await authFetch('/logout-whatsapp', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (whatsappLogout.ok) {
+        const result = await whatsappLogout.json();
+        console.log('✅ WhatsApp logout resultado:', result);
+        
+        updateProgress(60, '✅ WhatsApp: ' + result.message, 
+          `${result.attempts} intentos, ${result.finalState?.fullyDisconnected ? 'completamente desvinculado' : 'parcialmente desvinculado'}`);
+        
+        // Mostrar recomendación si está disponible
+        if (result.recommendation) {
+          console.log('💡 Recomendación:', result.recommendation);
+          setTimeout(() => {
+            updateProgress(65, result.recommendation, '');
+          }, 1000);
+        }
+        
+        // Verificación adicional del estado
+        if (result.finalState && !result.finalState.fullyDisconnected) {
+          updateProgress(70, '🔍 Verificando desvinculación...', 'Comprobando estado final...');
+          
+          try {
+            // Esperar un momento antes de verificar
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            const statusResponse = await authFetch('/logout-status');
+            if (statusResponse.ok) {
+              const status = await statusResponse.json();
+              console.log('📊 Estado de verificación:', status);
+              
+              if (status.state === 'disconnected') {
+                updateProgress(75, '✅ Verificación: dispositivo desvinculado', '');
+              } else {
+                updateProgress(75, '⚠️ Verificación: desvinculación parcial', 
+                  'El dispositivo puede tardar unos minutos en desaparecer de WhatsApp');
+              }
+            }
+          } catch (statusError) {
+            console.log('⚠️ Error en verificación:', statusError.message);
+            updateProgress(75, '⚠️ No se pudo verificar estado', 'Continuando con Keycloak...');
+          }
+        } else {
+          updateProgress(75, '✅ WhatsApp completamente desvinculado', 'Verificación exitosa');
+        }
+        
+      } else {
+        updateProgress(40, '⚠️ Problema con logout de WhatsApp', 'Continuando con Keycloak...');
+        console.warn('⚠️ Error al cerrar WhatsApp, continuando con logout de Keycloak');
+      }
+    } catch (whatsappError) {
+      updateProgress(35, '❌ Error en WhatsApp logout', whatsappError.message);
+      console.warn('⚠️ Error al cerrar WhatsApp:', whatsappError.message);
+      console.log('Continuando con logout de Keycloak...');
+    }
+    
+    // PASO 2: Limpiar datos locales
+    updateProgress(80, '🧹 Limpiando datos locales...', 'Eliminando información de sesión');
+    console.log('🧹 Limpiando datos locales...');
+    sessionStorage.removeItem(CONFIG.authAttemptKey);
+    sessionStorage.clear();
+    localStorage.clear();
+    
+    // PASO 3: Reiniciar estado de la aplicación
+    updateProgress(85, '🔄 Reiniciando estado de aplicación...', '');
+    isAuthenticated = false;
+    currentUser = { id: null, name: null, email: null };
+    
+    updateProgress(90, '🔐 Cerrando sesión en Keycloak...', 'Preparando redirección');
+    console.log('🔄 Iniciando logout en Keycloak...');
+    
+    // Cerrar sesión en Keycloak con URL de redirección
+    const logoutUrl = keycloak.createLogoutUrl({
+      redirectUri: window.location.origin + window.location.pathname
+    });
+    
+    updateProgress(100, '✅ Logout completado', 'Redirigiendo...');
+    console.log('🌐 Redirigiendo a:', logoutUrl);
+    
+    // Dar tiempo para mostrar el progreso completo
+    setTimeout(() => {
+      // Limpiar progreso antes de redireccionar
+      if (document.getElementById('logout-progress-detail')) {
+        document.body.removeChild(progressDiv);
+      }
+      
+      // Redireccionar manualmente para mayor control
+      window.location.href = logoutUrl;
+    }, 1500);
+    
+  } catch (error) {
+    console.error('❌ Error durante el logout robusto:', error);
     hideLoadingScreen();
-    showAlert('Error al cerrar sesión. Inténtalo nuevamente.', 'error', 'Error de logout');
+    
+    // Limpiar progreso en caso de error
+    const progressEl = document.getElementById('logout-progress-detail');
+    if (progressEl) {
+      document.body.removeChild(progressEl);
+    }
+    
+    showAlert(
+      'Error al cerrar sesión.\n\n' +
+      'Por favor verifica manualmente:\n' +
+      '• Tu sesión en WhatsApp (Dispositivos vinculados)\n' +
+      '• Tu sesión en Keycloak\n\n' +
+      'Si el problema persiste, contacta al administrador.', 
+      'error', 
+      'Error de logout robusto'
+    );
+    
+    // Como fallback, recargar la página después de un momento
+    setTimeout(() => {
+      if (confirm('¿Deseas recargar la página para intentar nuevamente?')) {
+        window.location.reload();
+      }
+    }, 3000);
   }
 }
 
@@ -393,7 +704,18 @@ function initializeQR() {
   }
 }
 
+// Variable para prevenir llamadas simultáneas
+let isRefreshingQR = false;
+
 async function refreshQR() {
+  // Prevenir múltiples llamadas simultáneas
+  if (isRefreshingQR) {
+    console.log('🚫 Ya hay un refresh de QR en progreso, ignorando llamada adicional');
+    return;
+  }
+  
+  isRefreshingQR = true;
+  
   const refreshBtn = document.getElementById('refreshQrBtn');
   const qrImage = document.getElementById('qrImage');
   
@@ -427,6 +749,9 @@ async function refreshQR() {
     console.error('Error al actualizar QR:', error);
     showAlert('Error al solicitar nuevo código QR', 'error', 'Error QR');
   } finally {
+    // Restablecer estado y botón
+    isRefreshingQR = false;
+    
     if (refreshBtn) {
       refreshBtn.disabled = false;
       refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i><span>Refrescar código</span>';
@@ -656,6 +981,43 @@ function animateNumber(element, start, end, duration = 1000) {
   }, 16);
 }
 
+// Variables para calcular velocidad en tiempo real
+let lastSentCount = 0;
+let lastUpdateTime = Date.now();
+let speedHistory = [];
+
+function calculateRealTimeSpeed(currentSent, total) {
+  const now = Date.now();
+  const timeDiff = (now - lastUpdateTime) / 1000; // segundos
+  
+  if (timeDiff > 0 && currentSent > lastSentCount) {
+    const messagesSent = currentSent - lastSentCount;
+    const currentSpeed = messagesSent / timeDiff;
+    
+    // Mantener historial de velocidades para suavizar
+    speedHistory.push(currentSpeed);
+    if (speedHistory.length > 10) {
+      speedHistory.shift(); // Mantener solo los últimos 10 valores
+    }
+    
+    // Promedio de velocidades para suavizar fluctuaciones
+    const avgSpeed = speedHistory.reduce((sum, speed) => sum + speed, 0) / speedHistory.length;
+    
+    lastSentCount = currentSent;
+    lastUpdateTime = now;
+    
+    return Math.round(avgSpeed * 60); // mensajes por minuto
+  }
+  
+  // Si no hay cambios, devolver la velocidad promedio histórica
+  if (speedHistory.length > 0) {
+    const avgSpeed = speedHistory.reduce((sum, speed) => sum + speed, 0) / speedHistory.length;
+    return Math.round(avgSpeed * 60);
+  }
+  
+  return 0;
+}
+
 let statusCheckPromise = null;
 
 async function checkStatus() {
@@ -672,14 +1034,33 @@ async function checkStatus() {
 
 async function performStatusCheck() {
   try {
+    console.log('🔄 Realizando status check...');
+    console.log('🔐 Estado de autenticación:', {
+      keycloakExists: !!keycloak,
+      isAuthenticated: keycloak?.authenticated,
+      hasToken: !!keycloak?.token,
+      tokenLength: keycloak?.token?.length || 0
+    });
+    
     const url = `${CONFIG.statusEndpoint}?t=${Date.now()}`;
+    console.log('📡 Enviando petición a:', url);
+    
     const res = await authFetch(url);
+    
+    console.log('📨 Respuesta recibida:', {
+      status: res.status,
+      ok: res.ok,
+      headers: Object.fromEntries(res.headers.entries())
+    });
+    
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const status = await res.json();
+    
+    console.log('✅ Status obtenido:', status);
     updateInterface(status);
     return status;
   } catch (e) {
-    console.error('Status check error:', e);
+    console.error('❌ Status check error:', e);
     return null;
   }
 }
@@ -939,19 +1320,33 @@ let messageProgressPoll = null;
 function updateMessageStatus(status) {
   const { sent, total, errors, messages, completed, speed } = status || {};
 
-  // Update progress bar
+  // Update progress bar with smooth animation
   const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
   const progressFill = document.querySelector('.progress-fill');
   const progressPercentage = document.querySelector('.progress-percentage');
   
-  if (progressFill) progressFill.style.width = `${progress}%`;
-  if (progressPercentage) progressPercentage.textContent = `${progress}%`;
+  if (progressFill) {
+    // Add active class during sending for faster animation
+    if (!completed && total > 0) {
+      progressFill.classList.add('active');
+    } else {
+      progressFill.classList.remove('active');
+    }
+    
+    progressFill.style.width = `${progress}%`;
+  }
+  if (progressPercentage) {
+    progressPercentage.textContent = `${progress}%`;
+  }
 
-  // Update stat cards
+  // Update stat cards with smooth number animation
   updateStatCard('totalCount', total || 0);
   updateStatCard('sentCount', sent || 0);
   updateStatCard('errorCount', errors || 0);
-  updateStatCard('currentSpeed', speed || 0);
+  
+  // Calculate and display real-time speed
+  const currentSpeed = calculateRealTimeSpeed(sent, total);
+  updateStatCard('currentSpeed', currentSpeed);
 
   // Update status table
   updateStatusTable(messages || []);
@@ -963,6 +1358,14 @@ function updateMessageStatus(status) {
     if (sendBtn) {
       sendBtn.classList.remove('loading');
       sendBtn.disabled = false;
+    }
+    
+    // Add success animation to progress bar
+    if (progressFill && (errors || 0) === 0) {
+      progressFill.classList.add('success');
+      setTimeout(() => {
+        progressFill.classList.remove('success');
+      }, 3000);
     }
     
     if ((errors || 0) === 0) {
@@ -977,7 +1380,8 @@ function updateStatCard(statId, value) {
   const element = document.getElementById(statId);
   if (element) {
     const currentValue = parseInt(element.textContent) || 0;
-    animateNumber(element, currentValue, value, 500);
+    // Animación más rápida durante envío activo para mejor respuesta
+    animateNumber(element, currentValue, value, 300);
   }
 }
 
@@ -1032,7 +1436,7 @@ function startProgressPolling() {
     } catch (e) {
       console.error('Progress polling error:', e);
     }
-  }, 1000);
+  }, 300); // Polling más frecuente para mejor respuesta (cada 300ms)
 }
 
 function stopProgressPolling() {
@@ -1077,6 +1481,11 @@ async function handleMessageFormSubmit(event) {
   // Clear previous results
   const tbody = document.getElementById('statusTableBody');
   if (tbody) tbody.innerHTML = '';
+
+  // Reset speed calculation variables
+  lastSentCount = 0;
+  lastUpdateTime = Date.now();
+  speedHistory = [];
 
   // Validate form
   const csvFile = document.getElementById('csvFile').files[0];
@@ -1239,10 +1648,47 @@ function setupEventListeners() {
     exportBtn.addEventListener('click', exportResults);
   }
 
-  // Logout button
+  // Logout button  
+  console.log('🔍 Buscando botón de logout...');
   const logoutBtn = document.getElementById('logout-btn');
+  console.log('🔍 Estado del botón:', {
+    exists: !!logoutBtn,
+    visible: logoutBtn?.offsetParent !== null,
+    disabled: logoutBtn?.disabled,
+    classList: logoutBtn?.classList.toString(),
+    parentElement: logoutBtn?.parentElement?.tagName
+  });
+  
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', logoutKeycloak);
+    console.log('✅ Botón de logout encontrado, configurando event listener...');
+    
+    // Remover event listeners previos si existen
+    logoutBtn.replaceWith(logoutBtn.cloneNode(true));
+    const newLogoutBtn = document.getElementById('logout-btn');
+    
+    newLogoutBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🖱️ Click en botón de logout detectado');
+      console.log('🔍 Event details:', e);
+      logoutKeycloak();
+    });
+    
+    // Agregar también el event listener para debug
+    newLogoutBtn.addEventListener('mousedown', () => {
+      console.log('👆 Mouse down en botón de logout');
+    });
+    
+    newLogoutBtn.addEventListener('mouseup', () => {
+      console.log('👆 Mouse up en botón de logout');
+    });
+    
+    console.log('✅ Event listeners configurados en botón de logout');
+  } else {
+    console.warn('⚠️ Botón de logout no encontrado en el DOM');
+    console.log('🔍 Elementos disponibles con ID:', 
+      Array.from(document.querySelectorAll('[id]')).map(el => el.id)
+    );
   }
 }
 
@@ -1278,8 +1724,17 @@ function exportResults() {
 
 /** ======== Application Initialization ======== */
 document.addEventListener('DOMContentLoaded', async () => {
+  console.log('🚀 Iniciando aplicación...');
+  
   // Initialize authentication first
-  await initKeycloak();
+  const authSuccess = await initKeycloak();
+  
+  if (!authSuccess) {
+    console.error('❌ Falló la inicialización de Keycloak, deteniendo la carga de la aplicación');
+    return;
+  }
+  
+  console.log('✅ Keycloak inicializado correctamente, continuando con la aplicación...');
   
   // Setup all event listeners
   setupEventListeners();
@@ -1300,7 +1755,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     sendTabBtn.classList.add('disabled');
   }
   
-  // Start status checking
+  // Start status checking ONLY after successful authentication
+  console.log('🔄 Iniciando verificación de estado...');
   startStatusCheck();
   
   // Initialize tab from hash
@@ -1378,43 +1834,3 @@ function setupVariablesSystem() {
     }
   });
 }
-
-// Add to the DOMContentLoaded event listener
-document.addEventListener('DOMContentLoaded', async () => {
-  // Initialize authentication first
-  await initKeycloak();
-  
-  // Setup all event listeners
-  setupEventListeners();
-  
-  // Setup form handlers
-  setupMessageTypeHandlers();
-  setupFileInputHandlers();
-  setupMessageTextarea();
-  setupEmojiPicker();
-  
-  // Setup variables system
-  setupVariablesSystem();
-  
-  // Setup theme toggle
-  setupThemeToggle();
-  
-  // Initially disable send tab until WhatsApp is connected
-  const sendTabBtn = document.querySelector('[data-tab="send"]');
-  if (sendTabBtn) {
-    sendTabBtn.classList.add('disabled');
-  }
-  
-  // Start status checking
-  startStatusCheck();
-  
-  // Initialize tab from hash
-  const hash = window.location.hash.substring(1);
-  if (hash && ['link', 'send', 'analytics'].includes(hash)) {
-    showTab(hash);
-  } else {
-    showTab('link');
-  }
-  
-  console.log('🚀 WhatsApp Sender Pro initialized successfully');
-});
