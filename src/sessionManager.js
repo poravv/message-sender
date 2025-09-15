@@ -3,6 +3,7 @@ const { WhatsAppManager } = require('./manager');
 const path = require('path');
 const fs = require('fs').promises;
 const logger = require('./logger');
+const { withUserLock } = require('./redisLock');
 
 class SessionManager {
   constructor() {
@@ -56,7 +57,14 @@ class SessionManager {
       // No inicializar automáticamente para evitar conflictos
     } else {
       // Inicializar la sesión solo si no hay otras activas
-      await manager.safeInitialize();
+      const store = (process.env.SESSION_STORE || 'file').toLowerCase();
+      if (store === 'redis') {
+        await withUserLock(userId, async () => {
+          await manager.safeInitialize();
+        }, 45, { timeoutMs: 20000 });
+      } else {
+        await manager.safeInitialize();
+      }
     }
     
     this.sessions.set(userId, manager);
@@ -131,7 +139,14 @@ class SessionManager {
     const manager = this.sessions.get(userId);
     if (manager && !manager.sock) {
       try {
-        await manager.safeInitialize();
+        const store = (process.env.SESSION_STORE || 'file').toLowerCase();
+        if (store === 'redis') {
+          await withUserLock(userId, async () => {
+            await manager.safeInitialize();
+          }, 45, { timeoutMs: 20000 });
+        } else {
+          await manager.safeInitialize();
+        }
         logger.info({ userId }, 'Sesión inicializada manualmente');
         return true;
       } catch (error) {

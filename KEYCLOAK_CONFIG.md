@@ -10,17 +10,17 @@ CONFIGURACIÓN KEYCLOAK CLIENTE - message-sender-web
 7. Service Accounts Enabled: OFF
 
 8. Valid Redirect URIs:
-   - http://localhost:3009/*
-   - http://localhost:3009/
+   - http://localhost:3000/*
+   - http://localhost:3000/
    - https://your-production-domain.com/*
 
 9. Web Origins:
-   - http://localhost:3009
+   - http://localhost:3000
    - https://your-production-domain.com
 
 10. Admin URL: (dejar vacío)
 
-11. Base URL: http://localhost:3009
+11. Base URL: http://localhost:3000
 
 ROLES NECESARIOS:
 ================

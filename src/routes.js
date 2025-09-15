@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { upload } = require('./media');
+const qrcode = require('qrcode');
 const { cleanupOldFiles, loadNumbersFromCSV } = require('./utils');
 const { publicDir, retentionHours } = require('./config');
 const logger = require('./logger');
@@ -231,13 +232,28 @@ function buildRoutes() {
       const qrPath = path.join(publicDir, qrFileName);
       
       if (fs.existsSync(qrPath)) {
-        res.sendFile(qrPath);
-      } else {
-        res.status(404).json({ 
-          error: 'QR no disponible para este usuario. Solicita un nuevo QR.',
-          userId: userId
-        });
+        return res.sendFile(qrPath);
       }
+
+      // Intentar recuperar QR desde Redis (entorno multi-replica)
+      if ((process.env.SESSION_STORE || 'file').toLowerCase() === 'redis') {
+        const { getUserQr } = require('./stores/redisAuthState');
+        const qrText = await getUserQr(userId);
+        if (qrText) {
+          const buf = await qrcode.toBuffer(qrText, {
+            color: { dark: '#128C7E', light: '#FFFFFF' },
+            width: 300,
+            margin: 1,
+          });
+          res.set('Content-Type', 'image/png');
+          return res.send(buf);
+        }
+      }
+
+      return res.status(404).json({ 
+        error: 'QR no disponible para este usuario. Solicita un nuevo QR.',
+        userId: userId
+      });
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /qr');
       res.status(500).json({ error: error.message });

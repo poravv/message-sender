@@ -14,9 +14,10 @@ const { retentionHours } = require('./src/config');
 const { cleanupOldFiles } = require('./src/utils');
 const { buildRoutes } = require('./src/routes');
 const sessionManager = require('./src/sessionManager');
+const { getRedis } = require('./src/redisClient');
 
 const app = express();
-const port = process.env.PORT || 3009;
+const port = process.env.PORT || 3000;
 
 // Si hay proxy/ingress con TLS, ayuda a detectar https correcto en req
 app.set('trust proxy', 1);
@@ -34,6 +35,32 @@ app.use('/', buildRoutes());
 // Raíz -> index.html (sin auth)
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Health endpoints for Kubernetes
+app.get('/health', async (_req, res) => {
+  try {
+    // simple liveness
+    res.json({ status: 'ok', time: new Date().toISOString() });
+  } catch {
+    res.status(500).json({ status: 'error' });
+  }
+});
+
+app.get('/ready', async (_req, res) => {
+  try {
+    const store = (process.env.SESSION_STORE || 'file').toLowerCase();
+    if (store === 'redis') {
+      const redis = getRedis();
+      const status = redis?.status;
+      if (status !== 'ready' && status !== 'connecting') {
+        return res.status(503).json({ ready: false, store, redisStatus: status });
+      }
+    }
+    res.json({ ready: true });
+  } catch (e) {
+    res.status(503).json({ ready: false, error: e?.message });
+  }
 });
 
 // 404 opcional para otras rutas
@@ -57,4 +84,14 @@ app.listen(port, async () => {
   }, 4 * 3600 * 1000);
 
   logger.info('Sistema multi-sesión WhatsApp inicializado correctamente');
+});
+
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('Recibido SIGTERM, cerrando servidor...');
+  setTimeout(() => process.exit(0), 500);
+});
+process.on('SIGINT', () => {
+  logger.info('Recibido SIGINT, cerrando servidor...');
+  setTimeout(() => process.exit(0), 500);
 });

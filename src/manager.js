@@ -5,12 +5,13 @@ const qrcode = require('qrcode');
 const {
   default: makeWASocket,
   DisconnectReason,
-  useMultiFileAuthState,
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const { isAuthorizedPhone, publicDir } = require('./config');
 const { MessageQueue } = require('./queue');
 const logger = require('./logger');
+const { getAuthState } = require('./auth');
+const { getRedis } = require('./redisClient');
 
 class WhatsAppManager {
   constructor(userId = 'default') {
@@ -29,6 +30,7 @@ class WhatsAppManager {
     this.authState = null;
     this.saveCreds = null;
     this.authPath = null; // ruta por-usuario: .../auth_info/user-<id>
+    this._clearAuth = null; // cleanup function for current auth store
 
     // QR
     this.qrCode = null;
@@ -185,9 +187,10 @@ class WhatsAppManager {
         fs.mkdirSync(authDir, { recursive: true });
       }
 
-      const { state, saveCreds } = await useMultiFileAuthState(authDir);
+      const { state, saveCreds, clear } = await getAuthState(this.userId, authDir);
       this.authState = state;
       this.saveCreds = saveCreds;
+      this._clearAuth = typeof clear === 'function' ? clear : null;
 
       // Socket Baileys
       this.sock = makeWASocket({
@@ -199,6 +202,9 @@ class WhatsAppManager {
         keepAliveIntervalMs: 10_000,
         markOnlineOnConnect: false,
       });
+
+      // expose manager to queue via socket reference
+      this.sock.manager = this;
 
       this.sock.ev.on('creds.update', saveCreds);
 
@@ -223,6 +229,13 @@ class WhatsAppManager {
             });
             logger.info({ qrPath }, 'QR guardado');
             this.lastQRUpdate = Date.now();
+          }
+          // Store QR in Redis for cross-pod availability if enabled
+          if ((process.env.SESSION_STORE || 'file').toLowerCase() === 'redis') {
+            try {
+              const { setUserQr } = require('./stores/redisAuthState');
+              await setUserQr(this._getScopedUserId(), qr);
+            } catch {}
           }
         }
 
@@ -461,6 +474,27 @@ class WhatsAppManager {
   }
 
   async waitForRateLimit() {
+    const store = (process.env.SESSION_STORE || 'file').toLowerCase();
+    if (store === 'redis') {
+      try {
+        const redis = getRedis();
+        const key = `wa:rl:${this._getScopedUserId()}`;
+        const count = await redis.incr(key);
+        if (count === 1) {
+          await redis.expire(key, 60);
+        }
+        if (count > this.maxMessagesPerMinute) {
+          const ttl = await redis.ttl(key);
+          const waitTime = Math.max(1, ttl) * 1000;
+          logger.warn(`Rate limit distribuido alcanzado. Esperando ${Math.ceil(waitTime/1000)}s...`);
+          await this._delay(waitTime);
+        }
+        return;
+      } catch (e) {
+        logger.warn({ err: e?.message }, 'Fallo rate-limit distribuido, usando local');
+      }
+    }
+    // Local fallback
     if (!this._checkRateLimit()) {
       const waitTime = 60_000; // 1 min
       logger.warn(`Rate limit alcanzado. Esperando ${waitTime / 1000} segundos...`);
@@ -473,7 +507,18 @@ class WhatsAppManager {
 
   async _deleteSessionFilesCompletely() {
     try {
-      logger.info('Eliminando archivos de sesión COMPLETAMENTE...');
+      logger.info('Eliminando estado de sesión...');
+      const store = (process.env.SESSION_STORE || 'file').toLowerCase();
+
+      if (store === 'redis' && this._clearAuth) {
+        await this._clearAuth();
+        this.authState = null;
+        this.saveCreds = null;
+        logger.info('Estado de sesión en Redis eliminado');
+        return;
+      }
+
+      // Fallback: delete local files
       const sessionDir = this._getAuthDir();
 
       if (!fs.existsSync(sessionDir)) {
