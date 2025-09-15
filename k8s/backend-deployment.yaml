@@ -77,13 +77,14 @@ metadata:
     app: sender-backend
     tier: backend
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: sender-backend
     tier: backend
   ports:
-  - port: 3010
+  - port: 80
     targetPort: 3010
+    nodePort: 32010
     name: http
 ---
 apiVersion: autoscaling/v2
