@@ -16,4 +16,3 @@ data:
   KEYCLOAK_URL: "https://kc.mindtechpy.net"
   KEYCLOAK_REALM: "message-sender"
   KEYCLOAK_AUDIENCE: "message-sender-api"
-
