@@ -47,109 +47,49 @@ npm start
 
 ### 2. **Variables de Entorno (.env)**
 ```env
-# Configuración del servidor
+# Servidor
 PORT=3000
 NODE_ENV=production
-PUBLIC_URL=http://localhost
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost
 
-# Configuración de Seguridad y Rendimiento
-MAX_RETRIES=3
-BATCH_SIZE=100
-INACTIVITY_TIMEOUT=1800000
+# App
 AUTHORIZED_PHONES=595992756462,595976947110
 FILE_RETENTION_HOURS=24
 MESSAGE_DELAY_MS=2000
 
-# Keycloak Configuration (OBLIGATORIO para producción)
+# Keycloak (obligatorio en producción)
 KEYCLOAK_URL=https://kc.mindtechpy.net
 KEYCLOAK_REALM=message-sender
 KEYCLOAK_AUDIENCE=message-sender-api
+
+# Sesiones (Redis)
+SESSION_STORE=redis
+REDIS_HOST=redis.mindtechpy.net
+REDIS_PORT=6379
+REDIS_PASSWORD=changeme
+REDIS_DB=0
+REDIS_TLS=false                 # true si el endpoint ofrece TLS
+REDIS_TLS_REJECT_UNAUTHORIZED=true
+REDIS_TTL_SECONDS=43200         # 12h para credenciales/keys
+REDIS_QR_TTL_SECONDS=180        # 3m para QR temporal
+
+# Logs (opcional)
+# LOG_LEVEL=info
 ```
 
 ## 🏗️ Deployment en Producción
 
-### **Arquitectura Multi-Cliente**
-```
-/home/elporavv/workspaceandre/clientes/
-├── cliente-3000/message-sender/  # Cliente A (Puerto 3000)
-├── cliente-3011/message-sender/  # Cliente B (Puerto 3011)
-└── cliente-3012/message-sender/  # Cliente C (Puerto 3012)
-```
+### CI/CD
+- El workflow `.github/workflows/deploy.yml` compila y publica la imagen en GHCR al hacer push/pr en `main`.
+- No usa SSH ni despliega a servidores directamente.
 
-### **Setup Manual por Cliente (Una sola vez)**
+### Kubernetes
+- Usa la imagen publicada en GHCR en tus manifests/Helm.
+- Las sesiones de WhatsApp están centralizadas en Redis (TTL configurable) y resisten autoescalado/restarts.
+- Define `LOG_LEVEL`, `KEYCLOAK_*` y las variables de Redis como ConfigMap/Secret.
+### Docker Compose (local)
 ```bash
-# En el servidor de producción
-CLIENT_ID="3000"  # Cambiar por el ID del cliente
-mkdir -p /home/elporavv/workspaceandre/clientes/cliente-${CLIENT_ID}
-cd /home/elporavv/workspaceandre/clientes/cliente-${CLIENT_ID}
-
-# Clonar rama específica del cliente
-git clone -b cliente-${CLIENT_ID} https://github.com/poravv/message-sender.git message-sender
-cd message-sender
-
-# Configurar .env específico del cliente
-cat > .env << EOF
-PORT=${CLIENT_ID}
-NODE_ENV=production
-PUBLIC_URL=http://localhost
-KEYCLOAK_URL=https://kc.mindtechpy.net
-KEYCLOAK_REALM=message-sender
-KEYCLOAK_AUDIENCE=message-sender-api
-ALLOWED_ORIGINS=http://localhost:${CLIENT_ID},http://localhost
-MAX_RETRIES=3
-BATCH_SIZE=100
-INACTIVITY_TIMEOUT=1800000
-FILE_RETENTION_HOURS=24
-MESSAGE_DELAY_MS=2000
-EOF
-
-# Crear directorios necesarios
-mkdir -p uploads bot_sessions temp logs
-
-# Iniciar servicio
 docker compose up -d
-```
-
-### **GitHub Actions - Deployment Automático**
-
-**Configurar Secrets en GitHub:**
-```
-SSH_HOST=tu-servidor.com
-SSH_USER=elporavv
-SSH_KEY=-----BEGIN OPENSSH PRIVATE KEY-----...
-SSH_PORT=22
-```
-
-**Flujo automático:**
-```bash
-# Hacer cambios en código
-git checkout cliente-3000
-# ... realizar modificaciones ...
-git add .
-git commit -m "feat: nueva funcionalidad"
-git push origin cliente-3000
-
-# 🚀 GitHub Actions se ejecuta automáticamente:
-# ✅ Detecta rama cliente-3000 → CLIENT_ID=3000
-# ✅ Busca /home/elporavv/workspaceandre/clientes/cliente-3009/message-sender
-# ✅ Preserva .env local
-# ✅ Actualiza código (git pull)
-# ✅ Redeploya con Docker Compose
-# ✅ Verifica estado y muestra logs
-```
-
-## 🌐 Configuración con Nginx Proxy Manager
-
-```bash
-# Ejemplo de configuración por cliente:
-Domain Name: cliente3009.tudominio.com
-Scheme: http
-Forward Hostname/IP: localhost
-Forward Port: 3000
-
-# SSL: Activar Force SSL y HTTP/2 Support
-# Certificado: Let's Encrypt automático
+open http://localhost:3000
 ```
 
 ## 📊 Características Funcionales
@@ -164,7 +104,7 @@ Forward Port: 3000
 
 ### **Conexión WhatsApp**
 - ✅ **Baileys Integration**: Socket-based connection con Node.js 20
-- ✅ **Session Management**: Persistencia de sesiones en bot_sessions/
+- ✅ **Session Management**: Persistencia de sesiones en Redis (TTL configurable)
 - ✅ **QR Generation**: Generación automática de QR para autenticación
 - ✅ **Auto Reconnection**: Reconexión automática con exponential backoff
 - ✅ **User Info Capture**: Captura de número y nombre del usuario conectado
