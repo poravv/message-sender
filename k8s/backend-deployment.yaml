@@ -82,7 +82,7 @@ spec:
     app: sender-backend
     tier: backend
   ports:
-  - port: 3010
+  - port: 80
     targetPort: 3010
     name: http
 ---
