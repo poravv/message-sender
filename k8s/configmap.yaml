@@ -11,9 +11,13 @@ data:
   REDIS_TTL_SECONDS: "43200"
   REDIS_QR_TTL_SECONDS: "180"
   LOG_LEVEL: "info"
+  # Redis connection (non-sensitive)
+  REDIS_HOST: "redis.mindtechpy.net"
+  REDIS_PORT: "6379"
+  REDIS_TLS: "false"
+  REDIS_TLS_REJECT_UNAUTHORIZED: "true"
 
   # Keycloak (override here if not provided via Secret)
   KEYCLOAK_URL: "https://kc.mindtechpy.net"
   KEYCLOAK_REALM: "message-sender"
   KEYCLOAK_AUDIENCE: "message-sender-api"
-

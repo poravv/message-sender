@@ -55,12 +55,12 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /ready
+            path: /health
             port: 3000
-          initialDelaySeconds: 5
+          initialDelaySeconds: 15
           periodSeconds: 5
           timeoutSeconds: 3
-          failureThreshold: 3
+          failureThreshold: 6
         lifecycle:
           preStop:
             exec:
@@ -126,4 +126,3 @@ spec:
       target:
         type: Utilization
         averageUtilization: 80
-

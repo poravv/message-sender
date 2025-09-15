@@ -53,7 +53,9 @@ app.get('/ready', async (_req, res) => {
     if (store === 'redis') {
       const redis = getRedis();
       const status = redis?.status;
-      if (status !== 'ready' && status !== 'connecting') {
+      // Consideramos ok mientras el cliente esté en estados transitorios comunes
+      const acceptable = new Set(['ready', 'connecting', 'reconnecting', 'wait']);
+      if (!acceptable.has(String(status))) {
         return res.status(503).json({ ready: false, store, redisStatus: status });
       }
     }

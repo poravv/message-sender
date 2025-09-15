@@ -208,8 +208,7 @@ jobs:
         echo "===================="
         if [ "${{ job.status }}" == "success" ]; then
           echo "✅ Backend + Database deployment successful!"
-          echo "ℹ️ Backend is internal-only (no public host)."
-          echo "   Access via port-forward or via frontend proxy."
+          echo "🌐 Ingress applied for public access (sender.mindtechpy.net)."
         else
           echo "❌ Deployment failed!"
         fi
@@ -220,4 +219,5 @@ jobs:
         echo "🔗 Services:"
         kubectl get services -n ${{ env.NAMESPACE }}
         echo ""
-        echo "(No backend ingress configured by design)"
+        echo "🌍 Ingress:"
+        kubectl get ingress -n ${{ env.NAMESPACE }}
