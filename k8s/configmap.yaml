@@ -2,11 +2,11 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: backend-config
-  namespace: legajo-backend
+  namespace: sender
 data:
   # App config (non-sensitive)
   NODE_ENV: "production"
-  PORT: "3000"
+  PORT: "3010"
   SESSION_STORE: "redis"
   REDIS_TTL_SECONDS: "43200"
   REDIS_QR_TTL_SECONDS: "180"

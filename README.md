@@ -48,7 +48,7 @@ npm start
 ### 2. **Variables de Entorno (.env)**
 ```env
 # Servidor
-PORT=3000
+PORT=3000                # Desarrollo local (Kubernetes usa 3010)
 NODE_ENV=production
 
 # App
@@ -76,16 +76,35 @@ REDIS_QR_TTL_SECONDS=180        # 3m para QR temporal
 # LOG_LEVEL=info
 ```
 
-## 🏗️ Deployment en Producción
+## 🏗️ Deployment en Producción (Kubernetes)
 
 ### CI/CD
-- El workflow `.github/workflows/deploy.yml` compila y publica la imagen en GHCR al hacer push/pr en `main`.
-- No usa SSH ni despliega a servidores directamente.
+- El workflow `.github/workflows/deploy.yml` compila y publica la imagen en GHCR y despliega en el clúster al hacer push a `main`.
+- Requiere un runner `self-hosted` con `docker` y `kubectl` configurado contra tu clúster.
 
-### Kubernetes
-- Usa la imagen publicada en GHCR en tus manifests/Helm.
-- Las sesiones de WhatsApp están centralizadas en Redis (TTL configurable) y resisten autoescalado/restarts.
-- Define `LOG_LEVEL`, `KEYCLOAK_*` y las variables de Redis como ConfigMap/Secret.
+### Manifests incluidos (namespace: `sender`)
+- `k8s/namespace.yaml` — crea el namespace `sender`.
+- `k8s/configmap.yaml` — configuración no sensible (PORT=3010 en K8s, TTLs, LOG_LEVEL, KEYCLOAK_* por defecto).
+- `k8s/backend-deployment.yaml` — Deployment/Service/HPA del backend.
+  - Deployment: `sender-backend` (puerto contenedor 3010)
+  - Service: `sender-backend-service` (ClusterIP 3010)
+  - Readiness/Liveness: `/health` en 3010
+- `k8s/ingress.yaml` — Ingress HTTPS para `sender.mindtechpy.net` (cert-manager `letsencrypt-prod`).
+
+### Variables desde GitHub Secrets
+- Secret `backend-env-secrets` se recrea en cada deploy con tus Secrets:
+  - `NODE_ENV`, `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_AUDIENCE`
+  - `SESSION_STORE`, `AUTHORIZED_PHONES`, `FILE_RETENTION_HOURS`, `MESSAGE_DELAY_MS`, `LOG_LEVEL`
+  - Redis (usa REDIS_URL o REDIS_HOST/REDIS_PORT/REDIS_DB/REDIS_TLS/REDIS_PASSWORD)
+- Asegúrate de definirlos en Settings → Secrets and variables → Actions.
+
+### Puertos y acceso
+- Desarrollo local: `http://localhost:3000`
+- Kubernetes: Ingress en `https://sender.mindtechpy.net` → Service `sender-backend-service:3010`.
+
+### Redis únicamente (sin MySQL)
+- Este proyecto no despliega base de datos. La app usa solo Redis externo para sesiones.
+- Las sesiones de WhatsApp están centralizadas (Redis + TTL + lock distribuido) y resisten autoescalado/restarts.
 ### Docker Compose (local)
 ```bash
 docker compose up -d

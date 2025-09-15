@@ -11,7 +11,7 @@ permissions:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
-  NAMESPACE: legajo-backend
+  NAMESPACE: sender
 
 jobs:
   test:
@@ -128,47 +128,10 @@ jobs:
           --from-literal=REDIS_QR_TTL_SECONDS="${{ secrets.REDIS_QR_TTL_SECONDS }}" \
           --from-literal=REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
 
-    - name: Create/Update MySQL secrets from GitHub Secrets
+    - name: Deploy configmap
       run: |
-        echo "🔐 Creating MySQL secrets from GitHub Secrets..."
-        kubectl delete secret legajo-backend-secrets -n ${{ env.NAMESPACE }} --ignore-not-found=true
-        kubectl create secret generic legajo-backend-secrets \
-          --namespace=${{ env.NAMESPACE }} \
-          --from-literal=mysql-root-password="${{ secrets.MYSQL_ROOT_PASSWORD }}" \
-          --from-literal=mysql-user="${{ secrets.MYSQL_USER }}" \
-          --from-literal=mysql-password="${{ secrets.MYSQL_PASSWORD }}" \
-          --from-literal=mysql-database="${{ secrets.MYSQL_DATABASE }}"
-
-    - name: Deploy infrastructure
-      run: |
-        echo "🏗️ Deploying infrastructure..."
+        echo "🏗️ Applying backend configmap..."
         kubectl apply -f k8s/configmap.yaml
-        echo "✅ Infrastructure deployed, secrets already created from GitHub Secrets"
-
-    - name: Deploy database
-      run: |
-        echo "💾 Deploying MySQL database..."
-        kubectl apply -f k8s/mysql-deployment.yaml
-        echo "⏳ Waiting for database to be ready..."
-        kubectl wait --for=condition=ready pod -l app=mysql -n ${{ env.NAMESPACE }} --timeout=1200s
-    
-    - name: Wait for MySQL Pod
-      run: |
-        echo "⏳ Waiting for MySQL pod to be ready..."
-        kubectl wait --for=condition=ready pod -l app=mysql -n ${{ env.NAMESPACE }} --timeout=600s
-
-    - name: Test database connection
-      run: |
-        echo "🔍 Testing database connection..."
-        sleep 30
-        MYSQL_POD=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=mysql -o jsonpath='{.items[0].metadata.name}')
-        if [ -n "$MYSQL_POD" ]; then
-          # Use container env MYSQL_ROOT_PASSWORD and force TCP to avoid socket auth
-          kubectl exec -n ${{ env.NAMESPACE }} "$MYSQL_POD" -- sh -c 'mysqladmin ping -h 127.0.0.1 -uroot -p"$MYSQL_ROOT_PASSWORD"' \
-            || echo "Database ping failed, but continuing..."
-        else
-          echo "MySQL pod not found"
-        fi
     
     - name: Get short SHA
       run: echo "SHORT_SHA=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_ENV
@@ -178,16 +141,16 @@ jobs:
         echo "🔧 Deploying backend..."
         kubectl apply -f k8s/backend-deployment.yaml
         echo "📌 Forzando actualización a la imagen del commit..."
-        kubectl set image deployment/legajo-backend \
-          legajo-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${SHORT_SHA} \
+        kubectl set image deployment/sender-backend \
+          sender-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${SHORT_SHA} \
           -n ${{ env.NAMESPACE }}
-        kubectl rollout status deployment/legajo-backend -n ${{ env.NAMESPACE }} --timeout=300s
+        kubectl rollout status deployment/sender-backend -n ${{ env.NAMESPACE }} --timeout=300s
     - name: Debug rollout failure
       if: failure()
       run: |
         echo "🔎 Debugging rollout failure..."
-        kubectl describe deployment/legajo-backend -n ${{ env.NAMESPACE }} || true
-        POD=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=legajo-backend -o jsonpath='{.items[0].metadata.name}')
+        kubectl describe deployment/sender-backend -n ${{ env.NAMESPACE }} || true
+        POD=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=sender-backend -o jsonpath='{.items[0].metadata.name}')
         echo "📄 Pod: $POD"
         kubectl describe pod "$POD" -n ${{ env.NAMESPACE }} || true
         echo "📜 Last 200 log lines"
@@ -202,9 +165,9 @@ jobs:
       run: |
         echo "🏥 Performing backend health check..."
         sleep 30
-        BACKEND_IP=$(kubectl get service legajo-backend-service -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.clusterIP}')
+        BACKEND_IP=$(kubectl get service sender-backend-service -n ${{ env.NAMESPACE }} -o jsonpath='{.spec.clusterIP}')
         for i in {1..10}; do
-          if curl -f http://$BACKEND_IP:3000/health > /dev/null 2>&1; then
+          if curl -f http://$BACKEND_IP:3010/health > /dev/null 2>&1; then
             echo "✅ Backend health check passed"
             break
           fi
@@ -212,7 +175,7 @@ jobs:
           sleep 10
           if [ $i -eq 10 ]; then
             echo "❌ Backend health check failed after 10 attempts"
-            kubectl logs deployment/legajo-backend -n ${{ env.NAMESPACE }} --tail=50
+            kubectl logs deployment/sender-backend -n ${{ env.NAMESPACE }} --tail=50
             exit 1
           fi
         done

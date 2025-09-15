@@ -1,7 +1,6 @@
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: legajo-backend
+  name: sender
   labels:
-    name: legajo-backend
-
+    name: sender

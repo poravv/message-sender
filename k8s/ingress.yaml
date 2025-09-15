@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: sender-ingress
-  namespace: legajo-backend
+  namespace: sender
   annotations:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -19,7 +19,6 @@ spec:
         pathType: Prefix
         backend:
           service:
-            name: legajo-backend-service
+            name: sender-backend-service
             port:
-              number: 3000
-
+              number: 3010
