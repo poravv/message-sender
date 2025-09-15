@@ -18,6 +18,7 @@ const { getRedis } = require('./src/redisClient');
 
 const app = express();
 const port = process.env.PORT || 3000;
+const host = process.env.HOST || '0.0.0.0';
 
 // Si hay proxy/ingress con TLS, ayuda a detectar https correcto en req
 app.set('trust proxy', 1);
@@ -69,8 +70,8 @@ app.get('/ready', async (_req, res) => {
 app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
 
 // Start
-app.listen(port, async () => {
-  logger.info({ url: `http://localhost:${port}` }, 'Servidor multi-sesión escuchando');
+app.listen(port, host, async () => {
+  logger.info({ url: `http://${host}:${port}` }, 'Servidor multi-sesión escuchando');
   logger.info({ retentionHours }, 'Configuración de retención');
 
   cleanupOldFiles(retentionHours);
