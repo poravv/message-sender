@@ -109,7 +109,7 @@ jobs:
         kubectl delete secret backend-env-secrets -n ${{ env.NAMESPACE }} --ignore-not-found=true
         kubectl create secret generic backend-env-secrets \
           --namespace=${{ env.NAMESPACE }} \
-          --from-literal=PORT="3000" \
+          --from-literal=PORT="3010" \
           --from-literal=NODE_ENV="${{ secrets.NODE_ENV }}" \
           --from-literal=KEYCLOAK_URL="${{ secrets.KEYCLOAK_URL }}" \
           --from-literal=KEYCLOAK_REALM="${{ secrets.KEYCLOAK_REALM }}" \
@@ -159,6 +159,8 @@ jobs:
     - name: Apply backend ingress
       run: |
         echo "🌐 Applying backend ingress..."
+        # Remove any existing ingress in target namespace to avoid conflicts
+        kubectl delete ingress sender-ingress -n ${{ env.NAMESPACE }} --ignore-not-found=true || true
         kubectl apply -f k8s/ingress.yaml
 
     - name: Backend health check

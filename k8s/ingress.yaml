@@ -4,9 +4,9 @@ metadata:
   name: sender-ingress
   namespace: sender
   annotations:
-    kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
 spec:
+  ingressClassName: nginx
   tls:
   - hosts:
     - sender.mindtechpy.net
