@@ -201,9 +201,21 @@ function buildRoutes() {
     }
   });
 
-  async function serveQrForUser(userId, res) {
+  async function serveQrForUser(userId, res, manager = null) {
     const qrFileName = `qr-${userId}.png`;
     const qrPath = path.join(publicDir, qrFileName);
+
+    // Prefer in-memory QR (más fresco)
+    const qrManager = manager || sessionManager.sessions?.get?.(userId);
+    if (qrManager?.qrCode) {
+      const buf = await qrcode.toBuffer(qrManager.qrCode, {
+        color: { dark: '#128C7E', light: '#FFFFFF' },
+        width: 300,
+        margin: 1,
+      });
+      res.set('Content-Type', 'image/png');
+      return res.send(buf);
+    }
 
     if (fs.existsSync(qrPath)) {
       return res.sendFile(qrPath);
@@ -250,7 +262,7 @@ function buildRoutes() {
         return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
       }
 
-      const served = await serveQrForUser(userId, res);
+      const served = await serveQrForUser(userId, res, whatsappManager);
       if (served) {
         return;
       }
@@ -279,7 +291,8 @@ function buildRoutes() {
         return res.status(403).json({ error: 'Forbidden' });
       }
 
-      const served = await serveQrForUser(requestedId, res);
+      const manager = await sessionManager.getSession(requestedId);
+      const served = await serveQrForUser(requestedId, res, manager);
       if (served) {
         return;
       }

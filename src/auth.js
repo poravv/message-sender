@@ -1,6 +1,7 @@
 // src/auth.js
 require('dotenv').config();
 const logger = require('./logger');
+const { getAuthState } = require('./auth/index');
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Asegurar WebCrypto (necesario para 'jose' en Node 18 dentro de Docker)
@@ -178,4 +179,5 @@ module.exports = {
   extractRoles,
   ISSUER,
   JWKS_URI,
+  getAuthState,
 };
