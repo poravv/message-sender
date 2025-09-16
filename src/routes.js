@@ -201,6 +201,31 @@ function buildRoutes() {
     }
   });
 
+  async function serveQrForUser(userId, res) {
+    const qrFileName = `qr-${userId}.png`;
+    const qrPath = path.join(publicDir, qrFileName);
+
+    if (fs.existsSync(qrPath)) {
+      return res.sendFile(qrPath);
+    }
+
+    if ((process.env.SESSION_STORE || 'file').toLowerCase() === 'redis') {
+      const { getUserQr } = require('./stores/redisAuthState');
+      const qrText = await getUserQr(userId);
+      if (qrText) {
+        const buf = await qrcode.toBuffer(qrText, {
+          color: { dark: '#128C7E', light: '#FFFFFF' },
+          width: 300,
+          margin: 1,
+        });
+        res.set('Content-Type', 'image/png');
+        return res.send(buf);
+      }
+    }
+
+    return null;
+  }
+
   router.get('/qr', conditionalAuth, async (req, res) => {
     try {
       const userId = req.auth?.sub;
@@ -208,10 +233,8 @@ function buildRoutes() {
         return res.status(401).json({ error: 'Usuario no autenticado' });
       }
       
-      // Verificar que el manager del usuario esté disponible
       const whatsappManager = await sessionManager.getSessionByToken(req);
       
-      // Si no hay socket, intentar inicializar
       if (!whatsappManager.sock) {
         const initialized = await sessionManager.initializeSession(userId);
         if (!initialized) {
@@ -220,34 +243,16 @@ function buildRoutes() {
             userId: userId
           });
         }
-        // Esperar un poco para que se genere el QR
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
       
       if (whatsappManager.isReady) {
         return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
       }
-      
-      const qrFileName = `qr-${userId}.png`;
-      const qrPath = path.join(publicDir, qrFileName);
-      
-      if (fs.existsSync(qrPath)) {
-        return res.sendFile(qrPath);
-      }
 
-      // Intentar recuperar QR desde Redis (entorno multi-replica)
-      if ((process.env.SESSION_STORE || 'file').toLowerCase() === 'redis') {
-        const { getUserQr } = require('./stores/redisAuthState');
-        const qrText = await getUserQr(userId);
-        if (qrText) {
-          const buf = await qrcode.toBuffer(qrText, {
-            color: { dark: '#128C7E', light: '#FFFFFF' },
-            width: 300,
-            margin: 1,
-          });
-          res.set('Content-Type', 'image/png');
-          return res.send(buf);
-        }
+      const served = await serveQrForUser(userId, res);
+      if (served) {
+        return;
       }
 
       return res.status(404).json({ 
@@ -256,6 +261,35 @@ function buildRoutes() {
       });
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /qr');
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/qr-:userId.png', conditionalAuth, async (req, res) => {
+    try {
+      const requestedId = req.params.userId;
+      const authUser = req.auth?.sub;
+
+      if (!authUser) {
+        return res.status(401).json({ error: 'Usuario no autenticado' });
+      }
+
+      if (requestedId !== authUser) {
+        logger.warn({ authUser, requestedId }, 'Intento de acceso a QR de otro usuario');
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
+      const served = await serveQrForUser(requestedId, res);
+      if (served) {
+        return;
+      }
+
+      return res.status(404).json({ 
+        error: 'QR no disponible para este usuario. Solicita un nuevo QR.',
+        userId: requestedId
+      });
+    } catch (error) {
+      logger.error({ err: error?.message }, 'Error en /qr-<userId>.png');
       res.status(500).json({ error: error.message });
     }
   });
@@ -309,7 +343,7 @@ function buildRoutes() {
         return res.json({ 
           success: true, 
           message: 'QR actualizado',
-          qrUrl: `/qr-${userId}.png`
+          qrUrl: '/qr'
         });
       }
 
@@ -320,7 +354,7 @@ function buildRoutes() {
         return res.json({ 
           success: true, 
           message: 'Solicitando nuevo código QR...',
-          qrUrl: `/qr-${userId}.png`
+          qrUrl: '/qr'
         });
       }
 
