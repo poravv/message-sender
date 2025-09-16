@@ -705,7 +705,8 @@ async function loadAuthenticatedQrImage() {
 
   try {
     const response = await authFetch('/qr', {
-      headers: { Accept: 'image/png' }
+      headers: { Accept: 'image/png', 'Cache-Control': 'no-cache' },
+      cache: 'no-store'
     });
 
     if (!response.ok) {
