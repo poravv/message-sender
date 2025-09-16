@@ -143,8 +143,18 @@ async function getUserQr(userId) {
   }
 }
 
+async function deleteUserQr(userId) {
+  const redis = getRedis();
+  try {
+    await redis.del(qrKey(userId));
+  } catch {
+    /* noop */
+  }
+}
+
 module.exports = {
   useRedisAuthState,
   setUserQr,
   getUserQr,
+  deleteUserQr,
 };
