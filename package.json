@@ -9,6 +9,7 @@
         "build": "echo 'No build step required'",
         "docker:build": "docker build -t whatsapp-sender .",
         "docker:run": "docker run -p 3000:3000 --env-file .env whatsapp-sender",
+        "reset-auth": "node scripts/reset-auth.js",
         "docker:compose": "docker-compose up -d",
         "docker:logs": "docker-compose logs -f audio-sender",
         "docker:stop": "docker-compose down",

@@ -32,6 +32,38 @@ async function useRedisAuthState(userId) {
   const redis = getRedis();
   const ttl = getTTL();
 
+  const replacer = (_key, value) => {
+    if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+      return { type: 'Buffer', data: Array.from(value) };
+    }
+    return value;
+  };
+
+  const reviver = (type) => (_key, value) => {
+    if (value && value.type === 'Buffer' && Array.isArray(value.data)) {
+      return Buffer.from(value.data);
+    }
+    return value;
+  };
+
+  function serialize(value) {
+    return JSON.stringify(value, replacer);
+  }
+
+  function deserialize(raw, type) {
+    if (!raw) return raw;
+    let parsed;
+    try {
+      parsed = JSON.parse(raw, reviver(type));
+    } catch {
+      return raw;
+    }
+    if (type === 'app-state-sync-key' && parsed) {
+      return proto.Message.AppStateSyncKeyData.fromObject(parsed);
+    }
+    return parsed;
+  }
+
   // Ensure connection
   if (!redis.status || redis.status === 'end') {
     await redis.connect();
@@ -41,7 +73,7 @@ async function useRedisAuthState(userId) {
   let creds;
   try {
     const data = await redis.get(credsKey(userId));
-    creds = data ? JSON.parse(data) : null;
+    creds = data ? JSON.parse(data, reviver()) : null;
   } catch (e) {
     logger.warn({ err: e?.message }, 'Redis: error loading creds');
   }
@@ -63,15 +95,7 @@ async function useRedisAuthState(userId) {
         ids.forEach((id, idx) => {
           const [err, val] = res[idx] || [];
           if (!err && val) {
-            try {
-              let parsed = JSON.parse(val);
-              if (type === 'app-state-sync-key') {
-                parsed = proto.Message.AppStateSyncKeyData.fromObject(parsed);
-              }
-              out[id] = parsed;
-            } catch {
-              out[id] = null;
-            }
+            out[id] = deserialize(val, type);
           } else {
             out[id] = undefined;
           }
@@ -86,7 +110,7 @@ async function useRedisAuthState(userId) {
             const value = data[category][id];
             const k = keyItem(userId, category, id);
             if (value) {
-              pipeline.set(k, JSON.stringify(value));
+              pipeline.set(k, serialize(value));
               pipeline.expire(k, expireAt);
             } else {
               pipeline.del(k);
@@ -102,7 +126,7 @@ async function useRedisAuthState(userId) {
 
   async function saveCreds() {
     try {
-      await redis.set(credsKey(userId), JSON.stringify(state.creds));
+      await redis.set(credsKey(userId), JSON.stringify(state.creds, replacer));
       await redis.expire(credsKey(userId), ttl);
     } catch (e) {
       logger.error({ err: e?.message }, 'Redis: error saving creds');
