@@ -690,18 +690,48 @@ async function showTab(tabName) {
 
 /** ======== QR Code Management ======== */
 let qrInitialized = false;
+let currentQrObjectUrl = null;
 
-function initializeQR() {
-  if (qrInitialized) return;
-  
-  const qrImage = document.getElementById('qrImage');
-  if (qrImage) {
-    // Usar QR específico del usuario
-    const userId = currentUser.id || 'default';
-    qrImage.src = `/qr-${userId}.png?t=${Date.now()}`;
-    qrInitialized = true;
-    logDebug('QR inicializado para usuario:', userId);
+function revokeQrObjectUrl() {
+  if (currentQrObjectUrl) {
+    URL.revokeObjectURL(currentQrObjectUrl);
+    currentQrObjectUrl = null;
   }
+}
+
+async function loadAuthenticatedQrImage() {
+  const qrImage = document.getElementById('qrImage');
+  if (!qrImage) return false;
+
+  try {
+    const response = await authFetch('/qr', {
+      headers: { Accept: 'image/png' }
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        logDebug('QR aún no disponible para el usuario, solicita refresh.');
+        return false;
+      }
+      throw new Error(`Estado inesperado al obtener QR: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    revokeQrObjectUrl();
+    currentQrObjectUrl = URL.createObjectURL(blob);
+    qrImage.src = currentQrObjectUrl;
+    qrInitialized = true;
+    logDebug('QR cargado vía petición autenticada.');
+    return true;
+  } catch (error) {
+    console.error('Error obteniendo QR autenticado:', error);
+    return false;
+  }
+}
+
+async function initializeQR(force = false) {
+  if (qrInitialized && !force) return;
+  await loadAuthenticatedQrImage();
 }
 
 // Variable para prevenir llamadas simultáneas
@@ -717,7 +747,6 @@ async function refreshQR() {
   isRefreshingQR = true;
   
   const refreshBtn = document.getElementById('refreshQrBtn');
-  const qrImage = document.getElementById('qrImage');
   
   if (refreshBtn) {
     refreshBtn.disabled = true;
@@ -735,12 +764,8 @@ async function refreshQR() {
       showAlert('Código QR actualizado', 'success', 'QR Refrescado');
       // Wait a bit for the QR to be generated and then refresh the image
       setTimeout(() => {
-        if (qrImage) {
-          // Usar la URL específica del usuario que devuelve el servidor
-          const qrUrl = result.qrUrl || `/qr-${currentUser.id}.png`;
-          qrImage.src = `${qrUrl}?t=${Date.now()}`;
-          logDebug('QR refrescado manualmente para usuario:', currentUser.id);
-        }
+        initializeQR(true);
+        logDebug('QR refrescado manualmente para usuario:', currentUser.id);
       }, 1000);
     } else {
       showAlert(result.message || 'No se pudo refrescar el QR', 'warning', 'Error QR');
@@ -758,6 +783,10 @@ async function refreshQR() {
     }
   }
 }
+
+window.addEventListener('beforeunload', () => {
+  revokeQrObjectUrl();
+});
 
 /** ======== Connection Status Management ======== */
 let isCurrentlyConnected = false;
