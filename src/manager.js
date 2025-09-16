@@ -216,14 +216,22 @@ class WhatsAppManager {
           this.qrCode = qr;
           this.connectionState = 'qr_ready';
 
-          const qrPath = this._getUserQrPath();
-          const shouldWrite = this.qrCaptureRequested || !fs.existsSync(qrPath);
+        const qrPath = this._getUserQrPath();
+        const shouldWrite = this.qrCaptureRequested || !fs.existsSync(qrPath);
 
-          if (shouldWrite) {
-            this.qrCaptureRequested = false;
-            logger.info({ userId: this._getScopedUserId() }, 'QR Code recibido');
-            await qrcode.toFile(qrPath, qr, {
-              color: { dark: '#128C7E', light: '#FFFFFF' },
+        if (shouldWrite) {
+          this.qrCaptureRequested = false;
+          // Ensure public directory exists before writing QR
+          try {
+            if (!fs.existsSync(publicDir)) {
+              fs.mkdirSync(publicDir, { recursive: true });
+            }
+          } catch (dirErr) {
+            logger.error({ err: dirErr?.message, publicDir }, 'No se pudo asegurar el directorio público para QR');
+          }
+          logger.info({ userId: this._getScopedUserId() }, 'QR Code recibido');
+          await qrcode.toFile(qrPath, qr, {
+            color: { dark: '#128C7E', light: '#FFFFFF' },
               width: 300,
               margin: 1,
             });
