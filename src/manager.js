@@ -443,6 +443,15 @@ class WhatsAppManager {
       this.userInfo = null;
       await this._deleteSessionFilesCompletely();
 
+      if ((process.env.SESSION_STORE || 'file').toLowerCase() === 'redis') {
+        try {
+          const { deleteUserQr } = require('./stores/redisAuthState');
+          await deleteUserQr(this._getScopedUserId());
+        } catch (e) {
+          logger.warn({ err: e?.message }, 'No se pudo eliminar QR previo de Redis');
+        }
+      }
+
       // preparar compuerta para el próximo evento 'qr'
       this.requestQrCapture();
 
