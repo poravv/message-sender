@@ -25,8 +25,8 @@ spec:
     spec:
       containers:
       - name: sender-backend
-        image: ghcr.io/poravv/message-sender:latest
-        imagePullPolicy: Always
+        image: ghcr.io/poravv/message-sender:latest   # 👉 siempre la última
+        imagePullPolicy: Always                      # 👉 fuerza pull en cada arranque
         ports:
         - containerPort: 3010
           name: http
@@ -66,7 +66,7 @@ spec:
             exec:
               command: ["/bin/sh","-c","sleep 15"]
       imagePullSecrets:
-      - name: ghcr-secret
+      - name: ghcr-secret     # 👉 asegura acceso a GHCR tras reinicios
 ---
 apiVersion: v1
 kind: Service
@@ -77,14 +77,13 @@ metadata:
     app: sender-backend
     tier: backend
 spec:
-  type: NodePort
+  type: ClusterIP            # 👉 acceso interno, el Ingress expone públicamente
   selector:
     app: sender-backend
     tier: backend
   ports:
-  - port: 80
-    targetPort: 3010
-    nodePort: 32010
+  - port: 80                 # 👉 puerto expuesto hacia el Ingress
+    targetPort: 3010         # 👉 apunta al contenedor
     name: http
 ---
 apiVersion: autoscaling/v2
