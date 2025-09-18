@@ -4,16 +4,16 @@ metadata:
   name: sender-ingress
   namespace: sender
   annotations:
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"  # Para TLS automático
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"   # 👈 ClusterIssuer de cert-manager
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
 spec:
-  ingressClassName: nginx   # Debe coincidir con tu Ingress Controller
+  ingressClassName: nginx   # Debe coincidir con el controlador de ingress que instalaste
   tls:
     - hosts:
         - sender.mindtechpy.net
-      secretName: sender-tls   # Cert-Manager guardará aquí el certificado
+      secretName: sender-tls   # Aquí cert-manager guardará tu certificado
   rules:
     - host: sender.mindtechpy.net
       http:
@@ -24,4 +24,4 @@ spec:
               service:
                 name: sender-backend-service
                 port:
-                  number: 3010   # ✅ Cambiado, coincide con el Service del backend
+                  number: 3010
