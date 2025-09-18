@@ -145,6 +145,7 @@ jobs:
           sender-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${SHORT_SHA} \
           -n ${{ env.NAMESPACE }}
         kubectl rollout status deployment/sender-backend -n ${{ env.NAMESPACE }} --timeout=300s
+
     - name: Debug rollout failure
       if: failure()
       run: |
@@ -159,7 +160,6 @@ jobs:
     - name: Apply backend ingress
       run: |
         echo "🌐 Applying backend ingress..."
-        # Remove any existing ingress in target namespace to avoid conflicts
         kubectl delete ingress sender-ingress -n ${{ env.NAMESPACE }} --ignore-not-found=true || true
         kubectl apply -f k8s/ingress.yaml
 
