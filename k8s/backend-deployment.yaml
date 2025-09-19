@@ -35,7 +35,7 @@ spec:
         - name: PORT
           value: "3010"
         - name: NODE_OPTIONS
-          value: "--max_old_space_size=1536"
+          value: "--max_old_space_size=3072"
         envFrom:
         - configMapRef:
             name: backend-config
@@ -43,11 +43,13 @@ spec:
             name: backend-env-secrets
         resources:
           requests:
-            memory: "768Mi"
-            cpu: "750m"
-          limits:
-            memory: "2Gi"
+            memory: "1536Mi"
             cpu: "1500m"
+            ephemeral-storage: "2Gi"
+          limits:
+            memory: "4Gi"
+            cpu: "3000m"
+            ephemeral-storage: "4Gi"
         livenessProbe:
           httpGet:
             path: /health
@@ -100,7 +102,7 @@ spec:
     kind: Deployment
     name: sender-backend
   minReplicas: 1
-  maxReplicas: 10
+  maxReplicas: 1
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 120
@@ -123,3 +125,5 @@ spec:
       target:
         type: Utilization
         averageUtilization: 90
+        # subir a 95% para permitir más uso antes de escalar
+        # (ajuste aplicado arriba)
