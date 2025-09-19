@@ -34,10 +34,10 @@ spec:
         - name: PORT
           value: "3010"
         envFrom:
-        - secretRef:
-            name: backend-env-secrets
         - configMapRef:
             name: backend-config
+        - secretRef:
+            name: backend-env-secrets
         resources:
           requests:
             memory: "256Mi"
@@ -126,5 +126,4 @@ spec:
       target:
         type: Utilization
         averageUtilization: 80
-
 

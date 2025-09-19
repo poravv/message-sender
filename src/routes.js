@@ -148,13 +148,49 @@ function buildRoutes() {
       }
 
       const csvFilePath = req.files['csvFile'][0].path;
-      const images = req.files['images'];
-      const singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
+      let images = req.files['images'];
+      let singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
       const audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
       const { message } = req.body;
 
       const numbers = await loadNumbersFromCSV(csvFilePath);
       if (numbers.length === 0) return res.status(400).json({ error: 'No se encontraron números válidos' });
+
+      // El CSV ya fue leído, se puede eliminar inmediatamente
+      try {
+        if (fs.existsSync(csvFilePath)) {
+          fs.unlinkSync(csvFilePath);
+          logger.info(`CSV temporal eliminado: ${csvFilePath}`);
+        }
+      } catch (csvCleanupErr) {
+        logger.warn(`No se pudo eliminar CSV temporal ${csvFilePath}: ${csvCleanupErr.message}`);
+      }
+
+      // Si S3 está habilitado, subir imágenes y referenciarlas por s3Key
+      try {
+        const s3 = require('./storage/s3');
+        if (s3.isEnabled()) {
+          const userId = req.auth?.sub || 'default';
+          const uploaded = [];
+          if (Array.isArray(images)) {
+            for (const img of images) {
+              const key = s3.buildKey(userId, img.originalname || 'image');
+              await s3.putObjectFromPath(key, img.path, img.mimetype);
+              uploaded.push({ s3Key: key, mimetype: img.mimetype, originalname: img.originalname });
+              try { if (img.path) require('fs').unlinkSync(img.path); } catch {}
+            }
+            images = uploaded;
+          }
+          if (singleImage) {
+            const key = s3.buildKey(userId, singleImage.originalname || 'image');
+            await s3.putObjectFromPath(key, singleImage.path, singleImage.mimetype);
+            try { if (singleImage.path) require('fs').unlinkSync(singleImage.path); } catch {}
+            singleImage = { s3Key: key, mimetype: singleImage.mimetype, originalname: singleImage.originalname };
+          }
+        }
+      } catch (e) {
+        logger.warn(`Carga a S3 omitida o fallida: ${e.message}`);
+      }
 
       whatsappManager.updateActivity();
       await whatsappManager.messageQueue.add(numbers, message, images, singleImage, audioFile);
@@ -169,22 +205,6 @@ function buildRoutes() {
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /send-messages');
       res.status(500).json({ error: error.message });
-    } finally {
-      // Limpiar todos los archivos subidos, incluidos los de audio en caso de error
-      if (req.files) {
-        Object.entries(req.files).forEach(([fieldName, files]) => {
-          for (const f of files) {
-            try {
-              if (fs.existsSync(f.path)) {
-                fs.unlinkSync(f.path);
-                logger.info(`Archivo temporal eliminado: ${f.path}`);
-              }
-            } catch (cleanupError) {
-              logger.warn(`Error al eliminar archivo temporal: ${f.path} - ${cleanupError.message}`);
-            }
-          }
-        });
-      }
     }
   });
 

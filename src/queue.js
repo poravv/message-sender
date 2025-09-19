@@ -56,6 +56,11 @@ class MessageQueue {
     // Sistema de referencias de archivos
     this.fileReferences = new Map(); // { filePath: count }
     this.filesToCleanup = new Set(); // archivos marcados para limpieza
+    // Rutas de imágenes a limpiar al finalizar
+    this.imagePaths = new Set();
+    // Caché de buffers e índice de S3
+    this.imageCache = new Map(); // key: fs:<path> | s3:<key>
+    this.s3ImageKeys = new Set();
   }
 
   getStats() { return this.messageStats; }
@@ -67,6 +72,18 @@ class MessageQueue {
     if (audioFile && audioFile.path) {
       const currentCount = this.fileReferences.get(audioFile.path) || 0;
       this.fileReferences.set(audioFile.path, currentCount + numbers.length);
+    }
+    // Registrar rutas/keys de imágenes para limpieza posterior y/o cache
+    if (Array.isArray(images)) {
+      for (const img of images) {
+        if (!img) continue;
+        if (img.path) this.imagePaths.add(img.path);
+        if (img.s3Key) this.s3ImageKeys.add(img.s3Key);
+      }
+    }
+    if (singleImage) {
+      if (singleImage.path) this.imagePaths.add(singleImage.path);
+      if (singleImage.s3Key) this.s3ImageKeys.add(singleImage.s3Key);
     }
     
     const items = numbers.map((entry, i) => {
@@ -133,6 +150,55 @@ class MessageQueue {
         this.filesToCleanup.clear();
       }
       
+      // Limpiar imágenes subidas asociadas a esta ejecución
+      if (this.imagePaths.size > 0) {
+        let removed = 0;
+        for (const p of this.imagePaths) {
+          try {
+            if (fs.existsSync(p)) {
+              fs.unlinkSync(p);
+              removed++;
+            }
+          } catch (e) {
+            logger.warn(`No se pudo eliminar imagen ${p}: ${e.message}`);
+          }
+        }
+        if (removed > 0) logger.info(`Imágenes temporales eliminadas: ${removed}`);
+        this.imagePaths.clear();
+      }
+      
+      // Borrar imágenes locales al finalizar
+      if (this.imagePaths.size > 0) {
+        let removed = 0;
+        for (const p of this.imagePaths) {
+          try {
+            if (fs.existsSync(p)) { fs.unlinkSync(p); removed++; }
+          } catch (e) {
+            logger.warn(`No se pudo eliminar imagen local ${p}: ${e.message}`);
+          }
+        }
+        if (removed > 0) logger.info(`Imágenes locales eliminadas: ${removed}`);
+        this.imagePaths.clear();
+      }
+
+      // Borrar imágenes de S3 al finalizar si está habilitado
+      try {
+        const s3 = require('./storage/s3');
+        if (s3.isEnabled() && s3.shouldDeleteAfterSend() && this.s3ImageKeys.size > 0) {
+          let deleted = 0;
+          for (const key of this.s3ImageKeys) {
+            const ok = await s3.deleteObject(key);
+            if (ok) deleted++;
+          }
+          if (deleted > 0) logger.info(`Imágenes S3 eliminadas: ${deleted}`);
+        }
+      } catch (e) {
+        logger.warn(`No se pudo eliminar imágenes S3: ${e.message}`);
+      }
+
+      // Limpiar caché de imágenes en memoria
+      this.imageCache.clear();
+
       // Limpiar archivos temp remanentes al finalizar
       this.cleanupTempDirectory();
     }
@@ -362,9 +428,7 @@ class MessageQueue {
 
       // 1 IMAGEN
       if (singleImage) {
-        if (!fs.existsSync(singleImage.path)) throw new Error('Archivo de imagen no encontrado');
-        
-        const imageBuffer = fs.readFileSync(singleImage.path);
+        const imageBuffer = await this._getImageBuffer(singleImage);
         
         await this.client.sendMessage(jid, {
           image: imageBuffer,
@@ -383,11 +447,7 @@ class MessageQueue {
       if (images && images.length > 0) {
         for (let i = 0; i < images.length; i++) {
           const image = images[i];
-          if (!fs.existsSync(image.path)) {
-            throw new Error(`Archivo de imagen no encontrado: ${image.path}`);
-          }
-          
-          const imageBuffer = fs.readFileSync(image.path);
+          const imageBuffer = await this._getImageBuffer(image);
           
           await this.client.sendMessage(jid, {
             image: imageBuffer,
@@ -432,6 +492,28 @@ class MessageQueue {
       }
       throw error;
     }
+  }
+
+  async _getImageBuffer(image) {
+    const key = image?.s3Key ? `s3:${image.s3Key}` : (image?.path ? `fs:${image.path}` : null);
+    if (!key) throw new Error('Archivo de imagen no encontrado');
+    if (this.imageCache.has(key)) return this.imageCache.get(key);
+
+    if (image.s3Key) {
+      const s3 = require('./storage/s3');
+      if (!s3.isEnabled()) throw new Error('S3 habilitado pero no configurado');
+      const buf = await s3.getObjectBuffer(image.s3Key);
+      this.imageCache.set(key, buf);
+      return buf;
+    }
+
+    if (image.path && fs.existsSync(image.path)) {
+      const buf = fs.readFileSync(image.path);
+      this.imageCache.set(key, buf);
+      return buf;
+    }
+
+    throw new Error(`Archivo de imagen no encontrado${image.path ? ': ' + image.path : ''}`);
   }
 }
 

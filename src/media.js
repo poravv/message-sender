@@ -73,7 +73,12 @@ const storage = multer.diskStorage({
       const userId = req.auth?.sub || req.auth?.id || 'default';
       cb(null, `audio_${userId}_${unique}${ext}`);
     } else {
-      cb(null, file.originalname);
+      // Asegurar nombres únicos por usuario para imágenes/CSV
+      const ext = path.extname(file.originalname);
+      const base = path.basename(file.originalname, ext).replace(/[^\w.-]/g, '_');
+      const unique = `${Date.now()}-${Math.round(Math.random()*1e9)}`;
+      const userId = req.auth?.sub || req.auth?.id || 'default';
+      cb(null, `${base}_${userId}_${unique}${ext}`);
     }
   }
 });

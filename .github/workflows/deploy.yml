@@ -126,7 +126,16 @@ jobs:
           --from-literal=REDIS_TLS="${{ secrets.REDIS_TLS }}" \
           --from-literal=REDIS_TTL_SECONDS="${{ secrets.REDIS_TTL_SECONDS }}" \
           --from-literal=REDIS_QR_TTL_SECONDS="${{ secrets.REDIS_QR_TTL_SECONDS }}" \
-          --from-literal=REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}"
+          --from-literal=REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}" \
+          --from-literal=MINIO_ENDPOINT="${{ secrets.MINIO_ENDPOINT }}" \
+          --from-literal=MINIO_REGION="${{ secrets.MINIO_REGION }}" \
+          --from-literal=MINIO_EXTERNAL_ENDPOINT="${{ secrets.MINIO_EXTERNAL_ENDPOINT }}" \
+          --from-literal=MINIO_ACCESS_KEY="${{ secrets.MINIO_ACCESS_KEY }}" \
+          --from-literal=MINIO_SECRET_KEY="${{ secrets.MINIO_SECRET_KEY }}" \
+          --from-literal=MINIO_SECURE="${{ secrets.MINIO_SECURE }}" \
+          --from-literal=MINIO_BUCKET="${{ secrets.MINIO_BUCKET }}" \
+          --from-literal=MINIO_FORCE_PATH_STYLE="${{ secrets.MINIO_FORCE_PATH_STYLE }}" \
+          --from-literal=MINIO_DELETE_AFTER_SEND="${{ secrets.MINIO_DELETE_AFTER_SEND }}"
 
     - name: Deploy configmap
       run: |
