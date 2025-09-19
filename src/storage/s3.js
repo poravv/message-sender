@@ -1,8 +1,8 @@
 const crypto = require('crypto');
-let S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand;
+let S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand;
 
 try {
-  ({ S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3'));
+  ({ S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } = require('@aws-sdk/client-s3'));
 } catch (e) {
   // sdk no instalado; el módulo seguirá deshabilitado
 }
@@ -111,6 +111,17 @@ async function deleteObject(key) {
   }
 }
 
+async function existsObject(key) {
+  try {
+    const client = getClient();
+    const Bucket = getBucket();
+    await client.send(new HeadObjectCommand({ Bucket, Key: key }));
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 function publicUrlForKey(key) {
   // 1) MINIO_EXTERNAL_ENDPOINT si existe
   const external = env('S3_PUBLIC_URL', 'MINIO_EXTERNAL_ENDPOINT');
@@ -134,5 +145,6 @@ module.exports = {
   putObjectFromPath,
   getObjectBuffer,
   deleteObject,
+  existsObject,
   publicUrlForKey,
 };

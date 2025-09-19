@@ -23,6 +23,7 @@ spec:
         app: sender-backend
         tier: backend
     spec:
+      terminationGracePeriodSeconds: 90
       containers:
       - name: sender-backend
         image: ghcr.io/poravv/message-sender:latest   # 👉 siempre la última
@@ -33,6 +34,8 @@ spec:
         env:
         - name: PORT
           value: "3010"
+        - name: NODE_OPTIONS
+          value: "--max_old_space_size=1536"
         envFrom:
         - configMapRef:
             name: backend-config
@@ -40,27 +43,27 @@ spec:
             name: backend-env-secrets
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "768Mi"
+            cpu: "750m"
           limits:
-            memory: "512Mi"
-            cpu: "500m"
+            memory: "2Gi"
+            cpu: "1500m"
         livenessProbe:
           httpGet:
             path: /health
             port: 3010
-          initialDelaySeconds: 30
+          initialDelaySeconds: 45
           periodSeconds: 10
           timeoutSeconds: 5
-          failureThreshold: 3
+          failureThreshold: 5
         readinessProbe:
           httpGet:
             path: /health
             port: 3010
-          initialDelaySeconds: 15
+          initialDelaySeconds: 25
           periodSeconds: 5
           timeoutSeconds: 3
-          failureThreshold: 6
+          failureThreshold: 8
         lifecycle:
           preStop:
             exec:
@@ -100,17 +103,17 @@ spec:
   maxReplicas: 10
   behavior:
     scaleUp:
-      stabilizationWindowSeconds: 0
-      policies:
-      - type: Percent
-        value: 100
-        periodSeconds: 60
-      selectPolicy: Max
-    scaleDown:
-      stabilizationWindowSeconds: 300
+      stabilizationWindowSeconds: 120
       policies:
       - type: Percent
         value: 50
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+      - type: Percent
+        value: 30
         periodSeconds: 60
       selectPolicy: Max
   metrics:
@@ -119,11 +122,4 @@ spec:
       name: cpu
       target:
         type: Utilization
-        averageUtilization: 70
-  - type: Resource
-    resource:
-      name: memory
-      target:
-        type: Utilization
-        averageUtilization: 80
-
+        averageUtilization: 90

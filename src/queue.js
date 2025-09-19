@@ -36,12 +36,14 @@ function processMessageVariables(message, variables) {
   return processedMessage;
 }
 
-// Derivados del delay base - Aumentados para evitar conflictos de WhatsApp
-const LOOP_IDLE_MS   = Math.max(1000, messageDelay * 2); // Duplicado
-const IMG_PREFIX_MS  = Math.max(1000, Math.floor(messageDelay));
-const IMG_BETWEEN_MS = messageDelay * 2; // Duplicado
-const SEND_BETWEEN_MS = messageDelay * 3; // Triplicado para audio
-const backoffBase     = Math.max(2000, messageDelay * 2);
+// Timings derivados del delay base (alineados al config para mayor throughput)
+const delayFactor = Math.max(0.5, Number(process.env.MESSAGE_DELAY_FACTOR || 1));
+const BASE_DELAY = Math.max(800, Math.floor(messageDelay * delayFactor));
+const LOOP_IDLE_MS   = BASE_DELAY;                // entre iteraciones del loop
+const IMG_PREFIX_MS  = Math.max(300, BASE_DELAY); // antes de la primera imagen
+const IMG_BETWEEN_MS = BASE_DELAY;                // entre imágenes
+const SEND_BETWEEN_MS = BASE_DELAY;               // entre envíos (texto/audio)
+const backoffBase     = Math.max(2000, BASE_DELAY * 2);
 
 class MessageQueue {
   constructor(client, userId = 'default') {

@@ -149,6 +149,7 @@ jobs:
       run: |
         echo "🔧 Deploying backend..."
         kubectl apply -f k8s/backend-deployment.yaml
+        kubectl apply -f k8s/pdb.yaml
         echo "📌 Forzando actualización a la imagen del commit..."
         kubectl set image deployment/sender-backend \
           sender-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${SHORT_SHA} \

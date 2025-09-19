@@ -52,4 +52,8 @@ function getRedis() {
   return client;
 }
 
-module.exports = { getRedis };
+function getRedisConnectionOptions() {
+  return buildRedisOptions();
+}
+
+module.exports = { getRedis, getRedisConnectionOptions };

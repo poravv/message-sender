@@ -8,6 +8,7 @@ data:
   NODE_ENV: "production"
   PORT: "3010"
   SESSION_STORE: "redis"
+  MESSAGE_QUEUE_BACKEND: "redis"
   REDIS_TTL_SECONDS: "43200"
   REDIS_QR_TTL_SECONDS: "180"
   LOG_LEVEL: "info"
