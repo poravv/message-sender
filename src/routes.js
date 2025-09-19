@@ -4,6 +4,7 @@ const express = require('express');
 const { upload } = require('./media');
 const qrcode = require('qrcode');
 const { cleanupOldFiles, loadNumbersFromCSV } = require('./utils');
+const redisQueue = require('./queueRedis');
 const { publicDir, retentionHours } = require('./config');
 const logger = require('./logger');
 const { checkJwt, requireRole } = require('./auth');
@@ -150,7 +151,7 @@ function buildRoutes() {
       const csvFilePath = req.files['csvFile'][0].path;
       let images = req.files['images'];
       let singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
-      const audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
+      let audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
       const { message } = req.body;
 
       const numbers = await loadNumbersFromCSV(csvFilePath);
@@ -187,20 +188,31 @@ function buildRoutes() {
             try { if (singleImage.path) require('fs').unlinkSync(singleImage.path); } catch {}
             singleImage = { s3Key: key, mimetype: singleImage.mimetype, originalname: singleImage.originalname };
           }
+          if (audioFile) {
+            const key = s3.buildKey(userId, audioFile.originalname || 'audio');
+            await s3.putObjectFromPath(key, audioFile.path, audioFile.mimetype);
+            try { if (audioFile.path) require('fs').unlinkSync(audioFile.path); } catch {}
+            audioFile = { s3Key: key, mimetype: audioFile.mimetype, originalname: audioFile.originalname };
+          }
         }
       } catch (e) {
         logger.warn(`Carga a S3 omitida o fallida: ${e.message}`);
       }
 
-      whatsappManager.updateActivity();
-      await whatsappManager.messageQueue.add(numbers, message, images, singleImage, audioFile);
+      const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
+      if (useRedisQueue) {
+        await redisQueue.enqueueCampaign(req.auth?.sub || 'default', numbers, message, images, singleImage, audioFile);
+      } else {
+        whatsappManager.updateActivity();
+        await whatsappManager.messageQueue.add(numbers, message, images, singleImage, audioFile);
+      }
 
       res.json({ 
         status: 'success', 
         message: 'Procesando mensajes', 
         totalNumbers: numbers.length, 
         userId: req.auth?.sub,
-        initialStats: whatsappManager.messageQueue.getStats() 
+        initialStats: useRedisQueue ? { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false } : whatsappManager.messageQueue.getStats() 
       });
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /send-messages');
@@ -210,11 +222,17 @@ function buildRoutes() {
 
   router.get('/message-status', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const whatsappManager = await sessionManager.getSessionByToken(req);
-      if (!whatsappManager.messageQueue) {
-        return res.json({ total: 0, sent: 0, errors: 0, messages: [], completed: true });
+      const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
+      if (useRedisQueue) {
+        const stats = await redisQueue.getStatus(req.auth?.sub || 'default');
+        return res.json(stats);
+      } else {
+        const whatsappManager = await sessionManager.getSessionByToken(req);
+        if (!whatsappManager.messageQueue) {
+          return res.json({ total: 0, sent: 0, errors: 0, messages: [], completed: true });
+        }
+        return res.json(whatsappManager.messageQueue.getStats());
       }
-      res.json(whatsappManager.messageQueue.getStats());
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /message-status');
       res.status(500).json({ error: error.message });

@@ -1,0 +1,12 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sender-backend-pdb
+  namespace: sender
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: sender-backend
+      tier: backend
+
