@@ -249,8 +249,15 @@ function processMessageVariables(message, variables) {
       }
     });
   }
-  processedMessage = processedMessage.replace(/\s*\{[^}]+\}\s*/g, ' ');
-  processedMessage = processedMessage.replace(/\s+/g, ' ').trim();
+  // Quitar placeholders no reemplazados sin comerse saltos de línea
+  processedMessage = processedMessage.replace(/\{[^}\n]+\}/g, '');
+  // Normalizar EOL y espacios sin colapsar los \n
+  processedMessage = processedMessage.replace(/\r\n/g, '\n');
+  processedMessage = processedMessage.replace(/[ \t]+\n/g, '\n');
+  processedMessage = processedMessage.replace(/\n[ \t]+/g, '\n');
+  processedMessage = processedMessage.replace(/[ \t]{2,}/g, ' ');
+  processedMessage = processedMessage.replace(/[ \t]+$/gm, '');
+  processedMessage = processedMessage.trim();
   return processedMessage;
 }
 
