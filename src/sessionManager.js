@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs').promises;
 const logger = require('./logger');
 const { withUserLock } = require('./redisLock');
+const owner = require('./owner');
 
 class SessionManager {
   constructor() {
@@ -11,6 +12,7 @@ class SessionManager {
     this.userSessions = new Map(); // Para mapear tokens a userIds
     this.baseSessionPath = path.join(__dirname, '..', 'bot_sessions');
     this.creatingSession = new Map(); // Para evitar creación concurrente
+    this.ownerIntervals = new Map(); // userId -> intervalId
   }
 
   // Obtener o crear sesión para un usuario
@@ -48,27 +50,25 @@ class SessionManager {
     // Modificar la ruta de autenticación para este usuario específico
     manager.authPath = sessionPath;
     
-    // Verificar que no hay otra sesión activa para este usuario
-    const existingSessions = Array.from(this.sessions.values());
-    const hasActiveWhatsApp = existingSessions.some(m => m.isReady);
-    
-    if (hasActiveWhatsApp) {
-      logger.warn({ userId }, 'Ya hay una sesión de WhatsApp activa, creando sesión sin inicializar');
-      // No inicializar automáticamente para evitar conflictos
-    } else {
-      // Inicializar la sesión solo si no hay otras activas
-      const store = (process.env.SESSION_STORE || 'file').toLowerCase();
-      if (store === 'redis') {
+    // Inicializar la sesión de este usuario (aislado por lock por-usuario)
+    const store = (process.env.SESSION_STORE || 'file').toLowerCase();
+    if (store === 'redis') {
+      // Intentar ser owner; si otro pod ya lo es, no inicializamos aquí
+      const gotOwner = await owner.acquireOwner(userId, owner.getOwnerTtl());
+      if (!gotOwner) {
+        logger.info({ userId }, 'Otro pod es owner de la sesión; no inicializaré el socket');
+      } else {
+        this.startOwnerHeartbeat(userId);
         await withUserLock(userId, async () => {
           await manager.safeInitialize();
         }, 45, { timeoutMs: 20000 });
-      } else {
-        await manager.safeInitialize();
       }
+    } else {
+      await manager.safeInitialize();
     }
     
     this.sessions.set(userId, manager);
-    logger.info({ userId, sessionPath, hasActiveWhatsApp }, 'Nueva sesión creada para usuario');
+    logger.info({ userId, sessionPath }, 'Nueva sesión creada para usuario');
   }
 
   // Obtener sesión por token JWT (después de validar con Keycloak)
@@ -127,6 +127,10 @@ class SessionManager {
           await manager.sock.logout();
         }
         this.sessions.delete(userId);
+        await this.stopOwnerHeartbeat(userId);
+        await owner.releaseOwner(userId);
+        await this.stopOwnerHeartbeat(userId);
+        await owner.releaseOwner(userId);
         logger.info({ userId }, 'Sesión cerrada para usuario');
       } catch (error) {
         logger.error({ userId, error: error.message }, 'Error cerrando sesión');
@@ -141,6 +145,13 @@ class SessionManager {
       try {
         const store = (process.env.SESSION_STORE || 'file').toLowerCase();
         if (store === 'redis') {
+          // Solo el owner puede inicializar
+          const ensured = await owner.tryEnsureOwnership(userId, owner.getOwnerTtl());
+          if (!ensured) {
+            logger.info({ userId }, 'No soy owner; omito initializeSession');
+            return false;
+          }
+          this.startOwnerHeartbeat(userId);
           await withUserLock(userId, async () => {
             await manager.safeInitialize();
           }, 45, { timeoutMs: 20000 });
@@ -199,6 +210,8 @@ class SessionManager {
       
       // Remover la sesión del mapa
       this.sessions.delete(userId);
+      await this.stopOwnerHeartbeat(userId);
+      await owner.releaseOwner(userId);
       
       logger.info(`Logout completado para usuario: ${userId}`);
       return { success: true, message: 'Sesión de WhatsApp cerrada exitosamente' };
@@ -231,6 +244,23 @@ class SessionManager {
     
     logger.info(`Logout solicitado por token para usuario: ${userId}`);
     return await this.logoutUser(userId);
+  }
+
+  // Owner heartbeat management
+  startOwnerHeartbeat(userId) {
+    if (this.ownerIntervals.has(userId)) return;
+    const ttl = owner.getOwnerTtl();
+    const period = Math.max(5, Math.floor(ttl / 2));
+    const intId = setInterval(() => owner.renewOwner(userId, ttl).catch(()=>{}), period * 1000);
+    this.ownerIntervals.set(userId, intId);
+  }
+
+  async stopOwnerHeartbeat(userId) {
+    const intId = this.ownerIntervals.get(userId);
+    if (intId) {
+      clearInterval(intId);
+      this.ownerIntervals.delete(userId);
+    }
   }
 }
 

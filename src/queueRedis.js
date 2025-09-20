@@ -6,6 +6,8 @@ const { getRedisConnectionOptions, getRedis } = require('./redisClient');
 const sessionManager = require('./sessionManager');
 const { messageDelay, tempDir } = require('./config');
 const { convertAudioToOpus } = require('./media');
+const { acquireLock } = require('./redisLock');
+const sessOwner = require('./owner');
 
 const s3 = require('./storage/s3');
 
@@ -13,6 +15,7 @@ const delayFactor = Math.max(0.5, Number(process.env.MESSAGE_DELAY_FACTOR || 1))
 const BASE_DELAY = Math.max(800, Math.floor(messageDelay * delayFactor));
 const LOOP_IDLE_MS   = BASE_DELAY;
 const SEND_BETWEEN_MS = BASE_DELAY;
+const WORKER_CONCURRENCY = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 3));
 
 function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
 
@@ -26,11 +29,13 @@ events.on('failed', ({ jobId, failedReason }) => logger.warn({ jobId, failedReas
 // Redis keys helpers
 function statusKey(userId){ return `ms:status:${userId}`; }
 function progressKey(userId){ return `ms:progress:${userId}`; }
+function cancelKey(userId){ return `ms:cancel:${userId}`; }
+function campaignLockKey(userId){ return `ms:lock:campaign:${userId}`; }
 
 async function resetStatus(userId, total){
   const r = getRedis();
   await r.hset(statusKey(userId), {
-    total: String(total), sent: '0', errors: '0', completed: '0',
+    total: String(total), sent: '0', errors: '0', completed: '0', canceled: '0',
     startedAt: String(Date.now()), updatedAt: String(Date.now()),
   });
 }
@@ -46,17 +51,44 @@ async function markCompleted(userId){
   await r.hset(statusKey(userId), { completed: '1', finishedAt: String(Date.now()) });
 }
 
+async function markCanceled(userId){
+  const r = getRedis();
+  await r.hset(statusKey(userId), {
+    canceled: '1', completed: '1', finishedAt: String(Date.now()), canceledAt: String(Date.now()),
+    updatedAt: String(Date.now()),
+  });
+}
+
+async function requestCancel(userId){
+  const r = getRedis();
+  const ttl = Math.max(60, Number(process.env.REDIS_CANCEL_TTL_SECONDS || 600));
+  await r.set(cancelKey(userId), '1', 'EX', ttl);
+  await r.hset(statusKey(userId), { canceled: '1', updatedAt: String(Date.now()) });
+}
+
+async function isCanceled(userId){
+  const r = getRedis();
+  const val = await r.get(cancelKey(userId));
+  return String(val) === '1';
+}
+
+async function clearCancel(userId){
+  const r = getRedis();
+  try { await r.del(cancelKey(userId)); } catch {}
+}
+
 async function getStatus(userId){
   const r = getRedis();
   const data = await r.hgetall(statusKey(userId));
   if (!data || Object.keys(data).length === 0) {
-    return { total: 0, sent: 0, errors: 0, completed: true, messages: [] };
+    return { total: 0, sent: 0, errors: 0, completed: true, canceled: false, messages: [] };
   }
   return {
     total: Number(data.total||0),
     sent: Number(data.sent||0),
     errors: Number(data.errors||0),
     completed: data.completed === '1',
+    canceled: data.canceled === '1',
     messages: [],
   };
 }
@@ -65,7 +97,122 @@ async function getStatus(userId){
 async function enqueueCampaign(userId, numbers, message, images, singleImage, audio) {
   await resetStatus(userId, numbers.length);
   const job = await queue.add('campaign', { userId, numbers, message, images, singleImage, audio }, { removeOnComplete: 100, removeOnFail: 200 });
+  try {
+    const r = getRedis();
+    await r.hset(statusKey(userId), { jobId: String(job.id), updatedAt: String(Date.now()) });
+    // Log event enqueue
+    if (typeof addEvent === 'function') {
+      await addEvent(userId, 'enqueue', { jobId: String(job.id), total: numbers.length });
+    }
+  } catch {}
   return { jobId: job.id };
+}
+
+// Cancelar campañas de un usuario: marca cancel y elimina jobs en espera
+async function cancelCampaign(userId){
+  await requestCancel(userId);
+  try { if (typeof addEvent === 'function') await addEvent(userId, 'cancel_requested', {}); } catch {}
+  // Remover jobs en espera/delayed del usuario
+  const types = ['waiting', 'delayed', 'paused'];
+  const jobs = await queue.getJobs(types, 0, -1, true);
+  let removed = 0;
+  for (const job of jobs) {
+    try {
+      if (job?.data?.userId === userId) { await job.remove(); removed++; }
+    } catch {}
+  }
+  await markCanceled(userId);
+  try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'cancel_api' }); } catch {}
+  return { removed };
+}
+
+async function setProgress(userId, data){
+  const r = getRedis();
+  const payload = {};
+  if (data.currentIndex !== undefined) payload.currentIndex = String(data.currentIndex);
+  if (data.total !== undefined) payload.total = String(data.total);
+  if (data.number !== undefined) payload.number = String(data.number);
+  if (data.status) payload.status = String(data.status);
+  if (data.message) payload.message = String(data.message);
+  if (data.resumeFrom !== undefined) payload.resumeFrom = String(data.resumeFrom);
+  payload.updatedAt = String(Date.now());
+  await r.hset(progressKey(userId), payload);
+}
+
+async function clearProgress(userId){
+  const r = getRedis();
+  try { await r.del(progressKey(userId)); } catch {}
+}
+
+async function getQueueInfo(userId){
+  try {
+    const counts = await queue.getJobCounts('waiting','active','delayed','paused');
+    const waitingJobs = await queue.getJobs(['waiting'], 0, -1, true);
+    let position = null;
+    let queuedForUser = 0;
+    for (let i = 0; i < waitingJobs.length; i++) {
+      const j = waitingJobs[i];
+      if (j?.data?.userId === userId) {
+        queuedForUser++;
+        if (position === null) position = i + 1; // 1-based approx
+      }
+    }
+    const activeJobs = await queue.getJobs(['active'], 0, -1, true);
+    const activeForUser = activeJobs.some(j => j?.data?.userId === userId);
+    return { counts, position, queuedForUser, activeForUser };
+  } catch (e) {
+    return { counts: {}, position: null, queuedForUser: 0, activeForUser: false };
+  }
+}
+
+async function getStatusDetailed(userId){
+  const r = getRedis();
+  const data = await r.hgetall(statusKey(userId));
+  if (!data || Object.keys(data).length === 0) {
+    return { total: 0, sent: 0, errors: 0, completed: true, canceled: false, messages: [], inProgress: false, queue: { waiting: 0, active: 0, delayed: 0, paused: 0, position: null, activeForUser: false, queuedForUser: 0 }, etaSeconds: 0 };
+  }
+  const prog = await r.hgetall(progressKey(userId));
+  const base = {
+    total: Number(data.total||0),
+    sent: Number(data.sent||0),
+    errors: Number(data.errors||0),
+    completed: data.completed === '1',
+    canceled: data.canceled === '1',
+    startedAt: data.startedAt ? Number(data.startedAt) : null,
+    updatedAt: data.updatedAt ? Number(data.updatedAt) : null,
+    finishedAt: data.finishedAt ? Number(data.finishedAt) : null,
+    jobId: data.jobId || null,
+    progress: prog && Object.keys(prog).length ? {
+      currentIndex: prog.currentIndex ? Number(prog.currentIndex) : null,
+      total: prog.total ? Number(prog.total) : (data.total ? Number(data.total) : null),
+      number: prog.number || null,
+      status: prog.status || null,
+      message: prog.message || null,
+      updatedAt: prog.updatedAt ? Number(prog.updatedAt) : null,
+    } : null,
+    messages: [],
+  };
+  const qi = await getQueueInfo(userId);
+  const remaining = Math.max(0, base.total - base.sent - base.errors);
+  const eta = remaining * Math.ceil(SEND_BETWEEN_MS / 1000);
+  const state = base.canceled ? 'canceled' : (base.completed ? 'completed' : ((base.progress && base.progress.status === 'sending') || qi.activeForUser ? 'running' : (qi.queuedForUser > 0 && !qi.activeForUser ? 'queued' : 'idle')));
+  return {
+    ...base,
+    resuming_from: prog && prog.resumeFrom ? Number(prog.resumeFrom) : null,
+    queue: {
+      waiting: qi.counts?.waiting || 0,
+      active: qi.counts?.active || 0,
+      delayed: qi.counts?.delayed || 0,
+      paused: qi.counts?.paused || 0,
+      position: qi.position,
+      activeForUser: qi.activeForUser,
+      queuedForUser: qi.queuedForUser,
+    },
+    inProgress: !base.completed && !base.canceled && (base.sent + base.errors > 0 || qi.activeForUser),
+    etaSeconds: eta,
+    state,
+    queuePositionExact: qi.position,
+  };
 }
 
 // Helpers
@@ -134,12 +281,48 @@ async function ensureConvertedAudio(userId, audio) {
 
 async function processCampaign(job){
   const { userId, numbers, message, images, singleImage, audio } = job.data;
-  const manager = await sessionManager.getSession(userId);
-  if (!manager || !manager.sock) {
-    await sessionManager.initializeSession(userId);
-  }
-  const client = (await sessionManager.getSession(userId)).sock;
-  if (!client || !client.user) throw new Error('Socket de WhatsApp no está listo');
+  // Exclusión por usuario para permitir concurrencia entre usuarios
+  const ttlSec = Math.max(300, Number(process.env.REDIS_CAMPAIGN_LOCK_TTL || 3600));
+  const { unlock } = await acquireLock(campaignLockKey(userId), ttlSec, { timeoutMs: 15000 });
+  try {
+    // Asegurar que sólo el owner procese el job de este usuario
+    const iAmOwner = await sessOwner.tryEnsureOwnership(userId, sessOwner.getOwnerTtl());
+    if (!iAmOwner) {
+      // Si otro es owner, reprogramar para que lo tome ese pod
+      try { await job.moveToDelayed(Date.now() + 2000); } catch {}
+      return;
+    }
+
+    if (await isCanceled(userId)) {
+      logger.warn({ userId }, 'Campaña marcada como cancelada antes de iniciar');
+      await markCanceled(userId);
+      try { await addEvent(userId, 'job_canceled', { reason: 'pre_start_cancelled' }); } catch {}
+      return;
+    }
+
+    // Si ya está marcada como completada en status, no reprocesar
+    try {
+      const r = getRedis();
+      const sdata = await r.hgetall(statusKey(userId));
+      if (sdata && Object.keys(sdata).length) {
+        if (sdata.completed === '1') {
+          logger.info({ userId }, 'Campaña ya marcada como completada. Omitiendo reproceso.');
+          return;
+        }
+        if (sdata.canceled === '1') {
+          logger.info({ userId }, 'Campaña ya marcada como cancelada. Omitiendo reproceso.');
+          await markCanceled(userId);
+          return;
+        }
+      }
+    } catch {}
+
+    const manager = await sessionManager.getSession(userId);
+    if (!manager || !manager.sock) {
+      await sessionManager.initializeSession(userId);
+    }
+    const client = (await sessionManager.getSession(userId)).sock;
+    if (!client || !client.user) throw new Error('Socket de WhatsApp no está listo');
 
   // Preparaciones de media
   const imageCache = new Map();
@@ -148,16 +331,50 @@ async function processCampaign(job){
     convertedAudio = await ensureConvertedAudio(userId, audio);
   }
 
-  let sent = 0;
-  for (let i = 0; i < numbers.length; i++) {
-    const entry = numbers[i];
-    const number = typeof entry === 'string' ? entry : entry.number;
-    const variables = typeof entry === 'object' && entry.variables ? entry.variables : {};
+    // Reanudar desde progreso previo
+    let startIdx = 0;
+    try {
+      const r = getRedis();
+      const prog = await r.hgetall(progressKey(userId));
+      if (prog && Object.keys(prog).length) {
+        const ci = Number(prog.currentIndex || 0);
+        if (ci > 0) {
+          if (prog.status === 'sent' || prog.status === 'error') {
+            // si fue enviado o marcado error, continuar con el siguiente
+            startIdx = Math.min(numbers.length, ci);
+          } else {
+            // si estaba "sending" u otro estado, reintentar el actual
+            startIdx = Math.max(0, ci - 1);
+          }
+        }
+      }
+      if (startIdx > 0) {
+        logger.info({ userId, startIdx }, 'Reanudando campaña desde índice calculado');
+        try { await setProgress(userId, { resumeFrom: startIdx, status: 'resuming' }); } catch {}
+        try { await addEvent(userId, 'resume', { resumeFrom: startIdx }); } catch {}
+      }
+    } catch {}
+
+    // Marca inicio de job
+    try { await addEvent(userId, 'job_started', { total: numbers.length, startIdx }); } catch {}
+
+    let sent = 0;
+    for (let i = startIdx; i < numbers.length; i++) {
+      if (await isCanceled(userId)) {
+        logger.warn({ userId, index: i }, 'Cancelación detectada durante campaña; abortando');
+        break;
+      }
+      const entry = numbers[i];
+      const number = typeof entry === 'string' ? entry : entry.number;
+      const variables = typeof entry === 'object' && entry.variables ? entry.variables : {};
+      try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'sending' }); } catch {}
 
     const processedMessage = processMessageVariables(message, variables || {});
     const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
 
     try {
+      // renovar ownership periódicamente
+      try { await sessOwner.renewOwner(userId, sessOwner.getOwnerTtl()); } catch {}
       if (manager && typeof manager.waitForRateLimit === 'function') {
         await manager.waitForRateLimit();
       }
@@ -188,28 +405,41 @@ async function processCampaign(job){
 
       sent++;
       await incField(userId, 'sent', 1);
+      try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'sent' }); } catch {}
     } catch (err) {
       logger.warn(`Error enviando a ${number}: ${err?.message}`);
       await incField(userId, 'errors', 1);
+      try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'error', message: err?.message }); } catch {}
     }
 
-    await sleep(SEND_BETWEEN_MS);
-  }
+      await sleep(SEND_BETWEEN_MS);
+    }
 
-  await markCompleted(userId);
+    if (await isCanceled(userId)) {
+      await markCanceled(userId);
+      try { await addEvent(userId, 'job_canceled', { reason: 'canceled_during_run' }); } catch {}
+    } else {
+      await markCompleted(userId);
+      try { const r = getRedis(); const sentCnt = Number((await r.hget(statusKey(userId), 'sent')) || 0); await addEvent(userId, 'job_completed', { sent: sentCnt }); } catch {}
+    }
 
   // Limpieza condicional en S3
-  try {
-    if (s3.isEnabled() && s3.shouldDeleteAfterSend()) {
+    try {
+      if (s3.isEnabled() && s3.shouldDeleteAfterSend()) {
       // borrar imágenes
-      if (Array.isArray(images)) {
-        for (const img of images) if (img?.s3Key) await s3.deleteObject(img.s3Key);
+        if (Array.isArray(images)) {
+          for (const img of images) if (img?.s3Key) await s3.deleteObject(img.s3Key);
+        }
+        if (singleImage?.s3Key) await s3.deleteObject(singleImage.s3Key);
+        if (convertedAudio?.s3Key) await s3.deleteObject(convertedAudio.s3Key);
+        if (audio?.s3Key) await s3.deleteObject(audio.s3Key);
       }
-      if (singleImage?.s3Key) await s3.deleteObject(singleImage.s3Key);
-      if (convertedAudio?.s3Key) await s3.deleteObject(convertedAudio.s3Key);
-      if (audio?.s3Key) await s3.deleteObject(audio.s3Key);
-    }
-  } catch {}
+    } catch {}
+  } finally {
+    try { await clearCancel(userId); } catch {}
+    try { await clearProgress(userId); } catch {}
+    await unlock();
+  }
 }
 
 // Worker
@@ -217,7 +447,7 @@ const worker = new Worker(QUEUE_NAME, async (job) => {
   if (job.name === 'campaign') {
     return await processCampaign(job);
   }
-}, { connection, concurrency: 1 });
+}, { connection, concurrency: WORKER_CONCURRENCY });
 
 worker.on('completed', (job) => logger.info({ jobId: job.id }, 'Job completed'));
 worker.on('failed', (job, err) => logger.warn({ jobId: job?.id, err: err?.message }, 'Job failed'));
@@ -225,4 +455,6 @@ worker.on('failed', (job, err) => logger.warn({ jobId: job?.id, err: err?.messag
 module.exports = {
   enqueueCampaign,
   getStatus,
+  getStatusDetailed,
+  cancelCampaign,
 };

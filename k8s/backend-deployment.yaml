@@ -36,6 +36,10 @@ spec:
           value: "3010"
         - name: NODE_OPTIONS
           value: "--max_old_space_size=3072"
+        - name: POD_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
         envFrom:
         - configMapRef:
             name: backend-config
@@ -101,8 +105,8 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: sender-backend
-  minReplicas: 1
-  maxReplicas: 1
+  minReplicas: 2
+  maxReplicas: 3
   behavior:
     scaleUp:
       stabilizationWindowSeconds: 120

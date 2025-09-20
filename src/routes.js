@@ -76,8 +76,17 @@ function buildRoutes() {
       const s = whatsappManager.getState();
       const health = whatsappManager.getConnectionHealth ? whatsappManager.getConnectionHealth() : {};
       
+      const conn = s.connectionState;
+      const stateText = s.isReady
+        ? 'connected'
+        : (health.isInCooldown ? 'cooldown'
+          : (conn === 'qr_ready' ? 'qr_ready'
+            : (health.isConnecting || conn === 'connecting' ? 'connecting'
+              : (conn === 'unauthorized' ? 'unauthorized' : 'disconnected'))));
+
       const resp = {
         status: s.connectionState,
+        state: stateText,
         isReady: s.isReady,
         lastActivity: s.lastActivity,
         lastActivityAgo: Math.round((Date.now() - s.lastActivity) / 1000),
@@ -224,7 +233,8 @@ function buildRoutes() {
     try {
       const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
       if (useRedisQueue) {
-        const stats = await redisQueue.getStatus(req.auth?.sub || 'default');
+        const getStatus = redisQueue.getStatusDetailed || redisQueue.getStatus;
+        const stats = await getStatus(req.auth?.sub || 'default');
         return res.json(stats);
       } else {
         const whatsappManager = await sessionManager.getSessionByToken(req);
@@ -236,6 +246,23 @@ function buildRoutes() {
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /message-status');
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Cancelar campaña en curso o en espera (por usuario)
+  router.post('/cancel-campaign', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
+      if (!useRedisQueue) {
+        return res.status(400).json({ success: false, error: 'Cancelación soportada sólo con backend Redis' });
+      }
+      const userId = req.auth?.sub || 'default';
+      const result = await redisQueue.cancelCampaign(userId);
+      const status = await redisQueue.getStatus(userId);
+      return res.json({ success: true, canceled: true, removedWaitingJobs: result.removed, status });
+    } catch (error) {
+      logger.error({ err: error?.message }, 'Error en /cancel-campaign');
+      res.status(500).json({ success: false, error: error.message });
     }
   });
 

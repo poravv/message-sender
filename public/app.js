@@ -840,8 +840,11 @@ function updateConnectionStatus(status) {
       
       statusText.innerHTML = `
         <div>WhatsApp Conectado</div>
-        ${phoneNumber ? `<small style="opacity: 0.8;">Tel: ${phoneNumber}</small>` : ''}
+        ${phoneNumber ? `<small style=\"opacity: 0.8;\">Tel: ${phoneNumber}</small>` : ''}
       `;
+      if (status.state) {
+        statusText.innerHTML += `<small style=\"opacity: 0.8;\">Estado: ${status.state}</small>`;
+      }
       
       if (!isCurrentlyConnected) {
         showAlert(`¡WhatsApp conectado exitosamente!`, 'success', 'Conexión establecida');
@@ -852,7 +855,7 @@ function updateConnectionStatus(status) {
     } else {
       statusText.innerHTML = `
         <div>Autenticando WhatsApp...</div>
-        <small style="opacity: 0.8;">Sincronizando</small>
+        <small style=\"opacity: 0.8;\">${status.state || 'Sincronizando'}</small>
       `;
       isCurrentlyConnected = false; // No considerar completamente conectado hasta que isReady sea true
     }
@@ -860,7 +863,7 @@ function updateConnectionStatus(status) {
     statusElement.classList.remove('connected');
     statusText.innerHTML = `
       <div>WhatsApp Desconectado</div>
-      <small style="opacity: 0.8;">Escanear QR</small>
+      <small style=\"opacity: 0.8;\">${(status && status.state) || 'Escanear QR'}</small>
     `;
     isCurrentlyConnected = false;
   }
