@@ -6,33 +6,30 @@ const logger = require('./logger');
 
 // Función para procesar variables en el mensaje
 function processMessageVariables(message, variables) {
-  if (!message) {
-    return message;
-  }
-  
+  if (!message) return message;
   let processedMessage = message;
-  
-  // Si hay variables disponibles, reemplazarlas
+
   if (variables && Object.keys(variables).length > 0) {
     Object.entries(variables).forEach(([key, value]) => {
-      if (value) { // Solo reemplazar si el valor no está vacío
+      if (value) {
         const placeholder = `{${key}}`;
         const regex = new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'gi');
         processedMessage = processedMessage.replace(regex, value);
       }
     });
   }
-  
-  // Limpiar variables que no fueron reemplazadas (quedaron vacías)
-  // Eliminar variables con espacios alrededor: " {variable} " → " "
-  processedMessage = processedMessage.replace(/\s*\{[^}]+\}\s*/g, ' ');
-  
-  // Limpiar múltiples espacios consecutivos
-  processedMessage = processedMessage.replace(/\s+/g, ' ');
-  
-  // Limpiar espacios al inicio y final
+
+  // Quitar placeholders no reemplazados sin comerse saltos de línea
+  processedMessage = processedMessage.replace(/\{[^}\n]+\}/g, '');
+
+  // Normalizar fin de línea y espacios sin colapsar \n
+  processedMessage = processedMessage.replace(/\r\n/g, '\n');
+  processedMessage = processedMessage.replace(/[ \t]+\n/g, '\n');
+  processedMessage = processedMessage.replace(/\n[ \t]+/g, '\n');
+  processedMessage = processedMessage.replace(/[ \t]{2,}/g, ' ');
+  processedMessage = processedMessage.replace(/[ \t]+$/gm, '');
+
   processedMessage = processedMessage.trim();
-  
   return processedMessage;
 }
 
