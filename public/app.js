@@ -1469,7 +1469,7 @@ function startProgressPolling() {
     } catch (e) {
       console.error('Progress polling error:', e);
     }
-  }, 300); // Polling más frecuente para mejor respuesta (cada 300ms)
+  }, 1000); // Polling de progreso cada 1000ms para reducir carga
 }
 
 function stopProgressPolling() {

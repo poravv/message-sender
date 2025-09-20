@@ -93,10 +93,31 @@ async function getStatus(userId){
   };
 }
 
+function parseKeepPolicy(val, defaultVal) {
+  if (val === undefined || val === null || val === '') return defaultVal;
+  const s = String(val).trim().toLowerCase();
+  if (s === 'true') return true;
+  if (s === 'false') return false;
+  if (s.startsWith('count:')) {
+    const n = Number(s.split(':')[1] || '0');
+    return isNaN(n) ? defaultVal : { count: Math.max(0, n) };
+  }
+  if (s.startsWith('age:')) {
+    const n = Number(s.split(':')[1] || '0');
+    return isNaN(n) ? defaultVal : { age: Math.max(0, n) };
+  }
+  const n = Number(s);
+  if (!isNaN(n)) return Math.max(0, n);
+  return defaultVal;
+}
+
+const REMOVE_ON_COMPLETE = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_COMPLETE, true);
+const REMOVE_ON_FAIL = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_FAIL, { age: 3600 });
+
 // Public API: enqueue campaign
 async function enqueueCampaign(userId, numbers, message, images, singleImage, audio) {
   await resetStatus(userId, numbers.length);
-  const job = await queue.add('campaign', { userId, numbers, message, images, singleImage, audio }, { removeOnComplete: 100, removeOnFail: 200 });
+  const job = await queue.add('campaign', { userId, numbers, message, images, singleImage, audio }, { removeOnComplete: REMOVE_ON_COMPLETE, removeOnFail: REMOVE_ON_FAIL });
   try {
     const r = getRedis();
     await r.hset(statusKey(userId), { jobId: String(job.id), updatedAt: String(Date.now()) });
@@ -457,4 +478,25 @@ module.exports = {
   getStatus,
   getStatusDetailed,
   cancelCampaign,
+  // Admin helpers (expuestos por rutas si se requiere)
+  async cleanQueue(type = 'completed', graceSec = 3600, limit = 1000) {
+    try {
+      const ms = Math.max(0, Number(graceSec) || 0) * 1000;
+      const lim = Math.max(1, Number(limit) || 1);
+      const cleaned = await queue.clean(ms, lim, type);
+      return { cleaned: cleaned?.length || 0, type };
+    } catch (e) {
+      logger.warn({ err: e?.message, type }, 'Queue clean failed');
+      return { cleaned: 0, type, error: e?.message };
+    }
+  },
+  async obliterateQueue(force = true) {
+    try {
+      await queue.obliterate({ force: !!force, count: 1000 });
+      return { ok: true };
+    } catch (e) {
+      logger.warn({ err: e?.message }, 'Queue obliterate failed');
+      return { ok: false, error: e?.message };
+    }
+  }
 };
