@@ -495,6 +495,22 @@ function buildRoutes() {
     }
   });
 
+  // Limpieza de cola BullMQ (solo admin)
+  router.post('/admin/queue/clean', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      const { type = 'completed', graceSec = 3600, limit = 1000, obliterate = false } = req.body || {};
+      if (obliterate) {
+        const r = await redisQueue.obliterateQueue(true);
+        return res.json({ success: r.ok, result: r });
+      }
+      const result = await redisQueue.cleanQueue(type, Number(graceSec), Number(limit));
+      res.json({ success: true, result });
+    } catch (error) {
+      logger.error({ err: error?.message }, 'Error en /admin/queue/clean');
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Estado de mi propia sesión (detallado)
   router.get('/my-session', conditionalAuth, async (req, res) => {
     try {
