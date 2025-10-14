@@ -3,7 +3,7 @@ const CONFIG = {
   checkInterval: 15000, // Cambio de 3s a 15s para reducir carga del servidor
   statusEndpoint: '/connection-status',
   keycloakConfig: {
-    url: 'https://kc.mindtechpy.net',
+    url: 'https://auth.mindtechpy.net',
     realm: 'message-sender',
     clientId: 'message-sender-web'  // Usar el cliente web correcto
   },

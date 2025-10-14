@@ -51,7 +51,7 @@ async function getJWKS(jwksUri) {
  * ENV y endpoints OIDC
  * ────────────────────────────────────────────────────────────────────────── */
 const {
-  KEYCLOAK_URL,      // p.ej.: https://kc.mindtechpy.net
+  KEYCLOAK_URL,      // p.ej.: https://auth.mindtechpy.net
   KEYCLOAK_REALM,    // p.ej.: message-sender
   KEYCLOAK_AUDIENCE, // p.ej.: message-sender-api (clientId de tu API)
   KEYCLOAK_ISSUER,   // opcional (override)

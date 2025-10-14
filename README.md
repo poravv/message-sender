@@ -57,7 +57,7 @@ FILE_RETENTION_HOURS=24
 MESSAGE_DELAY_MS=2000
 
 # Keycloak (obligatorio en producción)
-KEYCLOAK_URL=https://kc.mindtechpy.net
+KEYCLOAK_URL=https://auth.mindtechpy.net
 KEYCLOAK_REALM=message-sender
 KEYCLOAK_AUDIENCE=message-sender-api
 

@@ -20,6 +20,6 @@ data:
   # S3 variables se configuran vía Secret
 
   # Keycloak (override here if not provided via Secret)
-  KEYCLOAK_URL: "https://kc.mindtechpy.net"
+  KEYCLOAK_URL: "https://auth.mindtechpy.net"
   KEYCLOAK_REALM: "message-sender"
   KEYCLOAK_AUDIENCE: "message-sender-api"
