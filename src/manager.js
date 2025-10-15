@@ -192,15 +192,13 @@ class WhatsAppManager {
       this.saveCreds = saveCreds;
       this._clearAuth = typeof clear === 'function' ? clear : null;
 
-      // Socket Baileys
+            // Socket Baileys
       this.sock = makeWASocket({
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        connectTimeoutMs: 60_000,
-        defaultQueryTimeoutMs: 0,
-        keepAliveIntervalMs: 10_000,
-        markOnlineOnConnect: false,
+        browser: ['Chrome (Linux)', 'Chrome', '120.0.0'],
+        syncFullHistory: false,
       });
 
       // expose manager to queue via socket reference
