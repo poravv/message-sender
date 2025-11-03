@@ -4,7 +4,8 @@ metadata:
   name: sender-backend-pdb
   namespace: sender
 spec:
-  minAvailable: 1
+  # Usar maxUnavailable en lugar de minAvailable para permitir 0 réplicas
+  maxUnavailable: 1
   selector:
     matchLabels:
       app: sender-backend
