@@ -1,0 +1,21 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: sender-backend-scaledobject
+  namespace: sender
+spec:
+  scaleTargetRef:
+    name: sender-backend              # Deployment a escalar
+  minReplicaCount: 0                  # Duerme cuando no hay carga
+  maxReplicaCount: 3                  # Máximo 3 réplicas
+  cooldownPeriod: 300                 # 5 minutos sin carga antes de dormirse
+  pollingInterval: 30                 # Chequea cada 30 segundos
+  triggers:
+  - type: cpu
+    metricType: Utilization
+    metadata:
+      value: "60"                     # Escala cuando CPU > 60%
+  - type: memory
+    metricType: Utilization
+    metadata:
+      value: "70"                     # Escala cuando Memory > 70%

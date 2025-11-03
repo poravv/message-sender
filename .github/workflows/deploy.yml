@@ -148,10 +148,17 @@ jobs:
     - name: Deploy backend
       run: |
         echo "🔧 Deploying backend..."
+        
+        # Eliminar HPA antiguo si existe (KEDA lo reemplaza)
+        kubectl delete hpa sender-backend-hpa -n ${{ env.NAMESPACE }} --ignore-not-found=true
+        
         kubectl apply -f k8s/backend-deployment.yaml
         kubectl apply -f k8s/pdb.yaml
         
-        echo "📌 Forzando actualización a la imagen del commit..."
+        echo "📊 Aplicando KEDA ScaledObject para auto-scaling a 0..."
+        kubectl apply -f k8s/keda-scaledobject.yaml
+        
+        echo "� Forzando actualización a la imagen del commit..."
         kubectl set image deployment/sender-backend \
           sender-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${SHORT_SHA} \
           -n ${{ env.NAMESPACE }}
