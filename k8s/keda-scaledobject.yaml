@@ -1,3 +1,23 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-password-secret
+  namespace: sender
+type: Opaque
+stringData:
+  password: "placeholder"  # Se sobrescribe por GitHub Actions
+---
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: redis-trigger-auth
+  namespace: sender
+spec:
+  secretTargetRef:
+  - parameter: password
+    name: backend-env-secrets
+    key: REDIS_PASSWORD
+---
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -11,11 +31,17 @@ spec:
   cooldownPeriod: 300                 # 5 minutos sin carga antes de dormirse
   pollingInterval: 30                 # Chequea cada 30 segundos
   triggers:
+  # Trigger principal: BullMQ queue (Redis Streams)
+  - type: redis-streams
+    metadata:
+      address: redis.mindtechpy.net:6379
+      stream: bull:ms:messages:events    # BullMQ crea streams con formato bull:{queueName}:events
+      pendingEntriesCount: "1"           # Escala si hay >= 1 mensaje pendiente
+      consumerGroup: sender-workers
+    authenticationRef:
+      name: redis-trigger-auth
+  # Trigger secundario: CPU para auto-scaling adicional
   - type: cpu
     metricType: Utilization
     metadata:
-      value: "60"                     # Escala cuando CPU > 60%
-  - type: memory
-    metricType: Utilization
-    metadata:
-      value: "70"                     # Escala cuando Memory > 70%
+      value: "70"                        # Escala cuando CPU > 70%
