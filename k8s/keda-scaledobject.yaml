@@ -26,7 +26,7 @@ metadata:
 spec:
   scaleTargetRef:
     name: sender-backend              # Deployment a escalar
-  minReplicaCount: 0                  # Duerme cuando no hay carga
+  minReplicaCount: 1                  # Mínimo 1 réplica para respuesta inmediata HTTP
   maxReplicaCount: 3                  # Máximo 3 réplicas
   cooldownPeriod: 300                 # 5 minutos sin carga antes de dormirse
   pollingInterval: 30                 # Chequea cada 30 segundos
