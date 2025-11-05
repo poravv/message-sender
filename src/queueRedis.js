@@ -282,21 +282,34 @@ async function ensureConvertedAudio(userId, audio) {
   if (!audio || !audio.s3Key) return null;
   const origKey = audio.s3Key;
   const convKey = origKey.replace(/(\.[^./]+)?$/, '-converted.m4a');
+  
+  logger.info({ userId, origKey, convKey }, 'Procesando audio desde S3');
+  
   // Intentar usar objeto convertido existente
   try {
     const exists = await s3.existsObject(convKey);
-    if (exists) return { s3Key: convKey, mimetype: 'audio/mp4' };
-  } catch {}
+    if (exists) {
+      logger.info({ userId, convKey }, 'Audio convertido ya existe en S3');
+      return { s3Key: convKey, mimetype: 'audio/mp4' };
+    }
+  } catch (err) {
+    logger.warn({ userId, error: err.message }, 'Error verificando audio convertido existente');
+  }
 
   // Descargar original, convertir y subir
+  logger.info({ userId, origKey }, 'Descargando audio original de S3...');
   const localOrig = path.join(tempDir, `audio_download_${userId}_${Date.now()}`);
   const localConv = await (async () => {
     const buf = await s3.getObjectBuffer(origKey);
+    logger.info({ userId, size: buf.length }, 'Audio descargado de S3');
     fs.writeFileSync(localOrig, buf);
     try {
+      logger.info({ userId, localOrig }, 'Convirtiendo audio...');
       const out = await convertAudioToOpus(localOrig, userId);
       const convBuf = fs.readFileSync(out);
+      logger.info({ userId, convKey, size: convBuf.length }, 'Subiendo audio convertido a S3...');
       await s3.putObjectFromBuffer(convKey, convBuf, 'audio/mp4');
+      logger.info({ userId, convKey }, 'Audio convertido subido exitosamente');
       try { fs.unlinkSync(out); } catch {}
       return out;
     } finally {
@@ -356,7 +369,12 @@ async function processCampaign(job){
   const imageCache = new Map();
   let convertedAudio = null;
   if (audio && audio.s3Key) {
-    convertedAudio = await ensureConvertedAudio(userId, audio);
+    try {
+      convertedAudio = await ensureConvertedAudio(userId, audio);
+    } catch (err) {
+      logger.error({ userId, error: err.message }, 'Error procesando audio desde S3');
+      throw new Error(`Error al procesar audio: ${err.message}`);
+    }
   }
 
     // Reanudar desde progreso previo
