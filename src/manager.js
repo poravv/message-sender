@@ -857,6 +857,17 @@ class WhatsAppManager {
       return false;
     }
   }
+
+  /**
+   * Resetear cooldown manualmente (útil cuando hay conflictos persistentes)
+   */
+  resetCooldown() {
+    logger.info(`🔄 [${this.userId}] Reseteando cooldown manualmente`);
+    this.isInCooldown = false;
+    this.conflictCount = 0;
+    this.lastConflictTime = null;
+    logger.info(`✅ [${this.userId}] Cooldown reseteado`);
+  }
 }
 
 module.exports = { WhatsAppManager };

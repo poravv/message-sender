@@ -205,6 +205,11 @@ function buildRoutes() {
           }
         }
       } catch (e) {
+        logger.error({ error: e.message, stack: e.stack }, 'Error al cargar archivos a S3');
+        // Si el error es de credenciales o permisos, devolver error claro al usuario
+        if (e.message && (e.message.includes('Access Key') || e.message.includes('credentials') || e.message.includes('forbidden'))) {
+          throw new Error(`Error de almacenamiento: ${e.message}. Verifica las credenciales de MinIO.`);
+        }
         logger.warn(`Carga a S3 omitida o fallida: ${e.message}`);
       }
 
