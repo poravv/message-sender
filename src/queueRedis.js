@@ -31,6 +31,9 @@ function statusKey(userId){ return `ms:status:${userId}`; }
 function progressKey(userId){ return `ms:progress:${userId}`; }
 function cancelKey(userId){ return `ms:cancel:${userId}`; }
 function campaignLockKey(userId){ return `ms:lock:campaign:${userId}`; }
+function listKey(userId){ return `ms:list:${userId}`; }
+function heartbeatKey(userId){ return `ms:hb:${userId}`; }
+function eventsKey(userId){ return `ms:events:${userId}`; }
 
 async function resetStatus(userId, total){
   const r = getRedis();
@@ -57,6 +60,74 @@ async function markCanceled(userId){
     canceled: '1', completed: '1', finishedAt: String(Date.now()), canceledAt: String(Date.now()),
     updatedAt: String(Date.now()),
   });
+}
+
+// Guardar/limpiar la lista de números en Redis (por usuario)
+async function saveList(userId, numbers){
+  const r = getRedis();
+  try {
+    const ttl = Math.max(600, Number(process.env.REDIS_LIST_TTL_SECONDS || 3600));
+    await r.set(listKey(userId), JSON.stringify(numbers || []), 'EX', ttl);
+  } catch {}
+}
+
+async function clearList(userId){
+  const r = getRedis();
+  try { await r.del(listKey(userId)); } catch {}
+}
+
+// Heartbeat por usuario (para detectar refresh/cierre)
+async function touchHeartbeat(userId){
+  const r = getRedis();
+  try {
+    const ttl = Math.max(10, Number(process.env.HEARTBEAT_TTL_SECONDS || 30));
+    await r.set(heartbeatKey(userId), String(Date.now()), 'EX', ttl);
+  } catch {}
+}
+
+async function hasHeartbeat(userId){
+  const r = getRedis();
+  try {
+    const v = await r.get(heartbeatKey(userId));
+    return !!v;
+  } catch {
+    return false;
+  }
+}
+
+function validateNumbersArray(numbers){
+  if (!Array.isArray(numbers)) return { valid: false, invalidCount: 1 };
+  let invalid = 0;
+  for (const entry of numbers) {
+    const n = String(typeof entry === 'string' ? entry : entry?.number || '').trim();
+    const onlyDigits = /^\d+$/.test(n);
+    const validLength = n.length === 12;
+    const hasPrefix = n.startsWith('595');
+    if (!onlyDigits || !validLength || !hasPrefix) invalid++;
+  }
+  return { valid: invalid === 0, invalidCount: invalid };
+}
+
+// Eventos (lista circular por usuario) para poblar el frontend
+async function addEvent(userId, type, data = {}) {
+  const r = getRedis();
+  try {
+    const max = Math.max(10, Number(process.env.EVENTS_MAX || 200));
+    const ev = { type, ...data, timestamp: Date.now() };
+    await r.lpush(eventsKey(userId), JSON.stringify(ev));
+    await r.ltrim(eventsKey(userId), 0, max - 1);
+    await r.hset(statusKey(userId), { updatedAt: String(Date.now()) });
+  } catch {}
+}
+
+async function getRecentEvents(userId, limit = 100) {
+  const r = getRedis();
+  try {
+    const raw = await r.lrange(eventsKey(userId), 0, Math.max(0, Number(limit) - 1));
+    return raw.map(s => { try { return JSON.parse(s); } catch { return null; } }).filter(Boolean);
+  } catch {
+    return [];
+  }
 }
 
 async function requestCancel(userId){
@@ -117,6 +188,7 @@ const REMOVE_ON_FAIL = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_FAIL, { age: 
 // Public API: enqueue campaign
 async function enqueueCampaign(userId, numbers, message, images, singleImage, audio) {
   await resetStatus(userId, numbers.length);
+  await saveList(userId, numbers);
   const job = await queue.add('campaign', { userId, numbers, message, images, singleImage, audio }, { removeOnComplete: REMOVE_ON_COMPLETE, removeOnFail: REMOVE_ON_FAIL });
   try {
     const r = getRedis();
@@ -143,6 +215,8 @@ async function cancelCampaign(userId){
     } catch {}
   }
   await markCanceled(userId);
+  await clearProgress(userId);
+  await clearList(userId);
   try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'cancel_api' }); } catch {}
   return { removed };
 }
@@ -217,6 +291,25 @@ async function getStatusDetailed(userId){
   const remaining = Math.max(0, base.total - base.sent - base.errors);
   const eta = remaining * Math.ceil(SEND_BETWEEN_MS / 1000);
   const state = base.canceled ? 'canceled' : (base.completed ? 'completed' : ((base.progress && base.progress.status === 'sending') || qi.activeForUser ? 'running' : (qi.queuedForUser > 0 && !qi.activeForUser ? 'queued' : 'idle')));
+  // Mapear eventos recientes a filas de tabla
+  const evLimit = Math.max(10, Number(process.env.EVENTS_UI_LIMIT || 100));
+  const events = await getRecentEvents(userId, evLimit);
+  // Deduplicar por número quedándose con el evento más reciente
+  // Nota: getRecentEvents devuelve más reciente primero (LPUSH + LRANGE 0..)
+  const latestByNumber = new Map();
+  for (const e of events) {
+    if (!e || e.type !== 'message' || !e.number) continue;
+    if (!latestByNumber.has(e.number)) {
+      latestByNumber.set(e.number, {
+        number: e.number,
+        status: e.status || 'queued',
+        timestamp: e.timestamp,
+        response: e.response || e.message,
+      });
+    }
+  }
+  // Convertir a arreglo; opcionalmente ordenar por timestamp ascendente para tabla
+  const messages = Array.from(latestByNumber.values()).sort((a,b)=> (a.timestamp||0) - (b.timestamp||0));
   return {
     ...base,
     resuming_from: prog && prog.resumeFrom ? Number(prog.resumeFrom) : null,
@@ -233,6 +326,7 @@ async function getStatusDetailed(userId){
     etaSeconds: eta,
     state,
     queuePositionExact: qi.position,
+    messages,
   };
 }
 
@@ -365,6 +459,23 @@ async function processCampaign(job){
     const client = (await sessionManager.getSession(userId)).sock;
     if (!client || !client.user) throw new Error('Socket de WhatsApp no está listo');
 
+  // Validaciones previas
+  const numCheck = validateNumbersArray(numbers);
+  if (!numCheck.valid) {
+    logger.warn({ userId, invalidCount: numCheck.invalidCount }, 'Lista con números inválidos; cancelando campaña');
+    await markCanceled(userId);
+    await clearList(userId);
+    try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_numbers', invalid: numCheck.invalidCount }); } catch {}
+    return;
+  }
+  if (!message && !singleImage && !(images && images.length) && !audio) {
+    logger.warn({ userId }, 'Contenido inválido (sin mensaje ni media); cancelando campaña');
+    await markCanceled(userId);
+    await clearList(userId);
+    try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_content' }); } catch {}
+    return;
+  }
+
   // Preparaciones de media
   const imageCache = new Map();
   let convertedAudio = null;
@@ -405,15 +516,27 @@ async function processCampaign(job){
     try { await addEvent(userId, 'job_started', { total: numbers.length, startIdx }); } catch {}
 
     let sent = 0;
+    const requireHeartbeat = String(process.env.HEARTBEAT_REQUIRED || 'true').toLowerCase() === 'true';
     for (let i = startIdx; i < numbers.length; i++) {
       if (await isCanceled(userId)) {
         logger.warn({ userId, index: i }, 'Cancelación detectada durante campaña; abortando');
         break;
       }
+      if (requireHeartbeat) {
+        const alive = await hasHeartbeat(userId);
+        if (!alive) {
+          logger.warn({ userId, index: i }, 'Heartbeat ausente (posible refresh). Cancelando campaña y limpiando lista');
+          await markCanceled(userId);
+          try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'no_heartbeat_refresh' }); } catch {}
+          await clearList(userId);
+          break;
+        }
+      }
       const entry = numbers[i];
       const number = typeof entry === 'string' ? entry : entry.number;
       const variables = typeof entry === 'object' && entry.variables ? entry.variables : {};
       try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'sending' }); } catch {}
+      try { await addEvent(userId, 'message', { number, status: 'sending' }); } catch {}
 
     const processedMessage = processMessageVariables(message, variables || {});
     const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
@@ -452,10 +575,12 @@ async function processCampaign(job){
       sent++;
       await incField(userId, 'sent', 1);
       try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'sent' }); } catch {}
+      try { await addEvent(userId, 'message', { number, status: 'sent' }); } catch {}
     } catch (err) {
       logger.warn(`Error enviando a ${number}: ${err?.message}`);
       await incField(userId, 'errors', 1);
       try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'error', message: err?.message }); } catch {}
+      try { await addEvent(userId, 'message', { number, status: 'error', message: err?.message }); } catch {}
     }
 
       await sleep(SEND_BETWEEN_MS);
@@ -484,6 +609,7 @@ async function processCampaign(job){
   } finally {
     try { await clearCancel(userId); } catch {}
     try { await clearProgress(userId); } catch {}
+    try { await clearList(userId); } catch {}
     await unlock();
   }
 }
@@ -503,6 +629,9 @@ module.exports = {
   getStatus,
   getStatusDetailed,
   cancelCampaign,
+  saveList,
+  clearList,
+  touchHeartbeat,
   // Admin helpers (expuestos por rutas si se requiere)
   async cleanQueue(type = 'completed', graceSec = 3600, limit = 1000) {
     try {

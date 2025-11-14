@@ -199,6 +199,8 @@ class WhatsAppManager {
         logger: pino({ level: 'silent' }),
         browser: ['Chrome (Linux)', 'Chrome', '120.0.0'],
         syncFullHistory: false,
+        connectTimeoutMs: Math.max(20000, Number(process.env.WA_CONNECT_TIMEOUT_MS || 30000)),
+        defaultQueryTimeoutMs: Math.max(30000, Number(process.env.WA_QUERY_TIMEOUT_MS || 60000)),
       });
 
       // expose manager to queue via socket reference

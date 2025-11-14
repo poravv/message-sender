@@ -266,19 +266,19 @@
                     </div>
                     <div class="section-title">
                       <h4>Lista de destinatarios</h4>
-                      <p>Carga un archivo CSV con los números de teléfono</p>
+                      <p>Carga un archivo CSV o TXT con los números de teléfono</p>
                     </div>
                   </div>
                   
                   <div class="file-upload-area">
-                    <input type="file" id="csvFile" name="csvFile" class="file-input" accept=".csv" required>
+                    <input type="file" id="csvFile" name="csvFile" class="file-input" accept=".csv,.txt,text/plain" required>
                     <label for="csvFile" class="file-upload-label">
                       <div class="upload-icon">
                         <i class="bi bi-cloud-upload"></i>
                       </div>
                       <div class="upload-text">
-                        <div class="upload-title">Arrastra o selecciona tu archivo CSV</div>
-                        <div class="upload-subtitle">Formato: 5959xxxxxxxx (un número por línea)</div>
+                        <div class="upload-title">Arrastra o selecciona tu archivo CSV/TXT</div>
+                        <div class="upload-subtitle">Formato: 595xxxxxxxxxxx (12 dígitos, prefijo 595)</div>
                       </div>
                     </label>
                     <div class="file-info" id="csvFileInfo"></div>
@@ -610,6 +610,10 @@
                 <div class="table-header">
                   <h4>Detalle de envíos</h4>
                   <div class="table-actions">
+                    <button class="btn-cancel" id="cancelBtn">
+                      <i class="bi bi-x-circle"></i>
+                      Cancelar
+                    </button>
                     <button class="btn-export" id="exportBtn">
                       <i class="bi bi-download"></i>
                       Exportar

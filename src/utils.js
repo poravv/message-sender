@@ -56,71 +56,81 @@ function cleanupOldFiles(maxAgeHours = 24) {
 }
 
 function loadNumbersFromCSV(filePath) {
-  const csv = require('csv-parser');
+  const ext = path.extname(filePath).toLowerCase();
+
+  const buildEntry = (line, values, numbers, invalidRef) => {
+    const rawNumber = String(values[0] || '').trim();
+    const onlyDigits = /^\d+$/.test(rawNumber);
+    const isValidLength = rawNumber.length === 12;
+    const hasPrefix = rawNumber.startsWith('595');
+    if (onlyDigits && isValidLength && hasPrefix) {
+      const entry = { number: rawNumber, index: line, variables: {} };
+      if (values.length > 1) {
+        const sustantivo = String(values[1] || '').trim();
+        if (sustantivo) entry.variables.sustantivo = sustantivo;
+      }
+      if (values.length > 2) {
+        const nombre = String(values[2] || '').trim();
+        if (nombre) entry.variables.nombre = nombre;
+      }
+      numbers.push(entry);
+      const variablesInfo = Object.keys(entry.variables).length > 0 ? entry.variables : 'sin variables';
+      logger.info({ line, number: rawNumber, variables: variablesInfo, totalColumns: values.length }, 'Número procesado');
+    } else {
+      logger.warn({ line, number: rawNumber, values, reason: !onlyDigits ? 'non_digits' : (!isValidLength ? 'length_not_12' : (!hasPrefix ? 'missing_595_prefix' : 'unknown')) }, 'Número inválido en CSV/TXT');
+      invalidRef.count++;
+    }
+  };
+
   return new Promise((resolve, reject) => {
     const numbers = [];
+    const invalidRef = { count: 0 };
     let line = 0;
-    fs.createReadStream(filePath)
-      .pipe(csv({ skipLines: 0, headers: false }))
-      .on('data', (row) => {
-        line++;
-        const values = Object.values(row);
-        const number = String(values[0] || '').trim();
-        
-        if (number && /^\d+$/.test(number)) {
-          const entry = {
-            number,
-            index: line,
-            variables: {} // Para almacenar las variables adicionales
-          };
-          
-          // Procesar columnas adicionales para variables
-          if (values.length > 1) {
-            const sustantivo = String(values[1] || '').trim();
-            if (sustantivo) {
-              entry.variables.sustantivo = sustantivo;
-            }
-          }
-          
-          if (values.length > 2) {
-            const nombre = String(values[2] || '').trim();
-            if (nombre) {
-              entry.variables.nombre = nombre;
-            }
-          }
-          
-          numbers.push(entry);
-          
-          // Log más detallado para debugging
-          const variablesInfo = Object.keys(entry.variables).length > 0 
-            ? entry.variables 
-            : 'sin variables';
-          logger.info({ 
-            line, 
-            number, 
-            variables: variablesInfo,
-            totalColumns: values.length
-          }, 'Número procesado');
-          
-        } else {
-          logger.warn({ line, number, values }, 'Número inválido en CSV');
+
+    if (ext === '.txt') {
+      try {
+        const content = fs.readFileSync(filePath, 'utf8');
+        const lines = content.split(/\r?\n/);
+        for (const rawLine of lines) {
+          if (!rawLine || !rawLine.trim()) continue;
+          line++;
+          const parts = rawLine.split(',').map(s => s.trim());
+          buildEntry(line, parts, numbers, invalidRef);
         }
-      })
-      .on('end', () => {
-        if (numbers.length === 0) return reject(new Error('El archivo CSV no contiene números válidos.'));
-        
+        if (numbers.length === 0) return reject(new Error('El archivo TXT no contiene números válidos.'));
         const summary = numbers.reduce((acc, entry) => {
           const hasVars = Object.keys(entry.variables).length > 0;
           acc[hasVars ? 'withVariables' : 'withoutVariables']++;
           return acc;
         }, { withVariables: 0, withoutVariables: 0 });
-        
-        logger.info({ 
-          total: numbers.length,
-          ...summary
-        }, 'Resumen de procesamiento CSV');
-        
-        resolve(numbers.sort((a,b)=>a.index-b.index));
+        logger.info({ total: numbers.length, ...summary }, 'Resumen de procesamiento TXT');
+        const sorted = numbers.sort((a,b)=>a.index-b.index);
+        resolve({ numbers: sorted, invalidCount: invalidRef.count, totalRows: line });
+      } catch (err) {
+        logger.error({ err: err?.message }, 'Error leyendo TXT');
+        reject(err);
+      }
+      return;
+    }
+
+    const csv = require('csv-parser');
+    fs.createReadStream(filePath)
+      .pipe(csv({ skipLines: 0, headers: false }))
+      .on('data', (row) => {
+        line++;
+        const values = Object.values(row);
+        buildEntry(line, values, numbers, invalidRef);
+      })
+      .on('end', () => {
+        if (numbers.length === 0) return reject(new Error('El archivo CSV no contiene números válidos.'));
+        const summary = numbers.reduce((acc, entry) => {
+          const hasVars = Object.keys(entry.variables).length > 0;
+          acc[hasVars ? 'withVariables' : 'withoutVariables']++;
+          return acc;
+        }, { withVariables: 0, withoutVariables: 0 });
+        logger.info({ total: numbers.length, ...summary }, 'Resumen de procesamiento CSV');
+        const sorted = numbers.sort((a,b)=>a.index-b.index);
+        resolve({ numbers: sorted, invalidCount: invalidRef.count, totalRows: line });
       })
       .on('error', (err) => {
         logger.error({ err: err?.message }, 'Error leyendo CSV');

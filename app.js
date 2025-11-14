@@ -89,6 +89,24 @@ app.listen(port, host, async () => {
   logger.info('Sistema multi-sesión WhatsApp inicializado correctamente');
 });
 
+// Global error handlers to prevent process crash on unhandled errors
+process.on('unhandledRejection', (reason) => {
+  try {
+    logger.warn({ err: reason?.message, stack: reason?.stack }, 'UnhandledRejection capturado');
+  } catch (e) {
+    console.error('UnhandledRejection', reason);
+  }
+});
+
+process.on('uncaughtException', (err) => {
+  try {
+    logger.error({ err: err?.message, stack: err?.stack }, 'UncaughtException capturado');
+  } catch (e) {
+    console.error('UncaughtException', err);
+  }
+  // No salir; dejar que los manejadores de reconexión actúen
+});
+
 // Graceful shutdown
 process.on('SIGTERM', () => {
   logger.info('Recibido SIGTERM, cerrando servidor...');

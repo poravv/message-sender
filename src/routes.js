@@ -154,7 +154,7 @@ function buildRoutes() {
       }
       
       if (!req.files || !req.files['csvFile']) {
-        return res.status(400).json({ error: 'Archivo CSV no proporcionado' });
+        return res.status(400).json({ error: 'Archivo CSV/TXT no proporcionado' });
       }
 
       const csvFilePath = req.files['csvFile'][0].path;
@@ -163,8 +163,18 @@ function buildRoutes() {
       let audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
       const { message } = req.body;
 
-      const numbers = await loadNumbersFromCSV(csvFilePath);
+      const parsed = await loadNumbersFromCSV(csvFilePath);
+      const numbers = parsed?.numbers || [];
+      const invalidCount = parsed?.invalidCount || 0;
       if (numbers.length === 0) return res.status(400).json({ error: 'No se encontraron números válidos' });
+
+      // Si hay registros inválidos en el CSV, cancelar automáticamente y limpiar lista
+      if (invalidCount > 0) {
+        const userId = req.auth?.sub || 'default';
+        try { if (redisQueue && typeof redisQueue.cancelCampaign === 'function') await redisQueue.cancelCampaign(userId); } catch {}
+        try { if (redisQueue && typeof redisQueue.clearList === 'function') await redisQueue.clearList(userId); } catch {}
+        return res.status(400).json({ error: 'Se detectaron filas inválidas en el CSV. Envío cancelado.', invalidCount });
+      }
 
       // El CSV ya fue leído, se puede eliminar inmediatamente
       try {
@@ -215,7 +225,12 @@ function buildRoutes() {
 
       const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
       if (useRedisQueue) {
-        await redisQueue.enqueueCampaign(req.auth?.sub || 'default', numbers, message, images, singleImage, audioFile);
+        const userId = req.auth?.sub || 'default';
+        await redisQueue.enqueueCampaign(userId, numbers, message, images, singleImage, audioFile);
+        // Primer heartbeat tras encolar (para detectar refresh)
+        if (typeof redisQueue.touchHeartbeat === 'function') {
+          try { await redisQueue.touchHeartbeat(userId); } catch {}
+        }
       } else {
         whatsappManager.updateActivity();
         await whatsappManager.messageQueue.add(numbers, message, images, singleImage, audioFile);
@@ -238,8 +253,12 @@ function buildRoutes() {
     try {
       const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
       if (useRedisQueue) {
+        const userId = req.auth?.sub || 'default';
+        if (typeof redisQueue.touchHeartbeat === 'function') {
+          try { await redisQueue.touchHeartbeat(userId); } catch {}
+        }
         const getStatus = redisQueue.getStatusDetailed || redisQueue.getStatus;
-        const stats = await getStatus(req.auth?.sub || 'default');
+        const stats = await getStatus(userId);
         return res.json(stats);
       } else {
         const whatsappManager = await sessionManager.getSessionByToken(req);

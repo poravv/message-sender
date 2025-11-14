@@ -1479,6 +1479,28 @@ function stopProgressPolling() {
   }
 }
 
+async function cancelCampaignFrontend() {
+  try {
+    const res = await authFetch('/cancel-campaign', { method: 'POST' });
+    const result = await res.json();
+    if (res.ok) {
+      stopProgressPolling();
+      showAlert('Envío cancelado', 'warning', 'La campaña fue cancelada');
+      // Solicitar estado actualizado
+      try {
+        const st = await authFetch('/message-status');
+        const status = await st.json();
+        updateMessageStatus(status);
+      } catch {}
+    } else {
+      showAlert(result?.error || 'No se pudo cancelar', 'error');
+    }
+  } catch (e) {
+    showAlert('Error de red al cancelar', 'error');
+    console.error('Cancel error:', e);
+  }
+}
+
 /** ======== Form Submission ======== */
 async function handleMessageFormSubmit(event) {
   event.preventDefault();
@@ -1523,7 +1545,7 @@ async function handleMessageFormSubmit(event) {
   // Validate form
   const csvFile = document.getElementById('csvFile').files[0];
   if (!csvFile) {
-    showAlert('Debe seleccionar un archivo CSV', 'error', 'Error de validación');
+    showAlert('Debe seleccionar un archivo CSV o TXT', 'error', 'Error de validación');
     resetFormSubmission(sendBtn);
     return;
   }
@@ -1679,6 +1701,15 @@ function setupEventListeners() {
   const exportBtn = document.getElementById('exportBtn');
   if (exportBtn) {
     exportBtn.addEventListener('click', exportResults);
+  }
+
+  // Cancel button
+  const cancelBtn = document.getElementById('cancelBtn');
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      cancelCampaignFrontend();
+    });
   }
 
   // Logout button  

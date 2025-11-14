@@ -1870,6 +1870,29 @@ body::before {
   gap: var(--spacing-sm);
 }
 
+.btn-cancel {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--error-500);
+  border-radius: var(--radius-lg);
+  color: var(--error-500);
+  text-decoration: none;
+  font-weight: var(--font-weight-medium);
+  font-size: 0.875rem;
+  transition: all var(--transition-normal);
+  cursor: pointer;
+}
+
+.btn-cancel:hover {
+  background: var(--error-500);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
 .btn-export {
   display: flex;
   align-items: center;
@@ -2641,4 +2664,3 @@ body::before {
     gap: var(--spacing-xs);
   }
 }
-
