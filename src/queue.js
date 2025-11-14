@@ -385,7 +385,8 @@ class MessageQueue {
             await this.client.sendMessage(jid, {
               audio: audioBuffer,
               mimetype: mimetype,
-              ptt: true // Enviar como mensaje de voz
+              fileName: 'audio.m4a',
+              ptt: false // Enviar como audio adjunto (música)
             });
             
             logger.info(`Audio enviado exitosamente a ${number} con mimetype ${mimetype} (destinatario ${originalIndex + 1})`);
