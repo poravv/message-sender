@@ -129,9 +129,12 @@ class SessionManager {
         this.sessions.delete(userId);
         await this.stopOwnerHeartbeat(userId);
         await owner.releaseOwner(userId);
-        await this.stopOwnerHeartbeat(userId);
-        await owner.releaseOwner(userId);
-        logger.info({ userId }, 'Sesión cerrada para usuario');
+        
+        // Limpiar datos de Redis (campañas, progreso, etc.)
+        const { cleanupUserData } = require('./queueRedis');
+        await cleanupUserData(userId);
+        
+        logger.info({ userId }, 'Sesión cerrada y datos de Redis limpiados para usuario');
       } catch (error) {
         logger.error({ userId, error: error.message }, 'Error cerrando sesión');
       }
@@ -202,7 +205,12 @@ class SessionManager {
       const manager = this.sessions.get(userId);
       if (!manager) {
         logger.info(`No hay sesión activa para usuario: ${userId}`);
-        return { success: true, message: 'No había sesión activa' };
+        
+        // Aunque no haya sesión activa, limpiar datos de Redis por si acaso
+        const { cleanupUserData } = require('./queueRedis');
+        await cleanupUserData(userId);
+        
+        return { success: true, message: 'No había sesión activa, datos de Redis limpiados' };
       }
 
       // Llamar al método logout del manager
@@ -213,8 +221,12 @@ class SessionManager {
       await this.stopOwnerHeartbeat(userId);
       await owner.releaseOwner(userId);
       
-      logger.info(`Logout completado para usuario: ${userId}`);
-      return { success: true, message: 'Sesión de WhatsApp cerrada exitosamente' };
+      // Limpiar datos de Redis
+      const { cleanupUserData } = require('./queueRedis');
+      await cleanupUserData(userId);
+      
+      logger.info(`Logout completado y datos de Redis limpiados para usuario: ${userId}`);
+      return { success: true, message: 'Sesión de WhatsApp cerrada y datos limpiados exitosamente' };
       
     } catch (error) {
       logger.error(`Error durante logout de usuario ${userId}: ${error.message}`, error);
@@ -228,6 +240,14 @@ class SessionManager {
           logger.error(`Error en force disconnect: ${forceError.message}`);
         }
         this.sessions.delete(userId);
+      }
+      
+      // Intentar limpiar Redis de todas formas
+      try {
+        const { cleanupUserData } = require('./queueRedis');
+        await cleanupUserData(userId);
+      } catch (cleanupError) {
+        logger.error(`Error limpiando datos de Redis: ${cleanupError.message}`);
       }
       
       return { success: false, message: error.message };

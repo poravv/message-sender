@@ -166,6 +166,8 @@ function buildRoutes() {
       const parsed = await loadNumbersFromCSV(csvFilePath);
       const numbers = parsed?.numbers || [];
       const invalidCount = parsed?.invalidCount || 0;
+      const duplicates = parsed?.duplicates || 0;
+      
       if (numbers.length === 0) return res.status(400).json({ error: 'No se encontraron números válidos' });
 
       // Si hay registros inválidos en el CSV, cancelar automáticamente y limpiar lista
@@ -173,7 +175,17 @@ function buildRoutes() {
         const userId = req.auth?.sub || 'default';
         try { if (redisQueue && typeof redisQueue.cancelCampaign === 'function') await redisQueue.cancelCampaign(userId); } catch {}
         try { if (redisQueue && typeof redisQueue.clearList === 'function') await redisQueue.clearList(userId); } catch {}
-        return res.status(400).json({ error: 'Se detectaron filas inválidas en el CSV. Envío cancelado.', invalidCount });
+        return res.status(400).json({ 
+          error: 'Se detectaron filas inválidas en el CSV. Envío cancelado.', 
+          invalidCount,
+          duplicates,
+          details: 'Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX'
+        });
+      }
+      
+      // Informar sobre duplicados encontrados (pero continuar con los únicos)
+      if (duplicates > 0) {
+        logger.info({ duplicates, unique: numbers.length }, 'Duplicados eliminados del CSV');
       }
 
       // El CSV ya fue leído, se puede eliminar inmediatamente
@@ -239,7 +251,9 @@ function buildRoutes() {
       res.json({ 
         status: 'success', 
         message: 'Procesando mensajes', 
-        totalNumbers: numbers.length, 
+        totalNumbers: numbers.length,
+        duplicatesRemoved: duplicates || 0,
+        invalidNumbers: invalidCount || 0,
         userId: req.auth?.sub,
         initialStats: useRedisQueue ? { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false } : whatsappManager.messageQueue.getStats() 
       });

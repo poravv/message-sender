@@ -323,11 +323,13 @@ class WhatsAppManager {
           const shouldReconnect =
             lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
           const reason = lastDisconnect?.error?.message;
+          const statusCode = lastDisconnect?.error?.output?.statusCode;
           this.lastDisconnectReason = reason;
 
           logger.warn(
             {
               reason,
+              statusCode,
               shouldReconnect,
               userId: this._getScopedUserId(),
             },
@@ -339,6 +341,18 @@ class WhatsAppManager {
           this.userInfo = null;
           this.sock = null;
           this.isConnecting = false;
+
+          // Si fue logout/desvinculado, limpiar datos de Redis
+          if (statusCode === DisconnectReason.loggedOut) {
+            logger.info({ userId: this.userId }, 'Dispositivo desvinculado, limpiando datos de Redis...');
+            try {
+              const { cleanupUserData } = require('./queueRedis');
+              await cleanupUserData(this.userId);
+              logger.info({ userId: this.userId }, 'Datos de Redis limpiados tras desvinculación');
+            } catch (cleanupError) {
+              logger.error({ userId: this.userId, error: cleanupError.message }, 'Error limpiando datos tras desvinculación');
+            }
+          }
 
           // Timeout QR
           if (reason && reason.includes('QR refs attempts ended')) {

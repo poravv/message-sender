@@ -239,6 +239,41 @@ async function clearProgress(userId){
   try { await r.del(progressKey(userId)); } catch {}
 }
 
+/**
+ * Limpieza completa de datos de Redis para un usuario
+ * Se ejecuta en: logout, error fatal, desvinculación
+ */
+async function cleanupUserData(userId) {
+  logger.info({ userId }, 'Limpiando datos de Redis para usuario');
+  const r = getRedis();
+  
+  try {
+    // Limpiar estado de campaña
+    await r.del(statusKey(userId));
+    await clearProgress(userId);
+    await clearList(userId);
+    await clearCancel(userId);
+    
+    // Limpiar eventos
+    const evKey = `ms:events:${userId}`;
+    await r.del(evKey);
+    
+    // Limpiar heartbeat
+    const hbKey = `ms:heartbeat:${userId}`;
+    await r.del(hbKey);
+    
+    // Limpiar lock de campaña
+    const lockKey = campaignLockKey(userId);
+    await r.del(lockKey);
+    
+    logger.info({ userId }, 'Datos de Redis limpiados exitosamente');
+    return true;
+  } catch (error) {
+    logger.error({ userId, error: error.message }, 'Error limpiando datos de Redis');
+    return false;
+  }
+}
+
 async function getQueueInfo(userId){
   try {
     const counts = await queue.getJobCounts('waiting','active','delayed','paused');
@@ -623,7 +658,19 @@ const worker = new Worker(QUEUE_NAME, async (job) => {
 }, { connection, concurrency: WORKER_CONCURRENCY });
 
 worker.on('completed', (job) => logger.info({ jobId: job.id }, 'Job completed'));
-worker.on('failed', (job, err) => logger.warn({ jobId: job?.id, err: err?.message }, 'Job failed'));
+worker.on('failed', async (job, err) => {
+  logger.warn({ jobId: job?.id, err: err?.message }, 'Job failed');
+  
+  // Limpiar datos de Redis si el job falla completamente
+  if (job?.data?.userId) {
+    try {
+      await cleanupUserData(job.data.userId);
+      logger.info({ userId: job.data.userId }, 'Datos limpiados tras fallo de job');
+    } catch (cleanupError) {
+      logger.error({ userId: job.data.userId, error: cleanupError.message }, 'Error limpiando datos tras fallo');
+    }
+  }
+});
 
 module.exports = {
   enqueueCampaign,
@@ -632,6 +679,7 @@ module.exports = {
   cancelCampaign,
   saveList,
   clearList,
+  cleanupUserData,
   touchHeartbeat,
   // Admin helpers (expuestos por rutas si se requiere)
   async cleanQueue(type = 'completed', graceSec = 3600, limit = 1000) {
