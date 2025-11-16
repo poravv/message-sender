@@ -29,7 +29,7 @@
         "bullmq": "^4.12.2",
         "@ffmpeg-installer/ffmpeg": "^1.1.0",
         "@hapi/boom": "^10.0.1",
-        "@whiskeysockets/baileys": "6.5.0",
+        "@whiskeysockets/baileys": "7.0.0-rc.6",
         "ioredis": "^5.4.1",
         "cors": "^2.8.5",
         "csv-parser": "^3.2.0",

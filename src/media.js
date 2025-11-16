@@ -21,13 +21,13 @@ async function convertAudioToOpus(inputPath, userId = 'default') {
   return new Promise((resolve, reject) => {
     ffmpeg(inputPath)
       .noVideo()
-      .audioCodec('aac')     // AAC es el formato más compatible con iOS
-      .audioBitrate('64k')   // Bitrate más bajo para mejor compatibilidad
-      .audioChannels(1)      // Mono para mensajes de voz
-      .audioFrequency(44100) // Frecuencia estándar para mejor calidad
+      .audioCodec('aac')     // AAC para notas de voz WhatsApp
+      .audioBitrate('64k')   // Bitrate óptimo para PTT (voz)
+      .audioChannels(1)      // Mono para notas de voz
+      .audioFrequency(16000) // 16kHz óptimo para voz PTT
       .outputOptions([
-        '-f', 'mp4',               // Contenedor MP4 
-        '-movflags', '+faststart', // Optimización para reproducción inmediata
+        '-f', 'mp4',               // Contenedor MP4
+        '-movflags', '+faststart', // Optimización para streaming
         '-profile:a', 'aac_low',   // Perfil AAC de baja complejidad
         '-avoid_negative_ts', 'make_zero', // Evitar timestamps negativos
         '-fflags', '+genpts'       // Generar timestamps si faltan

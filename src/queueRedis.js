@@ -551,7 +551,8 @@ async function processCampaign(job){
       // Audio primero si existe
       if (convertedAudio) {
         const buf = await s3.getObjectBuffer(convertedAudio.s3Key);
-        await client.sendMessage(jid, { audio: buf, mimetype: 'audio/mp4', fileName: 'audio.m4a', ptt: false });
+        // PTT requiere solo audio y ptt:true, sin mimetype ni fileName
+        await client.sendMessage(jid, { audio: buf, ptt: true });
         if (processedMessage) {
           await sleep(SEND_BETWEEN_MS);
           await client.sendMessage(jid, { text: processedMessage });
