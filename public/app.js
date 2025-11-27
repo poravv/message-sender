@@ -847,7 +847,7 @@ function updateConnectionStatus(status) {
       }
       
       if (!isCurrentlyConnected) {
-        showAlert(`¡WhatsApp conectado exitosamente!`, 'success', 'Conexión establecida');
+        showAlert(`¡WhatsApp conectado exitosamente!`, 'success', '✅ Conexión establecida');
         // Auto-switch to send tab after successful connection
         setTimeout(() => showTab('send'), 1500);
       }
@@ -865,6 +865,17 @@ function updateConnectionStatus(status) {
       <div>WhatsApp Desconectado</div>
       <small style=\"opacity: 0.8;\">${(status && status.state) || 'Escanear QR'}</small>
     `;
+    
+    // Alert user if they were previously connected
+    if (isCurrentlyConnected) {
+      showAlert(
+        'Se perdió la conexión con WhatsApp.\n' +
+        'Por favor reconecta escaneando el código QR nuevamente.',
+        'warning',
+        '⚠️ Conexión perdida'
+      );
+    }
+    
     isCurrentlyConnected = false;
   }
 }
@@ -1349,9 +1360,14 @@ function setupEmojiPicker() {
 
 /** ======== Message Status & Progress ======== */
 let messageProgressPoll = null;
+let heartbeatTimer = null;
+
+// Variable global para rastrear si ya se notificó la cancelación
+let cancelNotificationShown = false;
+let lastKnownState = null;
 
 function updateMessageStatus(status) {
-  const { sent, total, errors, messages, completed, speed } = status || {};
+  const { sent, total, errors, messages, completed, canceled, state } = status || {};
 
   // Update progress bar with smooth animation
   const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
@@ -1364,6 +1380,15 @@ function updateMessageStatus(status) {
       progressFill.classList.add('active');
     } else {
       progressFill.classList.remove('active');
+    }
+    
+    // Visual feedback for canceled campaigns
+    if (canceled) {
+      progressFill.style.backgroundColor = 'var(--warning-500)';
+    } else if (completed && errors > 0) {
+      progressFill.style.backgroundColor = 'var(--error-500)';
+    } else {
+      progressFill.style.backgroundColor = ''; // Reset to default
     }
     
     progressFill.style.width = `${progress}%`;
@@ -1384,9 +1409,46 @@ function updateMessageStatus(status) {
   // Update status table
   updateStatusTable(messages || []);
 
-  // Handle completion
-  if (completed) {
+  // CRITICAL: Detect campaign cancellation
+  if (canceled && !cancelNotificationShown) {
+    cancelNotificationShown = true;
     stopProgressPolling();
+    
+    const sendBtn = document.getElementById('sendMessageBtn');
+    if (sendBtn) {
+      sendBtn.classList.remove('loading');
+      sendBtn.disabled = false;
+    }
+    
+    // Show prominent cancellation alert
+    showAlert(
+      `Campaña cancelada. Enviados: ${sent || 0}/${total || 0} mensajes.\n` +
+      `Motivo: ${state === 'no_heartbeat_refresh' ? 'Se perdió la conexión con el navegador' : 'Cancelado manualmente'}`,
+      'warning',
+      '⚠️ Envío Cancelado'
+    );
+    
+    return; // Don't process as completed
+  }
+
+  // Detect state changes and notify user
+  if (state && state !== lastKnownState) {
+    lastKnownState = state;
+    
+    // Notify about important state changes
+    if (state === 'running' && !completed) {
+      // Campaign just started
+      console.log('📤 Campaña iniciada');
+    } else if (state === 'queued') {
+      showAlert('Campaña en cola, esperando procesamiento...', 'info', 'En espera');
+    }
+  }
+
+  // Handle completion (only if not canceled)
+  if (completed && !canceled) {
+    stopProgressPolling();
+    cancelNotificationShown = false; // Reset for next campaign
+    
     const sendBtn = document.getElementById('sendMessageBtn');
     if (sendBtn) {
       sendBtn.classList.remove('loading');
@@ -1402,9 +1464,14 @@ function updateMessageStatus(status) {
     }
     
     if ((errors || 0) === 0) {
-      showAlert('Todos los mensajes fueron enviados exitosamente', 'success', 'Envío completado');
+      showAlert('Todos los mensajes fueron enviados exitosamente', 'success', '✅ Envío completado');
     } else {
-      showAlert(`Envío completado con ${errors} errores`, 'warning', 'Envío completado');
+      showAlert(
+        `Envío completado con ${errors} error${errors > 1 ? 'es' : ''}.\n` +
+        `Enviados exitosamente: ${sent}/${total}`,
+        'warning',
+        '⚠️ Completado con errores'
+      );
     }
   }
 }
@@ -1454,20 +1521,94 @@ function updateStatusTable(messages) {
   });
 }
 
+let progressPollErrorCount = 0;
+const MAX_POLL_ERRORS = 3;
+
+// Enviar heartbeat automático al backend
+async function sendHeartbeat() {
+  try {
+    await authFetch('/heartbeat', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    console.log('💓 Heartbeat enviado');
+  } catch (e) {
+    console.warn('⚠️ Error enviando heartbeat:', e.message);
+  }
+}
+
+function startHeartbeat() {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  
+  // Enviar heartbeat cada 10 segundos (mucho antes del TTL de 300s)
+  heartbeatTimer = setInterval(sendHeartbeat, 10000);
+  
+  // Enviar uno inmediatamente
+  sendHeartbeat();
+  
+  console.log('💗 Sistema de heartbeat iniciado');
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+    console.log('💔 Sistema de heartbeat detenido');
+  }
+}
+
 function startProgressPolling() {
   if (messageProgressPoll) clearInterval(messageProgressPoll);
+  
+  // Reset error counter and cancel notification flag
+  progressPollErrorCount = 0;
+  cancelNotificationShown = false;
+  lastKnownState = null;
+  
+  // Iniciar heartbeat automático
+  startHeartbeat();
   
   messageProgressPoll = setInterval(async () => {
     try {
       const res = await authFetch('/message-status');
+      
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      
       const status = await res.json();
+      
+      // Reset error counter on success
+      progressPollErrorCount = 0;
+      
       updateMessageStatus(status);
       
-      if (status.completed) {
+      // Stop polling if completed OR canceled
+      if (status.completed || status.canceled) {
         stopProgressPolling();
       }
     } catch (e) {
       console.error('Progress polling error:', e);
+      progressPollErrorCount++;
+      
+      // Alert user after consecutive failures
+      if (progressPollErrorCount >= MAX_POLL_ERRORS) {
+        stopProgressPolling();
+        
+        const sendBtn = document.getElementById('sendMessageBtn');
+        if (sendBtn) {
+          sendBtn.classList.remove('loading');
+          sendBtn.disabled = false;
+        }
+        
+        showAlert(
+          'Se perdió la conexión con el servidor.\n' +
+          'El envío puede continuar en segundo plano.\n' +
+          'Por favor recarga la página para verificar el estado.',
+          'error',
+          '❌ Error de conexión'
+        );
+      }
     }
   }, 1000); // Polling de progreso cada 1000ms para reducir carga
 }
@@ -1477,6 +1618,9 @@ function stopProgressPolling() {
     clearInterval(messageProgressPoll);
     messageProgressPoll = null;
   }
+  
+  // Detener heartbeat también
+  stopHeartbeat();
 }
 
 async function cancelCampaignFrontend() {

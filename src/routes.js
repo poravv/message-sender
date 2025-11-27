@@ -304,6 +304,19 @@ function buildRoutes() {
     }
   });
 
+  // Heartbeat endpoint para mantener campaña activa
+  router.post('/heartbeat', conditionalAuth, async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      await redisQueue.touchHeartbeat(userId);
+      logger.debug({ userId }, 'Heartbeat recibido');
+      return res.json({ success: true, timestamp: Date.now() });
+    } catch (error) {
+      logger.error({ err: error?.message }, 'Error en /heartbeat');
+      res.status(500).json({ success: false, error: error.message });
+    }
+  });
+
   async function serveQrForUser(userId, res, manager = null) {
     const qrFileName = `qr-${userId}.png`;
     const qrPath = path.join(publicDir, qrFileName);

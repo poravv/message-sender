@@ -80,7 +80,7 @@ async function clearList(userId){
 async function touchHeartbeat(userId){
   const r = getRedis();
   try {
-    const ttl = Math.max(10, Number(process.env.HEARTBEAT_TTL_SECONDS || 30));
+    const ttl = Math.max(10, Number(process.env.HEARTBEAT_TTL_SECONDS || 300));
     await r.set(heartbeatKey(userId), String(Date.now()), 'EX', ttl);
   } catch {}
 }
@@ -379,6 +379,7 @@ async function getStatusDetailed(userId){
   }
   // Convertir a arreglo; opcionalmente ordenar por timestamp ascendente para tabla
   const messages = Array.from(latestByNumber.values()).sort((a,b)=> (a.timestamp||0) - (b.timestamp||0));
+  
   return {
     ...base,
     resuming_from: prog && prog.resumeFrom ? Number(prog.resumeFrom) : null,
@@ -394,6 +395,7 @@ async function getStatusDetailed(userId){
     inProgress: !base.completed && !base.canceled && (base.sent + base.errors > 0 || qi.activeForUser),
     etaSeconds: eta,
     state,
+    canceled: base.canceled, // Exponer explícitamente para el frontend
     queuePositionExact: qi.position,
     messages,
   };
