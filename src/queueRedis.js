@@ -113,9 +113,11 @@ async function addEvent(userId, type, data = {}) {
   const r = getRedis();
   try {
     const max = Math.max(10, Number(process.env.EVENTS_MAX || 200));
+    const ttl = Math.max(600, Number(process.env.EVENTS_TTL_SECONDS || 3600)); // 1 hora por defecto
     const ev = { type, ...data, timestamp: Date.now() };
     await r.lpush(eventsKey(userId), JSON.stringify(ev));
     await r.ltrim(eventsKey(userId), 0, max - 1);
+    await r.expire(eventsKey(userId), ttl); // Establecer TTL cada vez que se agrega un evento
     await r.hset(statusKey(userId), { updatedAt: String(Date.now()) });
   } catch {}
 }
