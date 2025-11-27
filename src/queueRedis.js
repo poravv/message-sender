@@ -240,6 +240,35 @@ async function clearProgress(userId){
 }
 
 /**
+ * Eliminar todos los jobs pendientes de un usuario
+ */
+async function removeUserJobs(userId) {
+  try {
+    const states = ['waiting', 'delayed', 'active', 'paused'];
+    let removed = 0;
+    
+    for (const state of states) {
+      const jobs = await queue.getJobs([state], 0, -1, true);
+      for (const job of jobs) {
+        if (job?.data?.userId === userId) {
+          await job.remove();
+          removed++;
+        }
+      }
+    }
+    
+    if (removed > 0) {
+      logger.info({ userId, removed }, 'Jobs del usuario eliminados de la cola');
+    }
+    
+    return removed;
+  } catch (error) {
+    logger.error({ userId, error: error.message }, 'Error eliminando jobs del usuario');
+    return 0;
+  }
+}
+
+/**
  * Limpieza completa de datos de Redis para un usuario
  * Se ejecuta en: logout, error fatal, desvinculación
  */
@@ -248,6 +277,9 @@ async function cleanupUserData(userId) {
   const r = getRedis();
   
   try {
+    // Eliminar todos los jobs pendientes del usuario
+    await removeUserJobs(userId);
+    
     // Limpiar estado de campaña
     await r.del(statusKey(userId));
     await clearProgress(userId);
@@ -680,6 +712,7 @@ module.exports = {
   saveList,
   clearList,
   cleanupUserData,
+  removeUserJobs,
   touchHeartbeat,
   // Admin helpers (expuestos por rutas si se requiere)
   async cleanQueue(type = 'completed', graceSec = 3600, limit = 1000) {

@@ -65,6 +65,19 @@ async function tryEnsureOwnership(userId, ttlSec = getOwnerTtl()) {
   return false;
 }
 
+async function forceAcquireOwner(userId, ttlSec = getOwnerTtl()) {
+  const r = getRedis();
+  const podId = getPodId();
+  await r.set(ownerKey(userId), podId, 'EX', ttlSec);
+  return true;
+}
+
+async function clearOwner(userId) {
+  const r = getRedis();
+  await r.del(ownerKey(userId));
+  return true;
+}
+
 module.exports = {
   getPodId,
   ownerKey,
@@ -72,6 +85,8 @@ module.exports = {
   acquireOwner,
   renewOwner,
   releaseOwner,
+  forceAcquireOwner,
+  clearOwner,
   isOwner,
   tryEnsureOwnership,
   getOwnerTtl,
