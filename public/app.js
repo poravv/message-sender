@@ -1373,7 +1373,7 @@ function updateMessageStatus(status) {
   const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
   const progressFill = document.querySelector('.progress-fill');
   const progressPercentage = document.querySelector('.progress-percentage');
-  
+
   if (progressFill) {
     // Add active class during sending for faster animation
     if (!completed && total > 0) {
@@ -1381,7 +1381,6 @@ function updateMessageStatus(status) {
     } else {
       progressFill.classList.remove('active');
     }
-    
     // Visual feedback for canceled campaigns
     if (canceled) {
       progressFill.style.backgroundColor = 'var(--warning-500)';
@@ -1390,7 +1389,6 @@ function updateMessageStatus(status) {
     } else {
       progressFill.style.backgroundColor = ''; // Reset to default
     }
-    
     progressFill.style.width = `${progress}%`;
   }
   if (progressPercentage) {

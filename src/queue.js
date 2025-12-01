@@ -328,10 +328,10 @@ class MessageQueue {
     try {
       if (!this.client || !this.client.user) throw new Error('Socket de WhatsApp no está listo');
       
-      // Verificar si el manager tiene rate limiting
-      if (this.client.manager && typeof this.client.manager.waitForRateLimit === 'function') {
-        await this.client.manager.waitForRateLimit();
-      }
+      // Rate limiting deshabilitado por solicitud del cliente
+      // if (this.client.manager && typeof this.client.manager.waitForRateLimit === 'function') {
+      //   await this.client.manager.waitForRateLimit();
+      // }
 
       // Procesar variables en el mensaje
       const processedMessage = processMessageVariables(message, variables || {});

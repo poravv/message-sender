@@ -615,9 +615,10 @@ async function processCampaign(job){
     try {
       // renovar ownership periódicamente
       try { await sessOwner.renewOwner(userId, sessOwner.getOwnerTtl()); } catch {}
-      if (manager && typeof manager.waitForRateLimit === 'function') {
-        await manager.waitForRateLimit();
-      }
+      // Rate limit deshabilitado por solicitud del cliente
+      // if (manager && typeof manager.waitForRateLimit === 'function') {
+      //   await manager.waitForRateLimit();
+      // }
 
       // Audio primero si existe
       if (convertedAudio) {

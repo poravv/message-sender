@@ -505,33 +505,9 @@ class WhatsAppManager {
   }
 
   async waitForRateLimit() {
-    const store = (process.env.SESSION_STORE || 'file').toLowerCase();
-    if (store === 'redis') {
-      try {
-        const redis = getRedis();
-        const key = `wa:rl:${this._getScopedUserId()}`;
-        const count = await redis.incr(key);
-        if (count === 1) {
-          await redis.expire(key, 60);
-        }
-        if (count > this.maxMessagesPerMinute) {
-          const ttl = await redis.ttl(key);
-          const waitTime = Math.max(1, ttl) * 1000;
-          logger.warn(`Rate limit distribuido alcanzado. Esperando ${Math.ceil(waitTime/1000)}s...`);
-          await this._delay(waitTime);
-        }
-        return;
-      } catch (e) {
-        logger.warn({ err: e?.message }, 'Fallo rate-limit distribuido, usando local');
-      }
-    }
-    // Local fallback
-    if (!this._checkRateLimit()) {
-      const waitTime = 60_000; // 1 min
-      logger.warn(`Rate limit alcanzado. Esperando ${waitTime / 1000} segundos...`);
-      await this._delay(waitTime);
-      this.messageCount = 0;
-    }
+    // DESACTIVADO: Rate limit deshabilitado por solicitud del cliente
+    // El cliente asume el riesgo de bloqueo de WhatsApp
+    return;
   }
 
   // ========= Limpieza de sesión (archivos) =========
