@@ -333,7 +333,15 @@ class MessageQueue {
       try {
         if (!this.client || !this.client.user) throw new Error('Socket de WhatsApp no está listo');
         
-        // Verificar estado de conexión
+        // Verificar estado de conexión con retry interno
+        const maxWaitAttempts = 5;
+        let waitAttempts = 0;
+        while (this.client.ws?.readyState !== 1 && waitAttempts < maxWaitAttempts) {
+          logger.info(`WebSocket no listo (readyState: ${this.client.ws?.readyState}), esperando... (${waitAttempts + 1}/${maxWaitAttempts})`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          waitAttempts++;
+        }
+        
         if (this.client.ws?.readyState !== 1) {
           throw new Error('Connection not ready');
         }

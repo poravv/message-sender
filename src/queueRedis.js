@@ -631,7 +631,15 @@ async function processCampaign(job){
         //   await manager.waitForRateLimit();
         // }
 
-        // Verificar que la conexión está activa antes de enviar
+        // Verificar que la conexión está activa antes de enviar con retry interno
+        const maxWaitAttempts = 5;
+        let waitAttempts = 0;
+        while ((!client || client.ws?.readyState !== 1) && waitAttempts < maxWaitAttempts) {
+          logger.info(`WebSocket no listo (readyState: ${client?.ws?.readyState}), esperando... (${waitAttempts + 1}/${maxWaitAttempts})`);
+          await sleep(1000);
+          waitAttempts++;
+        }
+        
         if (!client || client.ws?.readyState !== 1) {
           throw new Error('Connection not ready');
         }
