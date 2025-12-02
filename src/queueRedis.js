@@ -586,6 +586,12 @@ async function processCampaign(job){
     // Marca inicio de job
     try { await addEvent(userId, 'job_started', { total: numbers.length, startIdx }); } catch {}
 
+    // Activar flag de campaña activa para evitar cooldowns durante envío
+    if (manager && typeof manager.setActiveCampaign === 'function') {
+      manager.setActiveCampaign(true);
+      logger.info({ userId }, 'Flag de campaña activa establecido');
+    }
+
     let sent = 0;
     const requireHeartbeat = String(process.env.HEARTBEAT_REQUIRED || 'true').toLowerCase() === 'true';
     for (let i = startIdx; i < numbers.length; i++) {
@@ -612,48 +618,80 @@ async function processCampaign(job){
     const processedMessage = processMessageVariables(message, variables || {});
     const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
 
-    try {
-      // renovar ownership periódicamente
-      try { await sessOwner.renewOwner(userId, sessOwner.getOwnerTtl()); } catch {}
-      // Rate limit deshabilitado por solicitud del cliente
-      // if (manager && typeof manager.waitForRateLimit === 'function') {
-      //   await manager.waitForRateLimit();
-      // }
+    let retries = 0;
+    const MAX_RETRIES = 3;
+    let success = false;
 
-      // Audio primero si existe
-      if (convertedAudio) {
-        const buf = await s3.getObjectBuffer(convertedAudio.s3Key);
-        // PTT requiere solo audio y ptt:true, sin mimetype ni fileName
-        await client.sendMessage(jid, { audio: buf, ptt: true });
-        if (processedMessage) {
-          await sleep(SEND_BETWEEN_MS);
+    while (retries <= MAX_RETRIES && !success) {
+      try {
+        // renovar ownership periódicamente
+        try { await sessOwner.renewOwner(userId, sessOwner.getOwnerTtl()); } catch {}
+        // Rate limit deshabilitado por solicitud del cliente
+        // if (manager && typeof manager.waitForRateLimit === 'function') {
+        //   await manager.waitForRateLimit();
+        // }
+
+        // Verificar que la conexión está activa antes de enviar
+        if (!client || client.ws?.readyState !== 1) {
+          throw new Error('Connection not ready');
+        }
+
+        // Audio primero si existe
+        if (convertedAudio) {
+          const buf = await s3.getObjectBuffer(convertedAudio.s3Key);
+          // PTT requiere solo audio y ptt:true, sin mimetype ni fileName
+          await client.sendMessage(jid, { audio: buf, ptt: true });
+          if (processedMessage) {
+            await sleep(SEND_BETWEEN_MS);
+            await client.sendMessage(jid, { text: processedMessage });
+          }
+        } else if (singleImage) {
+          const buf = await getImageBufferCached(imageCache, singleImage);
+          await client.sendMessage(jid, { image: buf, caption: processedMessage || '' });
+        } else if (images && images.length > 0) {
+          for (let k = 0; k < images.length; k++) {
+            const img = images[k];
+            const buf = await getImageBufferCached(imageCache, img);
+            await client.sendMessage(jid, { image: buf, caption: k === 0 ? (processedMessage || '') : '' });
+            if (k < images.length - 1) await sleep(SEND_BETWEEN_MS);
+          }
+        } else if (processedMessage) {
           await client.sendMessage(jid, { text: processedMessage });
+        } else {
+          throw new Error('No se proporcionó contenido');
         }
-      } else if (singleImage) {
-        const buf = await getImageBufferCached(imageCache, singleImage);
-        await client.sendMessage(jid, { image: buf, caption: processedMessage || '' });
-      } else if (images && images.length > 0) {
-        for (let k = 0; k < images.length; k++) {
-          const img = images[k];
-          const buf = await getImageBufferCached(imageCache, img);
-          await client.sendMessage(jid, { image: buf, caption: k === 0 ? (processedMessage || '') : '' });
-          if (k < images.length - 1) await sleep(SEND_BETWEEN_MS);
-        }
-      } else if (processedMessage) {
-        await client.sendMessage(jid, { text: processedMessage });
-      } else {
-        throw new Error('No se proporcionó contenido');
-      }
 
-      sent++;
-      await incField(userId, 'sent', 1);
-      try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'sent' }); } catch {}
-      try { await addEvent(userId, 'message', { number, status: 'sent' }); } catch {}
-    } catch (err) {
-      logger.warn(`Error enviando a ${number}: ${err?.message}`);
-      await incField(userId, 'errors', 1);
-      try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'error', message: err?.message }); } catch {}
-      try { await addEvent(userId, 'message', { number, status: 'error', message: err?.message }); } catch {}
+        sent++;
+        await incField(userId, 'sent', 1);
+        try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'sent' }); } catch {}
+        try { await addEvent(userId, 'message', { number, status: 'sent' }); } catch {}
+        success = true;
+
+      } catch (err) {
+        retries++;
+        const isConnectionError = err?.message?.includes('Connection') || err?.message?.includes('Socket') || err?.message?.includes('not ready');
+        
+        if (isConnectionError && retries <= MAX_RETRIES) {
+          logger.warn(`Error de conexión enviando a ${number} (intento ${retries}/${MAX_RETRIES}): ${err?.message}. Reintentando en 5s...`);
+          await sleep(5000); // Esperar 5 segundos antes de reintentar
+          
+          // Intentar reconectar si es necesario
+          if (manager && typeof manager.ensureConnection === 'function') {
+            try {
+              await manager.ensureConnection();
+            } catch (reconErr) {
+              logger.error(`Error al reconectar: ${reconErr?.message}`);
+            }
+          }
+        } else {
+          // Error definitivo o máximo de reintentos alcanzado
+          logger.warn(`Error enviando a ${number} (${retries} intentos): ${err?.message}`);
+          await incField(userId, 'errors', 1);
+          try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'error', message: err?.message }); } catch {}
+          try { await addEvent(userId, 'message', { number, status: 'error', message: err?.message }); } catch {}
+          break;
+        }
+      }
     }
 
       await sleep(SEND_BETWEEN_MS);
@@ -665,6 +703,12 @@ async function processCampaign(job){
     } else {
       await markCompleted(userId);
       try { const r = getRedis(); const sentCnt = Number((await r.hget(statusKey(userId), 'sent')) || 0); await addEvent(userId, 'job_completed', { sent: sentCnt }); } catch {}
+    }
+
+    // Desactivar flag de campaña activa
+    if (manager && typeof manager.setActiveCampaign === 'function') {
+      manager.setActiveCampaign(false);
+      logger.info({ userId }, 'Flag de campaña activa desactivado');
     }
 
   // Limpieza condicional en S3
@@ -680,6 +724,11 @@ async function processCampaign(job){
       }
     } catch {}
   } finally {
+    // Asegurar que el flag de campaña activa se desactive SIEMPRE
+    if (manager && typeof manager.setActiveCampaign === 'function') {
+      manager.setActiveCampaign(false);
+    }
+    
     try { await clearCancel(userId); } catch {}
     try { await clearProgress(userId); } catch {}
     try { await clearList(userId); } catch {}

@@ -48,6 +48,7 @@ class WhatsAppManager {
     this.conflictCount = 0;
     this.lastConflictTime = 0;
     this.isInCooldown = false;
+    this.activeCampaign = false; // Flag para indicar campaña activa
 
     // Cola de mensajes
     this.messageQueue = null;
@@ -372,14 +373,26 @@ class WhatsAppManager {
             this.lastConflictTime = Date.now();
 
             logger.warn(
-              `Conflicto detectado (#${this.conflictCount}). Estrategia de reconexión inteligente...`
+              `Conflicto detectado (#${this.conflictCount}). Campaña activa: ${this.activeCampaign}`
             );
 
-            const cooldownMinutes = Math.min(this.conflictCount * 2, 10);
-            const cooldownMs = cooldownMinutes * 60 * 1000;
+            // Si hay campaña activa, NO entrar en cooldown - solo reconectar rápido
+            if (this.activeCampaign) {
+              logger.info('Campaña activa detectada, reconectando inmediatamente sin cooldown');
+              setTimeout(() => {
+                logger.info('Reintentando conexión durante campaña activa...');
+                this.safeInitialize();
+              }, 5000); // Solo 5 segundos de espera
+              return;
+            }
+
+            // AJUSTADO: Cooldown reducido - solo en conflictos repetidos SIN campaña
+            // Primer conflicto: 30 segundos, luego aumenta
+            const cooldownSeconds = this.conflictCount === 1 ? 30 : Math.min(this.conflictCount * 30, 120);
+            const cooldownMs = cooldownSeconds * 1000;
             this.isInCooldown = true;
 
-            logger.info(`Entrando en cooldown por ${cooldownMinutes} minutos debido a conflicto`);
+            logger.info(`Entrando en cooldown por ${cooldownSeconds} segundos debido a conflicto (#${this.conflictCount})`);
             setTimeout(() => {
               this.isInCooldown = false;
               logger.info('Cooldown terminado, intentando reconexión');
@@ -508,6 +521,38 @@ class WhatsAppManager {
     // DESACTIVADO: Rate limit deshabilitado por solicitud del cliente
     // El cliente asume el riesgo de bloqueo de WhatsApp
     return;
+  }
+
+  async ensureConnection() {
+    if (!this.sock || this.sock.ws?.readyState !== 1) {
+      logger.warn({ userId: this._getScopedUserId() }, 'Conexión no activa, intentando reconectar...');
+      
+      // Si hay cooldown activo, no intentar reconectar
+      if (this.isInCooldown) {
+        throw new Error('En cooldown, no se puede reconectar ahora');
+      }
+
+      await this.safeInitialize();
+      
+      // Esperar un momento para que se estabilice la conexión
+      await this._delay(2000);
+      
+      // Verificar nuevamente
+      if (!this.sock || this.sock.ws?.readyState !== 1) {
+        throw new Error('No se pudo restablecer la conexión');
+      }
+      
+      logger.info({ userId: this._getScopedUserId() }, 'Conexión restablecida exitosamente');
+    }
+  }
+
+  setActiveCampaign(active) {
+    this.activeCampaign = active;
+    logger.info({ userId: this._getScopedUserId(), activeCampaign: active }, 'Estado de campaña actualizado');
+  }
+
+  isActiveCampaign() {
+    return this.activeCampaign;
   }
 
   // ========= Limpieza de sesión (archivos) =========

@@ -325,69 +325,79 @@ class MessageQueue {
     const { number, message, variables, images, singleImage, audioFile, originalIndex } = item;
     logger.info(`Enviando mensaje a ${number} (posición original: ${originalIndex + 1})`);
 
-    try {
-      if (!this.client || !this.client.user) throw new Error('Socket de WhatsApp no está listo');
-      
-      // Rate limiting deshabilitado por solicitud del cliente
-      // if (this.client.manager && typeof this.client.manager.waitForRateLimit === 'function') {
-      //   await this.client.manager.waitForRateLimit();
-      // }
+    let retries = 0;
+    const MAX_RETRIES = 3;
+    let success = false;
 
-      // Procesar variables en el mensaje
-      const processedMessage = processMessageVariables(message, variables || {});
-      
-      // Log para debug de variables
-      if (variables && Object.keys(variables).length > 0) {
-        logger.info({ number, variables, originalMessage: message, processedMessage }, 'Variables procesadas en mensaje');
-      }
-
-      // Formatear número para Baileys (agregar @s.whatsapp.net si no lo tiene)
-      const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
-
-      // AUDIO
-      if (audioFile) {
-        if (!fs.existsSync(audioFile.path)) throw new Error('Archivo de audio no encontrado');
+    while (retries <= MAX_RETRIES && !success) {
+      try {
+        if (!this.client || !this.client.user) throw new Error('Socket de WhatsApp no está listo');
         
-        // Solo convertir una vez y reutilizar el archivo convertido
-        let converted;
-        if (!audioFile.convertedPath || !fs.existsSync(audioFile.convertedPath)) {
-          converted = await convertAudioToOpus(audioFile.path, this.userId);
-          audioFile.convertedPath = converted;
-          logger.info(`Audio convertido para envío múltiple: ${converted}`);
-        } else {
-          converted = audioFile.convertedPath;
-          logger.info(`Reutilizando audio convertido: ${converted}`);
+        // Verificar estado de conexión
+        if (this.client.ws?.readyState !== 1) {
+          throw new Error('Connection not ready');
         }
         
-        // Verificar que el archivo convertido existe antes de leer
-        if (!fs.existsSync(converted)) {
-          throw new Error(`Archivo de audio convertido no encontrado: ${converted}`);
+        // Rate limiting deshabilitado por solicitud del cliente
+        // if (this.client.manager && typeof this.client.manager.waitForRateLimit === 'function') {
+        //   await this.client.manager.waitForRateLimit();
+        // }
+
+        // Procesar variables en el mensaje
+        const processedMessage = processMessageVariables(message, variables || {});
+        
+        // Log para debug de variables
+        if (variables && Object.keys(variables).length > 0) {
+          logger.info({ number, variables, originalMessage: message, processedMessage }, 'Variables procesadas en mensaje');
         }
-        
-        const audioBuffer = fs.readFileSync(converted);
-        const stats = fs.statSync(converted);
-        
-        logger.info(`Enviando audio a ${number}:`, {
-          originalFile: audioFile.path,
-          convertedFile: converted,
-          bufferSize: audioBuffer.length,
-          fileSize: stats.size,
-          destinatario: originalIndex + 1,
-          mimetype: 'audio/mp4'
-        });
-        
-        // Intentar múltiples formatos de mimetype para máxima compatibilidad
-        let sendSuccess = false;
-        const mimetypes = ['audio/mp4', 'audio/aac', 'audio/mpeg'];
-        
-        for (const mimetype of mimetypes) {
-          try {
-            await this.client.sendMessage(jid, {
-              audio: audioBuffer,
-              mimetype: mimetype,
-              fileName: 'audio.m4a',
-              ptt: false // Enviar como audio adjunto (música)
-            });
+
+        // Formatear número para Baileys (agregar @s.whatsapp.net si no lo tiene)
+        const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
+
+        // AUDIO
+        if (audioFile) {
+          if (!fs.existsSync(audioFile.path)) throw new Error('Archivo de audio no encontrado');
+          
+          // Solo convertir una vez y reutilizar el archivo convertido
+          let converted;
+          if (!audioFile.convertedPath || !fs.existsSync(audioFile.convertedPath)) {
+            converted = await convertAudioToOpus(audioFile.path, this.userId);
+            audioFile.convertedPath = converted;
+            logger.info(`Audio convertido para envío múltiple: ${converted}`);
+          } else {
+            converted = audioFile.convertedPath;
+            logger.info(`Reutilizando audio convertido: ${converted}`);
+          }
+          
+          // Verificar que el archivo convertido existe antes de leer
+          if (!fs.existsSync(converted)) {
+            throw new Error(`Archivo de audio convertido no encontrado: ${converted}`);
+          }
+          
+          const audioBuffer = fs.readFileSync(converted);
+          const stats = fs.statSync(converted);
+          
+          logger.info(`Enviando audio a ${number}:`, {
+            originalFile: audioFile.path,
+            convertedFile: converted,
+            bufferSize: audioBuffer.length,
+            fileSize: stats.size,
+            destinatario: originalIndex + 1,
+            mimetype: 'audio/mp4'
+          });
+          
+          // Intentar múltiples formatos de mimetype para máxima compatibilidad
+          let sendSuccess = false;
+          const mimetypes = ['audio/mp4', 'audio/aac', 'audio/mpeg'];
+          
+          for (const mimetype of mimetypes) {
+            try {
+              await this.client.sendMessage(jid, {
+                audio: audioBuffer,
+                mimetype: mimetype,
+                fileName: 'audio.m4a',
+                ptt: false // Enviar como audio adjunto (música)
+              });
             
             logger.info(`Audio enviado exitosamente a ${number} con mimetype ${mimetype} (destinatario ${originalIndex + 1})`);
             
@@ -480,7 +490,13 @@ class MessageQueue {
       }
 
       throw new Error('No se proporcionó contenido');
+      
+      // Si llegamos aquí, el mensaje se envió exitosamente
+      success = true;
+      
     } catch (error) {
+      retries++;
+      
       // Decrementar referencia del archivo en caso de error también
       if (audioFile) {
         this.decrementFileReference(audioFile);
@@ -488,10 +504,39 @@ class MessageQueue {
       
       if (isIgnorableSerializeError(error)) {
         logger.warn(`Aviso: error interno "serialize" ignorado para ${number}`);
-        return true;
+        success = true;
+        break;
       }
-      throw error;
+      
+      const isConnectionError = error?.message?.includes('Connection') || 
+                               error?.message?.includes('Socket') || 
+                               error?.message?.includes('not ready') ||
+                               error?.message?.includes('listo');
+      
+      if (isConnectionError && retries <= MAX_RETRIES) {
+        logger.warn(`Error de conexión enviando a ${number} (intento ${retries}/${MAX_RETRIES}): ${error?.message}. Reintentando en 5s...`);
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        
+        // Intentar reconectar si es necesario
+        if (this.client.manager && typeof this.client.manager.ensureConnection === 'function') {
+          try {
+            await this.client.manager.ensureConnection();
+          } catch (reconErr) {
+            logger.error(`Error al reconectar: ${reconErr?.message}`);
+          }
+        }
+      } else {
+        // Error definitivo o máximo de reintentos alcanzado
+        throw error;
+      }
     }
+  }
+  
+  if (!success) {
+    throw new Error(`No se pudo enviar el mensaje después de ${MAX_RETRIES} intentos`);
+  }
+  
+  return true;
   }
 
   async _getImageBuffer(image) {
