@@ -335,13 +335,8 @@ class WhatsAppManager {
 
             // OK
             logger.info({ phoneNumber }, 'Número autorizado');
-            
-            // Esperar a que el socket esté completamente estabilizado
-            await this._delay(2000); // 2 segundos para estabilización
-            
             this.isReady = true;
             this.lastActivity = Date.now();
-            logger.info({ phoneNumber, userId: this._getScopedUserId() }, 'Socket estabilizado y listo para enviar mensajes');
 
             // borrar QR al conectar
             const qrPath = this._getUserQrPath();
