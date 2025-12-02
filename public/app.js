@@ -789,6 +789,52 @@ window.addEventListener('beforeunload', () => {
   revokeQrObjectUrl();
 });
 
+/** ======== Clear Redis Session (resolver conflictos) ======== */
+async function clearRedisSession() {
+  const clearBtn = document.getElementById('clearRedisBtn');
+  
+  // Confirmación del usuario
+  if (!confirm('¿Limpiar el cache de Redis?\n\nEsto eliminará la sesión antigua y puede resolver errores de conflicto.\n\n⚠️ Solo hazlo si tienes problemas de conexión.')) {
+    return;
+  }
+  
+  if (clearBtn) {
+    clearBtn.disabled = true;
+    clearBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Limpiando...';
+  }
+  
+  try {
+    const response = await authFetch('/auth/clear-redis', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    const result = await response.json();
+    
+    if (result.success) {
+      showAlert(result.message || 'Cache limpiado exitosamente', 'success', '✅ Cache Limpiado');
+      
+      // Esperar un momento y luego refrescar el QR
+      setTimeout(() => {
+        showAlert('Generando nuevo código QR...', 'info', 'QR');
+        initializeQR(true);
+      }, 1500);
+    } else {
+      showAlert(result.message || 'No se pudo limpiar el cache', 'warning', '⚠️ Error');
+    }
+  } catch (error) {
+    console.error('Error al limpiar Redis:', error);
+    showAlert('Error al limpiar el cache de Redis', 'error', '❌ Error');
+  } finally {
+    if (clearBtn) {
+      clearBtn.disabled = false;
+      clearBtn.innerHTML = '<i class="bi bi-trash3"></i><span>Limpiar cache</span>';
+    }
+  }
+}
+
+// Hacer disponible globalmente
+window.clearRedisSession = clearRedisSession;
+
 /** ======== Connection Status Management ======== */
 let isCurrentlyConnected = false;
 let statusCheckTimer = null;

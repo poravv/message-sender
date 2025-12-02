@@ -82,6 +82,42 @@ class WhatsAppManager {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
 
+  async _clearRedisAuth() {
+    // Limpiar completamente todas las claves de autenticación en Redis para este usuario
+    try {
+      const redis = getRedis();
+      if (!redis || redis.status === 'end') {
+        logger.warn('Redis no disponible para limpieza');
+        return false;
+      }
+
+      const userId = this._getScopedUserId();
+      const patterns = [
+        `wa:auth:${userId}:*`,
+        `wa:owner:${userId}`,
+      ];
+
+      let totalDeleted = 0;
+      for (const pattern of patterns) {
+        let cursor = '0';
+        do {
+          const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 200);
+          cursor = nextCursor;
+          if (keys && keys.length) {
+            await redis.del(keys);
+            totalDeleted += keys.length;
+          }
+        } while (cursor !== '0');
+      }
+
+      logger.info({ userId, totalDeleted }, 'Redis auth limpiado completamente');
+      return totalDeleted > 0;
+    } catch (err) {
+      logger.error({ err: err?.message, userId: this._getScopedUserId() }, 'Error limpiando Redis auth');
+      return false;
+    }
+  }
+
   updateActivity() {
     this.lastActivity = Date.now();
   }
@@ -385,6 +421,16 @@ class WhatsAppManager {
               }, 5000); // Solo 5 segundos de espera
               return;
             }
+
+            // Auto-limpieza de Redis para eliminar sesiones fantasma
+            logger.info('Limpiando sesión antigua de Redis antes del cooldown...');
+            this._clearRedisAuth().then((cleaned) => {
+              if (cleaned) {
+                logger.info('Sesión antigua eliminada, reiniciando conexión limpia');
+              }
+            }).catch(err => {
+              logger.error({ err: err?.message }, 'Error en auto-limpieza de Redis');
+            });
 
             // AJUSTADO: Cooldown reducido - solo en conflictos repetidos SIN campaña
             // Primer conflicto: 30 segundos, luego aumenta

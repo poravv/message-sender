@@ -724,6 +724,43 @@ function buildRoutes() {
     }
   });
 
+  // Endpoint para limpiar sesión de Redis (resolver conflictos)
+  router.post('/auth/clear-redis', conditionalAuth, async (req, res) => {
+    try {
+      const whatsappManager = await sessionManager.getSessionByToken(req);
+      
+      logger.info({ userId: req.auth?.sub }, 'Solicitud de limpieza de Redis recibida');
+      
+      // Llamar al método de limpieza
+      const cleared = await whatsappManager._clearRedisAuth();
+      
+      if (cleared) {
+        logger.info({ userId: req.auth?.sub }, 'Redis limpiado exitosamente');
+        res.json({
+          success: true,
+          message: 'Sesión de Redis limpiada exitosamente. Puede reintentar la conexión.',
+          timestamp: new Date().toISOString()
+        });
+      } else {
+        logger.warn({ userId: req.auth?.sub }, 'No se encontraron claves para limpiar');
+        res.json({
+          success: true,
+          message: 'No se encontraron datos antiguos en Redis',
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error limpiando Redis');
+      res.status(500).json({ 
+        success: false, 
+        error: 'Error limpiando sesión de Redis',
+        details: error?.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   return router;
 }
 

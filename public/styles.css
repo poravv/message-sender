@@ -892,6 +892,8 @@ body::before {
 .qr-actions {
   display: flex;
   justify-content: center;
+  gap: var(--spacing-sm);
+  flex-wrap: wrap;
 }
 
 .btn-refresh {
@@ -914,6 +916,24 @@ body::before {
   color: var(--primary-500);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
+}
+
+.btn-refresh.btn-danger {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: var(--error-500);
+}
+
+.btn-refresh.btn-danger:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: var(--error-500);
+  color: var(--error-500);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* =========== AUTHENTICATED SECTION =========== */

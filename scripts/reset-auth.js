@@ -33,11 +33,20 @@ async function main() {
     await redis.connect();
   }
 
-  const pattern = target === 'all' ? 'wa:auth:*' : `wa:auth:${target}:*`;
-  logger.info({ pattern }, 'Eliminando estado de Baileys en Redis');
+  // Limpiar tanto auth como ownership
+  const patterns = target === 'all' 
+    ? ['wa:auth:*', 'wa:owner:*'] 
+    : [`wa:auth:${target}:*`, `wa:owner:${target}`];
+  
+  let totalDeleted = 0;
+  for (const pattern of patterns) {
+    logger.info({ pattern }, 'Eliminando estado en Redis');
+    const deleted = await deleteKeys(redis, pattern);
+    totalDeleted += deleted;
+    logger.info({ pattern, deleted }, 'Entradas eliminadas');
+  }
 
-  const deleted = await deleteKeys(redis, pattern);
-  logger.info({ deleted }, 'Entradas eliminadas en Redis');
+  logger.info({ totalDeleted }, 'Total de entradas eliminadas en Redis');
 
   try {
     await redis.quit();
