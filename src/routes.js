@@ -16,10 +16,10 @@ const qrRefreshInProgress = new Map();
 // Middleware condicional para desarrollo
 const conditionalAuth = (req, res, next) => {
   const isDevelopment = process.env.NODE_ENV !== 'production';
-  
+
   if (isDevelopment) {
     // En desarrollo, simular usuario autenticado
-    req.auth = { 
+    req.auth = {
       sub: 'dev-user-001',
       name: 'Usuario Desarrollo',
       preferred_username: 'dev-user',
@@ -28,34 +28,34 @@ const conditionalAuth = (req, res, next) => {
     req.userRoles = { all: ['sender_api'], realmRoles: [], clientRoles: ['sender_api'] };
     return next();
   }
-  
+
   // En producción, usar autenticación real
   return checkJwt(req, res, next);
 };
 
 const conditionalRole = (role) => (req, res, next) => {
   const isDevelopment = process.env.NODE_ENV !== 'production';
-  
+
   if (isDevelopment) {
     return next(); // En desarrollo, omitir verificación de roles
   }
-  
+
   // En producción, verificar múltiples roles posibles
   const allowedRoles = ['sender_api', 'sender']; // Aceptar cualquiera de los dos
   const { all } = req.userRoles || {};
-  
+
   const hasValidRole = allowedRoles.some(r => all?.includes(r));
-  
+
   if (!hasValidRole) {
-    logger.info({ 
-      sub: req.auth?.sub, 
-      requestedRole: role, 
-      allowedRoles, 
-      userRoles: all 
+    logger.info({
+      sub: req.auth?.sub,
+      requestedRole: role,
+      allowedRoles,
+      userRoles: all
     }, 'Forbidden: missing required role');
     return res.status(403).json({ error: 'Forbidden: missing role' });
   }
-  
+
   return next();
 };
 
@@ -71,11 +71,11 @@ function buildRoutes() {
         userAgent: req.headers['user-agent'],
         ip: req.ip
       });
-      
+
       const whatsappManager = await sessionManager.getSessionByToken(req);
       const s = whatsappManager.getState();
       const health = whatsappManager.getConnectionHealth ? whatsappManager.getConnectionHealth() : {};
-      
+
       const conn = s.connectionState;
       const stateText = s.isReady
         ? 'connected'
@@ -111,24 +111,24 @@ function buildRoutes() {
           lastDisconnectReason: health.lastDisconnectReason || null
         }
       };
-      
+
       if (s.userInfo) {
         resp.userInfo = {
           phoneNumber: s.userInfo.phoneNumber,
           pushname: s.userInfo.pushname
         };
       }
-      
+
       logger.info('Connection status response', {
         userId: req.auth?.sub,
         status: resp.status,
         isReady: resp.isReady,
         hasQR: resp.hasQR
       });
-      
+
       res.json(resp);
     } catch (error) {
-      logger.error({ 
+      logger.error({
         err: error?.message,
         userId: req.auth?.sub,
         stack: error?.stack
@@ -145,14 +145,14 @@ function buildRoutes() {
   ]), async (req, res) => {
     try {
       const whatsappManager = await sessionManager.getSessionByToken(req);
-      
+
       if (!whatsappManager.isReady) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: 'Tu sesión de WhatsApp no está lista. Escaneá el QR primero.',
-          needsQR: true 
+          needsQR: true
         });
       }
-      
+
       if (!req.files || !req.files['csvFile']) {
         return res.status(400).json({ error: 'Archivo CSV/TXT no proporcionado' });
       }
@@ -161,28 +161,66 @@ function buildRoutes() {
       let images = req.files['images'];
       let singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
       let audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
-      const { message } = req.body;
+
+      // Extract templates from request body
+      const { templates: templatesJson, message } = req.body;
+      let templates = [];
+
+      try {
+        // Try to parse templates JSON
+        if (templatesJson) {
+          templates = JSON.parse(templatesJson);
+        } else if (message) {
+          // Fallback: if no templates JSON, use the old 'message' field for backward compatibility
+          templates = [message];
+        }
+      } catch (e) {
+        logger.error({ error: e.message }, 'Error parsing templates JSON');
+        return res.status(400).json({ error: 'Formato de templates inválido' });
+      }
+
+      // Validate templates
+      if (!templates || !Array.isArray(templates) || templates.length === 0) {
+        return res.status(400).json({ error: 'Debes proporcionar al menos un template de mensaje' });
+      }
+
+      if (templates.length > 5) {
+        return res.status(400).json({ error: 'Máximo 5 templates permitidos' });
+      }
+
+      // Validate each template
+      for (let i = 0; i < templates.length; i++) {
+        if (typeof templates[i] !== 'string' || templates[i].trim().length === 0) {
+          return res.status(400).json({ error: `Template ${i + 1} está vacío o es inválido` });
+        }
+      }
+
+      logger.info({
+        userId: req.auth?.sub,
+        templateCount: templates.length,
+        numbersCount: 0  // Will be updated after CSV parsing
+      }, 'Procesando envío con templates múltiples');
 
       const parsed = await loadNumbersFromCSV(csvFilePath);
       const numbers = parsed?.numbers || [];
       const invalidCount = parsed?.invalidCount || 0;
       const duplicates = parsed?.duplicates || 0;
-      
+
       if (numbers.length === 0) return res.status(400).json({ error: 'No se encontraron números válidos' });
 
       // Si hay registros inválidos en el CSV, cancelar automáticamente y limpiar lista
       if (invalidCount > 0) {
         const userId = req.auth?.sub || 'default';
-        try { if (redisQueue && typeof redisQueue.cancelCampaign === 'function') await redisQueue.cancelCampaign(userId); } catch {}
-        try { if (redisQueue && typeof redisQueue.clearList === 'function') await redisQueue.clearList(userId); } catch {}
-        return res.status(400).json({ 
-          error: 'Se detectaron filas inválidas en el CSV. Envío cancelado.', 
+        try { if (redisQueue && typeof redisQueue.cancelCampaign === 'function') await redisQueue.cancelCampaign(userId); } catch { }
+        try { if (redisQueue && typeof redisQueue.clearList === 'function') await redisQueue.clearList(userId); } catch { }
+        return res.status(400).json({
+          error: 'Se detectaron filas inválidas en el CSV. Envío cancelado.',
           invalidCount,
           duplicates,
           details: 'Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX'
         });
       }
-      
+
       // Informar sobre duplicados encontrados (pero continuar con los únicos)
       if (duplicates > 0) {
         logger.info({ duplicates, unique: numbers.length }, 'Duplicados eliminados del CSV');
@@ -209,20 +247,20 @@ function buildRoutes() {
               const key = s3.buildKey(userId, img.originalname || 'image');
               await s3.putObjectFromPath(key, img.path, img.mimetype);
               uploaded.push({ s3Key: key, mimetype: img.mimetype, originalname: img.originalname });
-              try { if (img.path) require('fs').unlinkSync(img.path); } catch {}
+              try { if (img.path) require('fs').unlinkSync(img.path); } catch { }
             }
             images = uploaded;
           }
           if (singleImage) {
             const key = s3.buildKey(userId, singleImage.originalname || 'image');
             await s3.putObjectFromPath(key, singleImage.path, singleImage.mimetype);
-            try { if (singleImage.path) require('fs').unlinkSync(singleImage.path); } catch {}
+            try { if (singleImage.path) require('fs').unlinkSync(singleImage.path); } catch { }
             singleImage = { s3Key: key, mimetype: singleImage.mimetype, originalname: singleImage.originalname };
           }
           if (audioFile) {
             const key = s3.buildKey(userId, audioFile.originalname || 'audio');
             await s3.putObjectFromPath(key, audioFile.path, audioFile.mimetype);
-            try { if (audioFile.path) require('fs').unlinkSync(audioFile.path); } catch {}
+            try { if (audioFile.path) require('fs').unlinkSync(audioFile.path); } catch { }
             audioFile = { s3Key: key, mimetype: audioFile.mimetype, originalname: audioFile.originalname };
           }
         }
@@ -238,24 +276,25 @@ function buildRoutes() {
       const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
       if (useRedisQueue) {
         const userId = req.auth?.sub || 'default';
-        await redisQueue.enqueueCampaign(userId, numbers, message, images, singleImage, audioFile);
+        await redisQueue.enqueueCampaign(userId, numbers, templates, images, singleImage, audioFile);
         // Primer heartbeat tras encolar (para detectar refresh)
         if (typeof redisQueue.touchHeartbeat === 'function') {
-          try { await redisQueue.touchHeartbeat(userId); } catch {}
+          try { await redisQueue.touchHeartbeat(userId); } catch { }
         }
       } else {
         whatsappManager.updateActivity();
-        await whatsappManager.messageQueue.add(numbers, message, images, singleImage, audioFile);
+        await whatsappManager.messageQueue.add(numbers, templates[0], images, singleImage, audioFile);
       }
 
-      res.json({ 
-        status: 'success', 
-        message: 'Procesando mensajes', 
+      res.json({
+        status: 'success',
+        message: 'Procesando mensajes',
         totalNumbers: numbers.length,
+        templateCount: templates.length,
         duplicatesRemoved: duplicates || 0,
         invalidNumbers: invalidCount || 0,
         userId: req.auth?.sub,
-        initialStats: useRedisQueue ? { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false } : whatsappManager.messageQueue.getStats() 
+        initialStats: useRedisQueue ? { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false } : whatsappManager.messageQueue.getStats()
       });
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /send-messages');
@@ -269,7 +308,7 @@ function buildRoutes() {
       if (useRedisQueue) {
         const userId = req.auth?.sub || 'default';
         if (typeof redisQueue.touchHeartbeat === 'function') {
-          try { await redisQueue.touchHeartbeat(userId); } catch {}
+          try { await redisQueue.touchHeartbeat(userId); } catch { }
         }
         const getStatus = redisQueue.getStatusDetailed || redisQueue.getStatus;
         const stats = await getStatus(userId);
@@ -360,20 +399,20 @@ function buildRoutes() {
       if (!userId) {
         return res.status(401).json({ error: 'Usuario no autenticado' });
       }
-      
+
       const whatsappManager = await sessionManager.getSessionByToken(req);
-      
+
       if (!whatsappManager.sock) {
         const initialized = await sessionManager.initializeSession(userId);
         if (!initialized) {
-          return res.status(500).json({ 
+          return res.status(500).json({
             error: 'No se pudo inicializar la sesión de WhatsApp',
             userId: userId
           });
         }
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
-      
+
       if (whatsappManager.isReady) {
         return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
       }
@@ -383,7 +422,7 @@ function buildRoutes() {
         return;
       }
 
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'QR no disponible para este usuario. Solicita un nuevo QR.',
         userId: userId
       });
@@ -413,7 +452,7 @@ function buildRoutes() {
         return;
       }
 
-      return res.status(404).json({ 
+      return res.status(404).json({
         error: 'QR no disponible para este usuario. Solicita un nuevo QR.',
         userId: requestedId
       });
@@ -427,37 +466,37 @@ function buildRoutes() {
     try {
       const userId = req.auth?.sub;
       if (!userId) {
-        return res.status(401).json({ 
-          success: false, 
-          message: 'Usuario no autenticado' 
+        return res.status(401).json({
+          success: false,
+          message: 'Usuario no autenticado'
         });
       }
-      
+
       // Verificar si ya hay una operación de refresh en progreso para este usuario
       if (qrRefreshInProgress.has(userId)) {
         logger.warn({ userId }, 'Refresh QR ya en progreso para usuario, ignorando solicitud duplicada');
-        return res.status(429).json({ 
-          success: false, 
+        return res.status(429).json({
+          success: false,
           message: 'Ya hay una operación de refresh en progreso. Por favor espera.',
           retryAfter: 3
         });
       }
-      
+
       // Marcar como en progreso
       qrRefreshInProgress.set(userId, Date.now());
-      
+
       // Limpiar el marcador después de 30 segundos como medida de seguridad
       setTimeout(() => {
         qrRefreshInProgress.delete(userId);
       }, 30000);
-      
+
       const whatsappManager = await sessionManager.getSessionByToken(req);
-      
+
       if (whatsappManager.isReady) {
         qrRefreshInProgress.delete(userId); // Limpiar inmediatamente si ya está conectado
-        return res.status(400).json({ 
-          success: false, 
-          message: 'No se puede actualizar el QR si ya estás conectado' 
+        return res.status(400).json({
+          success: false,
+          message: 'No se puede actualizar el QR si ya estás conectado'
         });
       }
 
@@ -469,8 +508,8 @@ function buildRoutes() {
 
       if (wrote) {
         qrRefreshInProgress.delete(userId); // Limpiar al completar exitosamente
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           message: 'QR actualizado',
           qrUrl: '/qr'
         });
@@ -480,17 +519,17 @@ function buildRoutes() {
       const ok = await whatsappManager.refreshQR();
       if (ok) {
         qrRefreshInProgress.delete(userId); // Limpiar al completar exitosamente
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           message: 'Solicitando nuevo código QR...',
           qrUrl: '/qr'
         });
       }
 
       qrRefreshInProgress.delete(userId); // Limpiar si falla
-      return res.status(400).json({ 
-        success: false, 
-        message: 'No se pudo refrescar el QR en este momento' 
+      return res.status(400).json({
+        success: false,
+        message: 'No se pudo refrescar el QR en este momento'
       });
     } catch (e) {
       // Asegurar limpieza en caso de error
@@ -498,7 +537,7 @@ function buildRoutes() {
       if (userId) {
         qrRefreshInProgress.delete(userId);
       }
-      
+
       logger.error({ err: e?.message, userId }, 'Error en refresh-qr');
       res.status(500).json({ success: false, message: e.message || 'Error al refrescar QR' });
     }
@@ -510,7 +549,7 @@ function buildRoutes() {
   });
 
   // ===== RUTAS ADMINISTRATIVAS PARA MULTI-SESIÓN =====
-  
+
   // Listar todas las sesiones activas (solo para admins)
   router.get('/admin/sessions', conditionalAuth, conditionalRole('admin'), (req, res) => {
     try {
@@ -567,7 +606,7 @@ function buildRoutes() {
     try {
       const whatsappManager = await sessionManager.getSessionByToken(req);
       const state = whatsappManager.getState();
-      
+
       res.json({
         ...state,
         userId: req.auth?.sub,
@@ -585,17 +624,17 @@ function buildRoutes() {
     try {
       const userId = req.auth.sub;
       console.log(`🚪 [${userId}] Solicitud de logout robusto de WhatsApp recibida`);
-      
+
       const manager = await sessionManager.getSession(userId);
       if (!manager) {
         console.log(`⚠️ [${userId}] No hay sesión activa para logout`);
-        return res.json({ 
-          success: true, 
+        return res.json({
+          success: true,
           message: 'No hay sesión activa',
           state: 'no_session'
         });
       }
-      
+
       // Verificar si el manager tiene el método robustLogout
       if (typeof manager.robustLogout !== 'function') {
         console.log(`⚠️ [${userId}] Manager no tiene método robustLogout, usando logout normal`);
@@ -607,10 +646,10 @@ function buildRoutes() {
           fallback: true
         });
       }
-      
+
       // Usar logout robusto
       const result = await manager.robustLogout();
-      
+
       const response = {
         success: result.success,
         timestamp: new Date().toISOString(),
@@ -618,25 +657,25 @@ function buildRoutes() {
         finalState: result.finalState,
         details: result
       };
-      
+
       if (result.success) {
         console.log(`✅ [${userId}] Logout robusto de WhatsApp exitoso`);
         response.message = 'Logout de WhatsApp completado exitosamente';
-        response.recommendation = result.finalState.fullyDisconnected ? 
-          'Dispositivo completamente desvinculado' : 
+        response.recommendation = result.finalState.fullyDisconnected ?
+          'Dispositivo completamente desvinculado' :
           'Logout completado, puede tardar unos minutos en reflejarse en WhatsApp';
       } else {
         console.log(`⚠️ [${userId}] Logout robusto con problemas:`, result);
         response.message = 'Logout completado con advertencias';
         response.recommendation = 'Se recomienda verificar manualmente la desvinculación en WhatsApp';
       }
-      
+
       res.json(response);
-      
+
     } catch (error) {
       console.error('❌ Error en logout robusto de WhatsApp:', error);
-      res.status(500).json({ 
-        success: false, 
+      res.status(500).json({
+        success: false,
         error: 'Error interno del servidor',
         timestamp: new Date().toISOString()
       });
@@ -647,24 +686,24 @@ function buildRoutes() {
   router.get('/logout-status/:userId?', conditionalAuth, async (req, res) => {
     try {
       const userId = req.params.userId || req.auth.sub;
-      
+
       // Verificar autorización si se consulta otro usuario
       if (userId !== req.auth.sub && !req.auth.roles?.includes('admin')) {
         return res.status(403).json({ error: 'No autorizado para consultar otro usuario' });
       }
-      
+
       const manager = await sessionManager.getSession(userId);
       if (!manager) {
-        return res.json({ 
+        return res.json({
           userId,
           connected: false,
           state: 'no_session',
           message: 'No hay sesión activa'
         });
       }
-      
+
       const state = await manager.verifyLogoutState();
-      
+
       res.json({
         userId,
         connected: manager.isReady,
@@ -672,10 +711,10 @@ function buildRoutes() {
         details: state,
         timestamp: new Date().toISOString()
       });
-      
+
     } catch (error) {
       console.error('❌ Error verificando estado de logout:', error);
-      res.status(500).json({ 
+      res.status(500).json({
         error: 'Error interno del servidor',
         timestamp: new Date().toISOString()
       });
@@ -687,20 +726,20 @@ function buildRoutes() {
     try {
       const userId = req.user.sub;
       console.log(`🔄 [${userId}] Solicitud de reset de cooldown recibida`);
-      
+
       const manager = await sessionManager.getSession(userId);
       if (!manager) {
-        return res.json({ 
-          success: false, 
-          message: 'No hay sesión activa' 
+        return res.json({
+          success: false,
+          message: 'No hay sesión activa'
         });
       }
-      
+
       // Resetear cooldown
       if (typeof manager.resetCooldown === 'function') {
         manager.resetCooldown();
         console.log(`✅ [${userId}] Cooldown reseteado exitosamente`);
-        
+
         res.json({
           success: true,
           message: 'Cooldown reseteado exitosamente',
@@ -713,11 +752,11 @@ function buildRoutes() {
           timestamp: new Date().toISOString()
         });
       }
-      
+
     } catch (error) {
       console.error('❌ Error reseteando cooldown:', error);
-      res.status(500).json({ 
-        success: false, 
+      res.status(500).json({
+        success: false,
         error: 'Error interno del servidor',
         timestamp: new Date().toISOString()
       });
@@ -728,12 +767,12 @@ function buildRoutes() {
   router.post('/auth/clear-redis', conditionalAuth, async (req, res) => {
     try {
       const whatsappManager = await sessionManager.getSessionByToken(req);
-      
+
       logger.info({ userId: req.auth?.sub }, 'Solicitud de limpieza de Redis recibida');
-      
+
       // Llamar al método de limpieza
       const cleared = await whatsappManager._clearRedisAuth();
-      
+
       if (cleared) {
         logger.info({ userId: req.auth?.sub }, 'Redis limpiado exitosamente');
         res.json({
@@ -749,11 +788,11 @@ function buildRoutes() {
           timestamp: new Date().toISOString()
         });
       }
-      
+
     } catch (error) {
       logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error limpiando Redis');
-      res.status(500).json({ 
-        success: false, 
+      res.status(500).json({
+        success: false,
         error: 'Error limpiando sesión de Redis',
         details: error?.message,
         timestamp: new Date().toISOString()

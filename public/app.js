@@ -41,7 +41,7 @@ function diagnoseKeycloak() {
     config: CONFIG.keycloakConfig,
     url: window.location.href
   });
-  
+
   if (keycloak?.token) {
     try {
       const payload = JSON.parse(atob(keycloak.token.split('.')[1]));
@@ -79,12 +79,12 @@ function updateUserInfoNavbar(user) {
   const userInfoElement = document.getElementById('user-info');
   const userNameElement = document.getElementById('user-name');
   const userEmailElement = document.getElementById('user-email');
-  
+
   if (userInfoElement && userNameElement && userEmailElement) {
     userNameElement.textContent = user.name || 'Usuario';
     userEmailElement.textContent = user.email || 'Sin email';
     userInfoElement.classList.remove('d-none');
-    
+
     logDebug('Navbar actualizado con usuario:', user);
   }
 }
@@ -106,9 +106,9 @@ async function initKeycloak() {
       showAlert('Error de autenticación persistente. Verifica la configuración de Keycloak.', 'error', 'Error crítico');
       return false;
     }
-    
+
     showLoadingScreen('Inicializando autenticación...');
-    
+
     console.log('🔧 Configuración Keycloak:', CONFIG.keycloakConfig);
     console.log('🌍 URL actual:', window.location.href);
     console.log('🔄 Intento de autenticación:', authAttempts + 1);
@@ -117,25 +117,25 @@ async function initKeycloak() {
       origin: window.location.origin,
       nodeEnv: 'production (configurado en .env)'
     });
-    
+
     // Incrementar contador de intentos
     sessionStorage.setItem(CONFIG.authAttemptKey, (authAttempts + 1).toString());
-    
+
     keycloak = new Keycloak(CONFIG.keycloakConfig);
-    
+
     console.log('🔄 Iniciando Keycloak...');
-    
+
     // Configuración dinámica basada en el entorno
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     const baseUrl = window.location.origin;
-    
+
     console.log('🌍 Entorno detectado:', {
       hostname: window.location.hostname,
       isLocalhost,
       baseUrl,
       keycloakUrl: CONFIG.keycloakConfig.url
     });
-    
+
     const authenticated = await keycloak.init({
       onLoad: 'login-required', // Forzar login para asegurar autenticación
       checkLoginIframe: false,
@@ -151,7 +151,7 @@ async function initKeycloak() {
     console.log('✅ Keycloak inicializado. Autenticado:', authenticated);
     console.log('🔐 Token disponible:', !!keycloak.token);
     console.log('🎯 Token length:', keycloak.token ? keycloak.token.length : 0);
-    
+
     if (keycloak.token) {
       console.log('📋 Info del token:', {
         sub: keycloak.tokenParsed?.sub,
@@ -166,7 +166,7 @@ async function initKeycloak() {
     if (!authenticated) {
       console.log('🔐 Usuario no autenticado, redirigiendo al login...');
       hideLoadingScreen();
-      
+
       // Verificar si venimos de una redirección de login fallida
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.has('error')) {
@@ -175,7 +175,7 @@ async function initKeycloak() {
         sessionStorage.removeItem(CONFIG.authAttemptKey);
         return false;
       }
-      
+
       // Usar setTimeout para evitar loops inmediatos
       setTimeout(() => {
         keycloak.login({
@@ -187,17 +187,17 @@ async function initKeycloak() {
 
     // Si llegamos aquí, la autenticación fue exitosa - resetear contador
     sessionStorage.removeItem(CONFIG.authAttemptKey);
-    
+
     isAuthenticated = true;
     console.log('✅ Autenticación exitosa');
     console.log('🔍 Token info:', keycloak.tokenParsed);
-    
+
     // Extraer información del usuario
     if (keycloak.tokenParsed) {
       currentUser.id = keycloak.tokenParsed.sub;
       currentUser.name = keycloak.tokenParsed.name || keycloak.tokenParsed.preferred_username || keycloak.tokenParsed.email;
       currentUser.email = keycloak.tokenParsed.email;
-      
+
       console.log('👤 Usuario autenticado exitosamente:', {
         id: currentUser.id,
         name: currentUser.name,
@@ -205,10 +205,10 @@ async function initKeycloak() {
         roles: keycloak.tokenParsed.resource_access,
         tokenExpires: new Date(keycloak.tokenParsed.exp * 1000).toLocaleString()
       });
-      
+
       // Actualizar navbar con información del usuario de Keycloak
       updateUserInfoNavbar(currentUser);
-      
+
       // Verificar que el usuario tiene los roles necesarios
       const hasApiRole = keycloak.tokenParsed.resource_access?.['message-sender-api']?.roles?.includes('sender_api');
       if (!hasApiRole) {
@@ -220,7 +220,7 @@ async function initKeycloak() {
     } else {
       console.error('❌ No se pudo obtener información del token');
     }
-    
+
     // Renueva justo antes de expirar (sin loops)
     keycloak.onTokenExpired = async () => {
       if (refreshing) return;
@@ -246,7 +246,7 @@ async function initKeycloak() {
       clearTimeout(refreshTimer);
       try {
         if (!keycloak.authenticated) return;
-        
+
         const expMs = keycloak.tokenParsed?.exp ? keycloak.tokenParsed.exp * 1000 : 0;
         if (expMs) {
           const delta = expMs - Date.now();
@@ -261,20 +261,20 @@ async function initKeycloak() {
       refreshTimer = setTimeout(tick, 30_000); // Aumentado a 30 segundos
     };
     tick();
-    
+
     hideLoadingScreen();
     showAlert('Bienvenido al sistema', 'success', 'Autenticación exitosa');
-    
+
     console.log('✅ Inicialización de Keycloak completada exitosamente');
     return true; // Retornar true en caso de éxito
-    
+
   } catch (error) {
     console.error('❌ Error de autenticación:', error);
     hideLoadingScreen();
-    
+
     // Reset contador en caso de error crítico
     sessionStorage.removeItem(CONFIG.authAttemptKey);
-    
+
     // Verificar tipo de error
     if (error.message?.includes('CORS') || error.message?.includes('network')) {
       showAlert('Error de conectividad con Keycloak. Verifica tu conexión.', 'error', 'Error de red');
@@ -283,7 +283,7 @@ async function initKeycloak() {
     } else {
       showAlert('Error inesperado en la autenticación.', 'error', 'Error de autenticación');
     }
-    
+
     // No recargar automáticamente para evitar loops
     console.log('🛑 Deteniendo para evitar bucle infinito. Revisa la configuración de Keycloak.');
     return false;
@@ -327,25 +327,25 @@ async function authFetch(url, options = {}) {
 
     const headers = new Headers(options.headers || {});
     headers.set('Authorization', `Bearer ${keycloak.token}`);
-    
+
     console.log('🔐 Enviando petición autenticada:', {
       url,
       userId: keycloak.tokenParsed?.sub,
       userName: keycloak.tokenParsed?.name || keycloak.tokenParsed?.preferred_username,
       tokenExpires: new Date(keycloak.tokenParsed?.exp * 1000).toLocaleString()
     });
-    
+
     const response = await fetch(url, { ...options, headers });
-    
+
     // Si recibimos 401, el token puede estar inválido
     if (response.status === 401) {
       console.error('❌ Respuesta 401 - Token inválido o expirado');
       keycloak.login();
       throw new Error('Token inválido, redirigiendo al login');
     }
-    
+
     return response;
-    
+
   } catch (error) {
     console.error('❌ Error en authFetch:', error);
     throw error;
@@ -356,26 +356,26 @@ async function authFetch(url, options = {}) {
 async function logoutKeycloak() {
   try {
     console.log('🚪 Iniciando proceso de logout robusto...');
-    
+
     // Verificar que Keycloak esté disponible
     if (!keycloak) {
       console.error('❌ Keycloak no está disponible para logout');
       showAlert('Error: Sistema de autenticación no disponible', 'error');
       return;
     }
-    
+
     // Mostrar confirmación mejorada
     const confirmLogout = confirm('¿Estás seguro de que deseas cerrar sesión?\n\n✅ Se cerrará tu sesión de Keycloak\n✅ Se desvinculará WhatsApp de este dispositivo (proceso robusto)\n✅ Tendrás que volver a escanear el código QR\n\n⏱️ Este proceso puede tomar unos segundos...');
     if (!confirmLogout) {
       console.log('🚫 Logout cancelado por el usuario');
       return;
     }
-    
+
     console.log('✅ Confirmación de logout recibida, procediendo con proceso robusto...');
-    
+
     // Crear indicador de progreso mejorado
     showLoadingScreen('Iniciando logout robusto...');
-    
+
     // Crear div de progreso detallado
     const progressDiv = document.createElement('div');
     progressDiv.id = 'logout-progress-detail';
@@ -393,12 +393,12 @@ async function logoutKeycloak() {
       </div>
     `;
     document.body.appendChild(progressDiv);
-    
+
     const updateProgress = (percent, step, details = '') => {
       const stepEl = document.getElementById('logout-step');
       const barEl = document.getElementById('logout-progress-bar');
       const detailsEl = document.getElementById('logout-details');
-      
+
       if (stepEl) stepEl.textContent = step;
       if (barEl) barEl.style.width = percent + '%';
       if (detailsEl) detailsEl.textContent = details;
@@ -408,7 +408,7 @@ async function logoutKeycloak() {
     try {
       updateProgress(20, '📱 Cerrando sesión de WhatsApp...', 'Iniciando logout robusto...');
       console.log('📱 Cerrando sesión de WhatsApp con proceso robusto...');
-      
+
       const whatsappLogout = await authFetch('/logout-whatsapp', {
         method: 'POST',
         headers: {
@@ -419,10 +419,10 @@ async function logoutKeycloak() {
       if (whatsappLogout.ok) {
         const result = await whatsappLogout.json();
         console.log('✅ WhatsApp logout resultado:', result);
-        
-        updateProgress(60, '✅ WhatsApp: ' + result.message, 
+
+        updateProgress(60, '✅ WhatsApp: ' + result.message,
           `${result.attempts} intentos, ${result.finalState?.fullyDisconnected ? 'completamente desvinculado' : 'parcialmente desvinculado'}`);
-        
+
         // Mostrar recomendación si está disponible
         if (result.recommendation) {
           console.log('💡 Recomendación:', result.recommendation);
@@ -430,24 +430,24 @@ async function logoutKeycloak() {
             updateProgress(65, result.recommendation, '');
           }, 1000);
         }
-        
+
         // Verificación adicional del estado
         if (result.finalState && !result.finalState.fullyDisconnected) {
           updateProgress(70, '🔍 Verificando desvinculación...', 'Comprobando estado final...');
-          
+
           try {
             // Esperar un momento antes de verificar
             await new Promise(resolve => setTimeout(resolve, 2000));
-            
+
             const statusResponse = await authFetch('/logout-status');
             if (statusResponse.ok) {
               const status = await statusResponse.json();
               console.log('📊 Estado de verificación:', status);
-              
+
               if (status.state === 'disconnected') {
                 updateProgress(75, '✅ Verificación: dispositivo desvinculado', '');
               } else {
-                updateProgress(75, '⚠️ Verificación: desvinculación parcial', 
+                updateProgress(75, '⚠️ Verificación: desvinculación parcial',
                   'El dispositivo puede tardar unos minutos en desaparecer de WhatsApp');
               }
             }
@@ -458,7 +458,7 @@ async function logoutKeycloak() {
         } else {
           updateProgress(75, '✅ WhatsApp completamente desvinculado', 'Verificación exitosa');
         }
-        
+
       } else {
         updateProgress(40, '⚠️ Problema con logout de WhatsApp', 'Continuando con Keycloak...');
         console.warn('⚠️ Error al cerrar WhatsApp, continuando con logout de Keycloak');
@@ -468,61 +468,61 @@ async function logoutKeycloak() {
       console.warn('⚠️ Error al cerrar WhatsApp:', whatsappError.message);
       console.log('Continuando con logout de Keycloak...');
     }
-    
+
     // PASO 2: Limpiar datos locales
     updateProgress(80, '🧹 Limpiando datos locales...', 'Eliminando información de sesión');
     console.log('🧹 Limpiando datos locales...');
     sessionStorage.removeItem(CONFIG.authAttemptKey);
     sessionStorage.clear();
     localStorage.clear();
-    
+
     // PASO 3: Reiniciar estado de la aplicación
     updateProgress(85, '🔄 Reiniciando estado de aplicación...', '');
     isAuthenticated = false;
     currentUser = { id: null, name: null, email: null };
-    
+
     updateProgress(90, '🔐 Cerrando sesión en Keycloak...', 'Preparando redirección');
     console.log('🔄 Iniciando logout en Keycloak...');
-    
+
     // Cerrar sesión en Keycloak con URL de redirección
     const logoutUrl = keycloak.createLogoutUrl({
       redirectUri: window.location.origin + window.location.pathname
     });
-    
+
     updateProgress(100, '✅ Logout completado', 'Redirigiendo...');
     console.log('🌐 Redirigiendo a:', logoutUrl);
-    
+
     // Dar tiempo para mostrar el progreso completo
     setTimeout(() => {
       // Limpiar progreso antes de redireccionar
       if (document.getElementById('logout-progress-detail')) {
         document.body.removeChild(progressDiv);
       }
-      
+
       // Redireccionar manualmente para mayor control
       window.location.href = logoutUrl;
     }, 1500);
-    
+
   } catch (error) {
     console.error('❌ Error durante el logout robusto:', error);
     hideLoadingScreen();
-    
+
     // Limpiar progreso en caso de error
     const progressEl = document.getElementById('logout-progress-detail');
     if (progressEl) {
       document.body.removeChild(progressEl);
     }
-    
+
     showAlert(
       'Error al cerrar sesión.\n\n' +
       'Por favor verifica manualmente:\n' +
       '• Tu sesión en WhatsApp (Dispositivos vinculados)\n' +
       '• Tu sesión en Keycloak\n\n' +
-      'Si el problema persiste, contacta al administrador.', 
-      'error', 
+      'Si el problema persiste, contacta al administrador.',
+      'error',
       'Error de logout robusto'
     );
-    
+
     // Como fallback, recargar la página después de un momento
     setTimeout(() => {
       if (confirm('¿Deseas recargar la página para intentar nuevamente?')) {
@@ -536,7 +536,7 @@ async function logoutKeycloak() {
 function showLoadingScreen(message = 'Cargando...') {
   const loadingScreen = document.getElementById('loading-screen');
   const loadingMessage = document.getElementById('loadingMessage');
-  
+
   if (loadingMessage) loadingMessage.textContent = message;
   if (loadingScreen) loadingScreen.classList.remove('d-none');
 }
@@ -555,7 +555,7 @@ let alertContainer = null;
 
 function createAlertContainer() {
   if (alertContainer) return;
-  
+
   alertContainer = document.createElement('div');
   alertContainer.className = 'alert-container';
   alertContainer.style.cssText = `
@@ -570,7 +570,7 @@ function createAlertContainer() {
 
 function showAlert(message, type = 'info', title = '') {
   createAlertContainer();
-  
+
   const alertId = 'alert-' + Date.now();
   const typeClass = `alert-${type}`;
   const iconMap = {
@@ -579,7 +579,7 @@ function showAlert(message, type = 'info', title = '') {
     warning: 'bi-exclamation-triangle-fill',
     info: 'bi-info-circle-fill'
   };
-  
+
   const alertElement = document.createElement('div');
   alertElement.id = alertId;
   alertElement.className = `alert ${typeClass} alert-dismissible fade show modern-alert`;
@@ -589,7 +589,7 @@ function showAlert(message, type = 'info', title = '') {
     border: none;
     border-left: 4px solid var(--primary-500);
   `;
-  
+
   alertElement.innerHTML = `
     <div class="d-flex align-items-start">
       <i class="bi ${iconMap[type] || iconMap.info} me-2 mt-1"></i>
@@ -600,9 +600,9 @@ function showAlert(message, type = 'info', title = '') {
       <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
     </div>
   `;
-  
+
   alertContainer.appendChild(alertElement);
-  
+
   // Auto-dismiss after 5 seconds for non-error alerts
   if (type !== 'error') {
     setTimeout(() => {
@@ -630,12 +630,12 @@ async function showTab(tabName) {
       const res = await authFetch(CONFIG.statusEndpoint);
       const status = await res.json();
       const isConnected = status && (status.isReady === true || status.status === 'authenticated' || status.connectionState === 'authenticated');
-      
+
       if (!isConnected) {
         showAlert('Debe conectar WhatsApp primero', 'warning', 'Conexión requerida');
         return;
       }
-      
+
       // If authenticated but not ready, show info message
       if (!status.isReady && (status.status === 'authenticated' || status.connectionState === 'authenticated')) {
         showAlert('WhatsApp está autenticado y sincronizando. El botón de envío se habilitará automáticamente cuando esté listo.', 'info', 'Sincronización en proceso');
@@ -666,7 +666,7 @@ async function showTab(tabName) {
       btn.classList.add('active');
     }
   });
-  
+
   // Update tab content
   document.querySelectorAll('.tab-pane').forEach(content => {
     content.classList.remove('active');
@@ -674,7 +674,7 @@ async function showTab(tabName) {
       content.classList.add('active');
     }
   });
-  
+
   // Reinitialize interactive components when showing send tab
   if (tabName === 'send') {
     // Small delay to ensure DOM is ready
@@ -683,7 +683,7 @@ async function showTab(tabName) {
       setupEmojiPicker();
     }, 100);
   }
-  
+
   // Update URL hash
   window.location.hash = tabName;
 }
@@ -744,23 +744,23 @@ async function refreshQR() {
     console.log('🚫 Ya hay un refresh de QR en progreso, ignorando llamada adicional');
     return;
   }
-  
+
   isRefreshingQR = true;
-  
+
   const refreshBtn = document.getElementById('refreshQrBtn');
-  
+
   if (refreshBtn) {
     refreshBtn.disabled = true;
     refreshBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Refrescando...';
   }
-  
+
   try {
     const response = await authFetch('/refresh-qr', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
     const result = await response.json();
-    
+
     if (result.success) {
       showAlert('Código QR actualizado', 'success', 'QR Refrescado');
       // Wait a bit for the QR to be generated and then refresh the image
@@ -777,7 +777,7 @@ async function refreshQR() {
   } finally {
     // Restablecer estado y botón
     isRefreshingQR = false;
-    
+
     if (refreshBtn) {
       refreshBtn.disabled = false;
       refreshBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i><span>Refrescar código</span>';
@@ -792,27 +792,27 @@ window.addEventListener('beforeunload', () => {
 /** ======== Clear Redis Session (resolver conflictos) ======== */
 async function clearRedisSession() {
   const clearBtn = document.getElementById('clearRedisBtn');
-  
+
   // Confirmación del usuario
   if (!confirm('¿Limpiar el cache de Redis?\n\nEsto eliminará la sesión antigua y puede resolver errores de conflicto.\n\n⚠️ Solo hazlo si tienes problemas de conexión.')) {
     return;
   }
-  
+
   if (clearBtn) {
     clearBtn.disabled = true;
     clearBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Limpiando...';
   }
-  
+
   try {
     const response = await authFetch('/auth/clear-redis', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
     const result = await response.json();
-    
+
     if (result.success) {
       showAlert(result.message || 'Cache limpiado exitosamente', 'success', '✅ Cache Limpiado');
-      
+
       // Esperar un momento y luego refrescar el QR
       setTimeout(() => {
         showAlert('Generando nuevo código QR...', 'info', 'QR');
@@ -845,7 +845,7 @@ async function fetchUserInfoFallback() {
     // Try to get additional info from backend
     const res = await authFetch(CONFIG.statusEndpoint);
     const status = await res.json();
-    
+
     if (status.userInfo) {
       const nick = document.getElementById('user-nickname');
       const phone = document.getElementById('user-phone');
@@ -871,7 +871,7 @@ async function fetchUserInfoFallback() {
 function updateConnectionStatus(status) {
   const statusElement = document.querySelector('#connection-status');
   const statusText = statusElement?.querySelector('.status-text');
-  
+
   if (!statusElement || !statusText) return;
 
   const isConnected = status && (status.isReady === true || status.status === 'authenticated' || status.connectionState === 'authenticated');
@@ -879,11 +879,11 @@ function updateConnectionStatus(status) {
 
   if (isConnected) {
     statusElement.classList.add('connected');
-    
+
     if (isFullyReady) {
       const userInfo = status.userInfo || {};
       const phoneNumber = userInfo.phoneNumber || '';
-      
+
       statusText.innerHTML = `
         <div>WhatsApp Conectado</div>
         ${phoneNumber ? `<small style=\"opacity: 0.8;\">Tel: ${phoneNumber}</small>` : ''}
@@ -891,7 +891,7 @@ function updateConnectionStatus(status) {
       if (status.state) {
         statusText.innerHTML += `<small style=\"opacity: 0.8;\">Estado: ${status.state}</small>`;
       }
-      
+
       if (!isCurrentlyConnected) {
         showAlert(`¡WhatsApp conectado exitosamente!`, 'success', '✅ Conexión establecida');
         // Auto-switch to send tab after successful connection
@@ -911,7 +911,7 @@ function updateConnectionStatus(status) {
       <div>WhatsApp Desconectado</div>
       <small style=\"opacity: 0.8;\">${(status && status.state) || 'Escanear QR'}</small>
     `;
-    
+
     // Alert user if they were previously connected
     if (isCurrentlyConnected) {
       showAlert(
@@ -921,7 +921,7 @@ function updateConnectionStatus(status) {
         '⚠️ Conexión perdida'
       );
     }
-    
+
     isCurrentlyConnected = false;
   }
 }
@@ -931,14 +931,14 @@ function updateSendButtonState(isReady, status) {
   const btnText = sendBtn?.querySelector('.btn-text');
   const sendTabDescription = document.getElementById('sendTabDescription');
   const connectionDescription = document.getElementById('connectionDescription');
-  
+
   logDebug('Actualizando estado del botón de envío:', { isReady, status, sendBtn: !!sendBtn, btnText: !!btnText });
-  
+
   if (!sendBtn || !btnText) {
     logDebug('Botón de envío no encontrado en el DOM');
     return;
   }
-  
+
   if (isReady) {
     sendBtn.disabled = false;
     sendBtn.classList.remove('disabled');
@@ -965,9 +965,9 @@ function updateSendButtonState(isReady, status) {
 
 function updateInterface(status) {
   logDebug('Actualizando interfaz con estado:', status);
-  
+
   updateConnectionStatus(status);
-  
+
   const qrContainer = document.getElementById('qr-container');
   const authMessage = document.getElementById('authenticated-message');
 
@@ -1001,10 +1001,10 @@ function updateInterface(status) {
 
     // Update stats
     updateHeroStats(status);
-    
+
     // Update send button state
     updateSendButtonState(isFullyReady, status);
-    
+
     // Enable send tab navigation when authenticated (even if not fully ready)
     const sendTabBtn = document.querySelector('[data-tab="send"]');
     if (sendTabBtn) {
@@ -1046,11 +1046,11 @@ function updateHeroStats(status) {
   if (totalSentToday && status.stats?.sentToday !== undefined) {
     animateNumber(totalSentToday, parseInt(totalSentToday.textContent) || 0, status.stats.sentToday);
   }
-  
+
   if (successRate && status.stats?.successRate !== undefined) {
     successRate.textContent = `${status.stats.successRate}%`;
   }
-  
+
   if (avgSpeed && status.stats?.avgSpeed !== undefined) {
     avgSpeed.textContent = `${status.stats.avgSpeed}s`;
   }
@@ -1060,7 +1060,7 @@ function animateNumber(element, start, end, duration = 1000) {
   const range = end - start;
   const increment = range / (duration / 16);
   let current = start;
-  
+
   const timer = setInterval(() => {
     current += increment;
     if ((increment > 0 && current >= end) || (increment < 0 && current <= end)) {
@@ -1079,32 +1079,32 @@ let speedHistory = [];
 function calculateRealTimeSpeed(currentSent, total) {
   const now = Date.now();
   const timeDiff = (now - lastUpdateTime) / 1000; // segundos
-  
+
   if (timeDiff > 0 && currentSent > lastSentCount) {
     const messagesSent = currentSent - lastSentCount;
     const currentSpeed = messagesSent / timeDiff;
-    
+
     // Mantener historial de velocidades para suavizar
     speedHistory.push(currentSpeed);
     if (speedHistory.length > 10) {
       speedHistory.shift(); // Mantener solo los últimos 10 valores
     }
-    
+
     // Promedio de velocidades para suavizar fluctuaciones
     const avgSpeed = speedHistory.reduce((sum, speed) => sum + speed, 0) / speedHistory.length;
-    
+
     lastSentCount = currentSent;
     lastUpdateTime = now;
-    
+
     return Math.round(avgSpeed * 60); // mensajes por minuto
   }
-  
+
   // Si no hay cambios, devolver la velocidad promedio histórica
   if (speedHistory.length > 0) {
     const avgSpeed = speedHistory.reduce((sum, speed) => sum + speed, 0) / speedHistory.length;
     return Math.round(avgSpeed * 60);
   }
-  
+
   return 0;
 }
 
@@ -1115,7 +1115,7 @@ async function checkStatus() {
   if (statusCheckPromise) {
     return statusCheckPromise;
   }
-  
+
   statusCheckPromise = performStatusCheck();
   const result = await statusCheckPromise;
   statusCheckPromise = null;
@@ -1131,21 +1131,21 @@ async function performStatusCheck() {
       hasToken: !!keycloak?.token,
       tokenLength: keycloak?.token?.length || 0
     });
-    
+
     const url = `${CONFIG.statusEndpoint}?t=${Date.now()}`;
     console.log('📡 Enviando petición a:', url);
-    
+
     const res = await authFetch(url);
-    
+
     console.log('📨 Respuesta recibida:', {
       status: res.status,
       ok: res.ok,
       headers: Object.fromEntries(res.headers.entries())
     });
-    
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const status = await res.json();
-    
+
     console.log('✅ Status obtenido:', status);
     updateInterface(status);
     return status;
@@ -1169,7 +1169,7 @@ let currentMessageType = 'none';
 
 function setupMessageTypeHandlers() {
   const messageTypeInputs = document.querySelectorAll('input[name="messageType"]');
-  
+
   messageTypeInputs.forEach(input => {
     input.addEventListener('change', (e) => {
       currentMessageType = e.target.value;
@@ -1216,7 +1216,7 @@ function clearFileInput(inputId) {
 function updateFileInfo(inputId, files) {
   const infoId = inputId + 'Info';
   const infoElement = document.getElementById(infoId);
-  
+
   if (!infoElement) return;
 
   if (!files || files.length === 0) {
@@ -1249,7 +1249,7 @@ function formatFileSize(bytes) {
 
 function setupFileInputHandlers() {
   const fileInputs = ['csvFile', 'singleImage', 'images', 'audioFile'];
-  
+
   fileInputs.forEach(inputId => {
     const input = document.getElementById(inputId);
     if (input) {
@@ -1263,11 +1263,11 @@ function setupFileInputHandlers() {
 function updateCharacterCount() {
   const textarea = document.getElementById('message');
   const charCount = document.getElementById('charCount');
-  
+
   if (textarea && charCount) {
     const length = textarea.value.length;
     charCount.textContent = length;
-    
+
     // Color coding for character limit
     if (length > 3500) {
       charCount.style.color = 'var(--error-500)';
@@ -1281,7 +1281,7 @@ function updateCharacterCount() {
 
 function setupMessageTextarea() {
   const textarea = document.getElementById('message');
-  
+
   if (textarea) {
     // Solo agregar el listener de character count, no input
     // El highlighting se maneja en setupVariablesSystem
@@ -1312,19 +1312,19 @@ function setupEmojiPicker() {
   if (emojiSystemInitialized) {
     return;
   }
-  
+
   const emojiBtn = document.getElementById('emojiBtn');
   const emojiPicker = document.getElementById('emojiPicker');
   const emojiGrid = document.getElementById('emojiGrid');
   const textarea = document.getElementById('message');
-  
+
   if (!emojiBtn || !emojiPicker || !emojiGrid || !textarea) {
     return;
   }
-  
+
   // Marcar como inicializado
   emojiSystemInitialized = true;
-  
+
   // Toggle emoji picker
   emojiBtn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -1334,72 +1334,72 @@ function setupEmojiPicker() {
       populateEmojis(currentEmojiCategory);
     }
   });
-  
+
   // Close picker when clicking outside
   document.addEventListener('click', (e) => {
     if (!emojiPicker.contains(e.target) && !emojiBtn.contains(e.target)) {
       emojiPicker.classList.add('d-none');
     }
   });
-  
+
   // Category buttons
   const categoryButtons = emojiPicker.querySelectorAll('.emoji-category');
   categoryButtons.forEach(btn => {
     btn.addEventListener('click', (e) => {
       e.preventDefault();
       const category = btn.getAttribute('data-category');
-      
+
       // Update active category
       categoryButtons.forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      
+
       currentEmojiCategory = category;
       populateEmojis(category);
     });
   });
-  
+
   function populateEmojis(category) {
     const emojis = emojiCategories[category] || emojiCategories.smileys;
     emojiGrid.innerHTML = '';
-    
+
     emojis.forEach(emoji => {
       const emojiBtn = document.createElement('button');
       emojiBtn.className = 'emoji-item';
       emojiBtn.textContent = emoji;
       emojiBtn.type = 'button';
-      
+
       emojiBtn.addEventListener('click', (e) => {
         e.preventDefault();
         insertEmoji(emoji);
       });
-      
+
       emojiGrid.appendChild(emojiBtn);
     });
   }
-  
+
   function insertEmoji(emoji) {
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const text = textarea.value;
-    
+
     // Insert emoji at cursor position
     const newText = text.substring(0, start) + emoji + text.substring(end);
     textarea.value = newText;
-    
+
     // Update cursor position
     const newCursorPos = start + emoji.length;
     textarea.setSelectionRange(newCursorPos, newCursorPos);
-    
+
     // Focus back to textarea
     textarea.focus();
-    
+
     // Trigger input event to update character count
     textarea.dispatchEvent(new Event('input'));
-    
+
     // Close picker after selection
     emojiPicker.classList.add('d-none');
   }
-  
+
   // Initialize with default category
   populateEmojis(currentEmojiCategory);
 }
@@ -1445,7 +1445,7 @@ function updateMessageStatus(status) {
   updateStatCard('totalCount', total || 0);
   updateStatCard('sentCount', sent || 0);
   updateStatCard('errorCount', errors || 0);
-  
+
   // Calculate and display real-time speed
   const currentSpeed = calculateRealTimeSpeed(sent, total);
   updateStatCard('currentSpeed', currentSpeed);
@@ -1457,13 +1457,13 @@ function updateMessageStatus(status) {
   if (canceled && !cancelNotificationShown) {
     cancelNotificationShown = true;
     stopProgressPolling();
-    
+
     const sendBtn = document.getElementById('sendMessageBtn');
     if (sendBtn) {
       sendBtn.classList.remove('loading');
       sendBtn.disabled = false;
     }
-    
+
     // Show prominent cancellation alert
     showAlert(
       `Campaña cancelada. Enviados: ${sent || 0}/${total || 0} mensajes.\n` +
@@ -1471,14 +1471,14 @@ function updateMessageStatus(status) {
       'warning',
       '⚠️ Envío Cancelado'
     );
-    
+
     return; // Don't process as completed
   }
 
   // Detect state changes and notify user
   if (state && state !== lastKnownState) {
     lastKnownState = state;
-    
+
     // Notify about important state changes
     if (state === 'running' && !completed) {
       // Campaign just started
@@ -1492,13 +1492,13 @@ function updateMessageStatus(status) {
   if (completed && !canceled) {
     stopProgressPolling();
     cancelNotificationShown = false; // Reset for next campaign
-    
+
     const sendBtn = document.getElementById('sendMessageBtn');
     if (sendBtn) {
       sendBtn.classList.remove('loading');
       sendBtn.disabled = false;
     }
-    
+
     // Add success animation to progress bar
     if (progressFill && (errors || 0) === 0) {
       progressFill.classList.add('success');
@@ -1506,7 +1506,7 @@ function updateMessageStatus(status) {
         progressFill.classList.remove('success');
       }, 3000);
     }
-    
+
     if ((errors || 0) === 0) {
       showAlert('Todos los mensajes fueron enviados exitosamente', 'success', '✅ Envío completado');
     } else {
@@ -1537,7 +1537,7 @@ function updateStatusTable(messages) {
   messages.forEach(message => {
     const key = String(message.number);
     let row = tbody.querySelector(`[data-number="${key}"]`);
-    
+
     if (!row) {
       row = document.createElement('tr');
       row.setAttribute('data-number', key);
@@ -1551,7 +1551,7 @@ function updateStatusTable(messages) {
       'error': 'badge-error'
     }[message.status] || 'badge-queued';
 
-    const timestamp = message.timestamp ? 
+    const timestamp = message.timestamp ?
       new Date(message.timestamp).toLocaleTimeString() : '—';
 
     row.innerHTML = `
@@ -1571,7 +1571,7 @@ const MAX_POLL_ERRORS = 3;
 // Enviar heartbeat automático al backend
 async function sendHeartbeat() {
   try {
-    await authFetch('/heartbeat', { 
+    await authFetch('/heartbeat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' }
     });
@@ -1583,13 +1583,13 @@ async function sendHeartbeat() {
 
 function startHeartbeat() {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
-  
+
   // Enviar heartbeat cada 10 segundos (mucho antes del TTL de 300s)
   heartbeatTimer = setInterval(sendHeartbeat, 10000);
-  
+
   // Enviar uno inmediatamente
   sendHeartbeat();
-  
+
   console.log('💗 Sistema de heartbeat iniciado');
 }
 
@@ -1603,30 +1603,30 @@ function stopHeartbeat() {
 
 function startProgressPolling() {
   if (messageProgressPoll) clearInterval(messageProgressPoll);
-  
+
   // Reset error counter and cancel notification flag
   progressPollErrorCount = 0;
   cancelNotificationShown = false;
   lastKnownState = null;
-  
+
   // Iniciar heartbeat automático
   startHeartbeat();
-  
+
   messageProgressPoll = setInterval(async () => {
     try {
       const res = await authFetch('/message-status');
-      
+
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
-      
+
       const status = await res.json();
-      
+
       // Reset error counter on success
       progressPollErrorCount = 0;
-      
+
       updateMessageStatus(status);
-      
+
       // Stop polling if completed OR canceled
       if (status.completed || status.canceled) {
         stopProgressPolling();
@@ -1634,17 +1634,17 @@ function startProgressPolling() {
     } catch (e) {
       console.error('Progress polling error:', e);
       progressPollErrorCount++;
-      
+
       // Alert user after consecutive failures
       if (progressPollErrorCount >= MAX_POLL_ERRORS) {
         stopProgressPolling();
-        
+
         const sendBtn = document.getElementById('sendMessageBtn');
         if (sendBtn) {
           sendBtn.classList.remove('loading');
           sendBtn.disabled = false;
         }
-        
+
         showAlert(
           'Se perdió la conexión con el servidor.\n' +
           'El envío puede continuar en segundo plano.\n' +
@@ -1662,7 +1662,7 @@ function stopProgressPolling() {
     clearInterval(messageProgressPoll);
     messageProgressPoll = null;
   }
-  
+
   // Detener heartbeat también
   stopHeartbeat();
 }
@@ -1679,7 +1679,7 @@ async function cancelCampaignFrontend() {
         const st = await authFetch('/message-status');
         const status = await st.json();
         updateMessageStatus(status);
-      } catch {}
+      } catch { }
     } else {
       showAlert(result?.error || 'No se pudo cancelar', 'error');
     }
@@ -1687,6 +1687,210 @@ async function cancelCampaignFrontend() {
     showAlert('Error de red al cancelar', 'error');
     console.error('Cancel error:', e);
   }
+}
+
+/** ======== Templates System ======== */
+let currentTemplateCount = 1;
+let currentActiveTemplate = 1; // Track which template is active for emoji/variables insertion
+
+function generateTemplateFields(count) {
+  const container = document.getElementById('templatesContainer');
+  if (!container) return;
+
+  container.innerHTML = '';
+  currentTemplateCount = count;
+
+  for (let i = 1; i <= count; i++) {
+    const templateDiv = document.createElement('div');
+    templateDiv.className = 'template-field';
+    templateDiv.setAttribute('data-template-index', i);
+
+    // Calculate which lines this template will use
+    const lineExamples = [];
+    for (let j = 0; j < 3; j++) {
+      lineExamples.push(i + (j * count));
+    }
+    const lineText = lineExamples.join(', ') + '...';
+
+    templateDiv.innerHTML = `
+      <div class="template-header">
+        <h5>Template ${i}</h5>
+        <span class="template-badge">Líneas: ${lineText}</span>
+      </div>
+      <div class="message-textarea-container">
+        <textarea 
+          id="template${i}" 
+          name="templates[]"
+          class="message-textarea"
+          placeholder="Escribe el template ${i}... Puedes usar {sustantivo} y {nombre}
+
+Ejemplo: 'Buen día {sustantivo} {nombre}, le escribo para...'
+
+Este template se usará con las líneas ${lineText} del CSV"
+          rows="4"
+          required
+        ></textarea>
+      </div>
+      <div class="template-tools">
+        <div class="character-counter">
+          <span id="charCount${i}">0</span>/4096 caracteres
+        </div>
+        <div class="template-actions">
+          <button type="button" class="btn-template-emoji" data-template="${i}" title="Insertar emoji">
+            <i class="bi bi-emoji-smile"></i>
+          </button>
+          <button type="button" class="btn-template-variables" data-template="${i}" title="Insertar variables">
+            <i class="bi bi-braces"></i>
+          </button>
+        </div>
+      </div>
+    `;
+
+    container.appendChild(templateDiv);
+
+    // Add event listener for character count
+    const textarea = templateDiv.querySelector(`#template${i}`);
+    textarea.addEventListener('input', () => updateTemplateCharCount(i));
+
+    // Add event listeners for emoji and variables buttons
+    const emojiBtn = templateDiv.querySelector('.btn-template-emoji');
+    const variablesBtn = templateDiv.querySelector('.btn-template-variables');
+
+    emojiBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      currentActiveTemplate = i;
+      const emojiPicker = document.getElementById('emojiPicker');
+      emojiPicker.classList.toggle('d-none');
+      if (!emojiPicker.classList.contains('d-none')) {
+        populateEmojisForTemplate(currentEmojiCategory);
+      }
+    });
+
+    variablesBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      currentActiveTemplate = i;
+      const variablesHelper = document.getElementById('variablesHelper');
+      variablesHelper.classList.toggle('d-none');
+    });
+  }
+
+  console.log(`✅ Generados ${count} campos de templates`);
+}
+
+function updateTemplateCharCount(templateIndex) {
+  const textarea = document.getElementById(`template${templateIndex}`);
+  const counter = document.getElementById(`charCount${templateIndex}`);
+
+  if (textarea && counter) {
+    const length = textarea.value.length;
+    counter.textContent = length;
+
+    // Visual feedback for character limit
+    if (length > 4096) {
+      counter.style.color = 'var(--error-500)';
+    } else if (length > 3500) {
+      counter.style.color = 'var(--warning-500)';
+    } else {
+      counter.style.color = 'var(--primary-500)';
+    }
+  }
+}
+
+function setupTemplateCountSelector() {
+  const selector = document.getElementById('templateCount');
+  if (!selector) return;
+
+  // Generate initial template field (1 template by default)
+  generateTemplateFields(1);
+
+  // Listen for changes
+  selector.addEventListener('change', (e) => {
+    const count = parseInt(e.target.value);
+    generateTemplateFields(count);
+  });
+
+  console.log('✅ Selector de templates configurado');
+}
+
+function collectTemplates() {
+  const templates = [];
+
+  for (let i = 1; i <= currentTemplateCount; i++) {
+    const textarea = document.getElementById(`template${i}`);
+    if (!textarea) {
+      console.error(`Template ${i} not found`);
+      return null;
+    }
+
+    const value = textarea.value.trim();
+    if (!value) {
+      showAlert(`El template ${i} no puede estar vacío`, 'error', 'Error de validación');
+      return null;
+    }
+
+    if (value.length > 4096) {
+      showAlert(`El template ${i} excede el límite de 4096 caracteres`, 'error', 'Error de validación');
+      return null;
+    }
+
+    templates.push(value);
+  }
+
+  console.log(`✅ Recolectados ${templates.length} templates`);
+  return templates;
+}
+
+// Helper function to populate emojis for template
+function populateEmojisForTemplate(category) {
+  const emojis = emojiCategories[category] || emojiCategories.smileys;
+  const emojiGrid = document.getElementById('emojiGrid');
+  if (!emojiGrid) return;
+
+  emojiGrid.innerHTML = '';
+
+  emojis.forEach(emoji => {
+    const emojiBtn = document.createElement('button');
+    emojiBtn.className = 'emoji-item';
+    emojiBtn.textContent = emoji;
+    emojiBtn.type = 'button';
+
+    emojiBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      insertEmojiIntoTemplate(emoji);
+    });
+
+    emojiGrid.appendChild(emojiBtn);
+  });
+}
+
+// Helper function to insert emoji into current active template
+function insertEmojiIntoTemplate(emoji) {
+  const textarea = document.getElementById(`template${currentActiveTemplate}`);
+  if (!textarea) return;
+
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const text = textarea.value;
+
+  // Insert emoji at cursor position
+  const newText = text.substring(0, start) + emoji + text.substring(end);
+  textarea.value = newText;
+
+  // Update cursor position
+  const newCursorPos = start + emoji.length;
+  textarea.setSelectionRange(newCursorPos, newCursorPos);
+
+  // Focus back to textarea
+  textarea.focus();
+
+  // Trigger input event to update character count
+  textarea.dispatchEvent(new Event('input'));
+
+  // Close picker after selection
+  const emojiPicker = document.getElementById('emojiPicker');
+  if (emojiPicker) emojiPicker.classList.add('d-none');
 }
 
 /** ======== Form Submission ======== */
@@ -1744,9 +1948,16 @@ async function handleMessageFormSubmit(event) {
     return;
   }
 
+  // Collect templates
+  const templates = collectTemplates();
+  if (!templates || templates.length === 0) {
+    resetFormSubmission(sendBtn);
+    return;
+  }
+
   // Prepare form data
   const formData = new FormData();
-  formData.append('message', document.getElementById('message').value);
+  formData.append('templates', JSON.stringify(templates)); // Send templates as JSON
   formData.append('csvFile', csvFile);
   formData.append('mode', currentMessageType);
 
@@ -1754,20 +1965,20 @@ async function handleMessageFormSubmit(event) {
   appendMediaFiles(formData);
 
   try {
-    const res = await authFetch('/send-messages', { 
-      method: 'POST', 
-      body: formData 
+    const res = await authFetch('/send-messages', {
+      method: 'POST',
+      body: formData
     });
-    
+
     const result = await res.json();
 
     if (res.ok) {
       showAlert('Envío iniciado correctamente', 'success', 'Proceso iniciado');
-      
+
       if (result.initialStats) {
         updateMessageStatus(result.initialStats);
       }
-      
+
       // Start polling for progress
       startProgressPolling();
     } else {
@@ -1910,14 +2121,14 @@ function setupEventListeners() {
     classList: logoutBtn?.classList.toString(),
     parentElement: logoutBtn?.parentElement?.tagName
   });
-  
+
   if (logoutBtn) {
     console.log('✅ Botón de logout encontrado, configurando event listener...');
-    
+
     // Remover event listeners previos si existen
     logoutBtn.replaceWith(logoutBtn.cloneNode(true));
     const newLogoutBtn = document.getElementById('logout-btn');
-    
+
     newLogoutBtn.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -1925,20 +2136,20 @@ function setupEventListeners() {
       console.log('🔍 Event details:', e);
       logoutKeycloak();
     });
-    
+
     // Agregar también el event listener para debug
     newLogoutBtn.addEventListener('mousedown', () => {
       console.log('👆 Mouse down en botón de logout');
     });
-    
+
     newLogoutBtn.addEventListener('mouseup', () => {
       console.log('👆 Mouse up en botón de logout');
     });
-    
+
     console.log('✅ Event listeners configurados en botón de logout');
   } else {
     console.warn('⚠️ Botón de logout no encontrado en el DOM');
-    console.log('🔍 Elementos disponibles con ID:', 
+    console.log('🔍 Elementos disponibles con ID:',
       Array.from(document.querySelectorAll('[id]')).map(el => el.id)
     );
   }
@@ -1977,40 +2188,41 @@ function exportResults() {
 /** ======== Application Initialization ======== */
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 Iniciando aplicación...');
-  
+
   // Initialize authentication first
   const authSuccess = await initKeycloak();
-  
+
   if (!authSuccess) {
     console.error('❌ Falló la inicialización de Keycloak, deteniendo la carga de la aplicación');
     return;
   }
-  
+
   console.log('✅ Keycloak inicializado correctamente, continuando con la aplicación...');
-  
+
   // Setup all event listeners
   setupEventListeners();
-  
+
   // Setup form handlers
   setupMessageTypeHandlers();
   setupFileInputHandlers();
   setupMessageTextarea();
   setupVariablesSystem();
   setupEmojiPicker();
-  
+  setupTemplateCountSelector(); // Initialize templates system
+
   // Setup theme toggle
   setupThemeToggle();
-  
+
   // Initially disable send tab until WhatsApp is connected
   const sendTabBtn = document.querySelector('[data-tab="send"]');
   if (sendTabBtn) {
     sendTabBtn.classList.add('disabled');
   }
-  
+
   // Start status checking ONLY after successful authentication
   console.log('🔄 Iniciando verificación de estado...');
   startStatusCheck();
-  
+
   // Initialize tab from hash
   const hash = window.location.hash.substring(1);
   if (hash && ['link', 'send', 'analytics'].includes(hash)) {
@@ -2018,7 +2230,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   } else {
     showTab('link');
   }
-  
+
   console.log('🚀 WhatsApp Sender Pro initialized successfully');
 });
 
@@ -2034,54 +2246,50 @@ function setupVariablesSystem() {
   if (variablesSystemInitialized) {
     return;
   }
-  
-  const variablesBtn = document.getElementById('variablesBtn');
+
   const variablesHelper = document.getElementById('variablesHelper');
-  const messageTextarea = document.getElementById('message');
-  
-  if (!variablesBtn || !variablesHelper || !messageTextarea) {
+  if (!variablesHelper) {
     return;
   }
-  
+
   // Marcar como inicializado
   variablesSystemInitialized = true;
-  
-  // Toggle variables helper
-  variablesBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    variablesHelper.classList.toggle('d-none');
-  });
-  
-  // Insert variables into message
+
+  // Insert variables into current active template
   const variableBtns = variablesHelper.querySelectorAll('.variable-btn');
   variableBtns.forEach(btn => {
     btn.addEventListener('click', () => {
       const variable = btn.getAttribute('data-variable');
-      const start = messageTextarea.selectionStart;
-      const end = messageTextarea.selectionEnd;
-      const text = messageTextarea.value;
-      
+      const textarea = document.getElementById(`template${currentActiveTemplate}`);
+
+      if (!textarea) return;
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+
       // Insert variable at cursor position
       const newText = text.substring(0, start) + variable + text.substring(end);
-      messageTextarea.value = newText;
-      
+      textarea.value = newText;
+
       // Update character count
-      updateCharacterCount();
-      
+      updateTemplateCharCount(currentActiveTemplate);
+
       // Set cursor position after inserted variable
       const newCursorPos = start + variable.length;
-      messageTextarea.setSelectionRange(newCursorPos, newCursorPos);
-      messageTextarea.focus();
-      
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+      textarea.focus();
+
       // Hide helper after insertion
       variablesHelper.classList.add('d-none');
     });
   });
-  
+
   // Hide helper when clicking outside
   document.addEventListener('click', (e) => {
-    if (!variablesHelper.contains(e.target) && !variablesBtn.contains(e.target)) {
+    const isVariableBtn = e.target.closest('.btn-template-variables');
+    const isHelper = variablesHelper.contains(e.target);
+    if (!isVariableBtn && !isHelper) {
       variablesHelper.classList.add('d-none');
     }
   });

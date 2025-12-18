@@ -13,11 +13,11 @@ const s3 = require('./storage/s3');
 
 const delayFactor = Math.max(0.5, Number(process.env.MESSAGE_DELAY_FACTOR || 1));
 const BASE_DELAY = Math.max(800, Math.floor(messageDelay * delayFactor));
-const LOOP_IDLE_MS   = BASE_DELAY;
+const LOOP_IDLE_MS = BASE_DELAY;
 const SEND_BETWEEN_MS = BASE_DELAY;
 const WORKER_CONCURRENCY = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 3));
 
-function sleep(ms){ return new Promise(r=>setTimeout(r, ms)); }
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 const connection = getRedisConnectionOptions();
 const QUEUE_NAME = 'ms:messages';
@@ -27,15 +27,15 @@ const events = new QueueEvents(QUEUE_NAME, { connection });
 events.on('failed', ({ jobId, failedReason }) => logger.warn({ jobId, failedReason }, 'Job failed'));
 
 // Redis keys helpers
-function statusKey(userId){ return `ms:status:${userId}`; }
-function progressKey(userId){ return `ms:progress:${userId}`; }
-function cancelKey(userId){ return `ms:cancel:${userId}`; }
-function campaignLockKey(userId){ return `ms:lock:campaign:${userId}`; }
-function listKey(userId){ return `ms:list:${userId}`; }
-function heartbeatKey(userId){ return `ms:hb:${userId}`; }
-function eventsKey(userId){ return `ms:events:${userId}`; }
+function statusKey(userId) { return `ms:status:${userId}`; }
+function progressKey(userId) { return `ms:progress:${userId}`; }
+function cancelKey(userId) { return `ms:cancel:${userId}`; }
+function campaignLockKey(userId) { return `ms:lock:campaign:${userId}`; }
+function listKey(userId) { return `ms:list:${userId}`; }
+function heartbeatKey(userId) { return `ms:hb:${userId}`; }
+function eventsKey(userId) { return `ms:events:${userId}`; }
 
-async function resetStatus(userId, total){
+async function resetStatus(userId, total) {
   const r = getRedis();
   await r.hset(statusKey(userId), {
     total: String(total), sent: '0', errors: '0', completed: '0', canceled: '0',
@@ -43,18 +43,18 @@ async function resetStatus(userId, total){
   });
 }
 
-async function incField(userId, field, by = 1){
+async function incField(userId, field, by = 1) {
   const r = getRedis();
   await r.hincrby(statusKey(userId), field, by);
   await r.hset(statusKey(userId), 'updatedAt', String(Date.now()));
 }
 
-async function markCompleted(userId){
+async function markCompleted(userId) {
   const r = getRedis();
   await r.hset(statusKey(userId), { completed: '1', finishedAt: String(Date.now()) });
 }
 
-async function markCanceled(userId){
+async function markCanceled(userId) {
   const r = getRedis();
   await r.hset(statusKey(userId), {
     canceled: '1', completed: '1', finishedAt: String(Date.now()), canceledAt: String(Date.now()),
@@ -63,29 +63,29 @@ async function markCanceled(userId){
 }
 
 // Guardar/limpiar la lista de números en Redis (por usuario)
-async function saveList(userId, numbers){
+async function saveList(userId, numbers) {
   const r = getRedis();
   try {
     const ttl = Math.max(600, Number(process.env.REDIS_LIST_TTL_SECONDS || 3600));
     await r.set(listKey(userId), JSON.stringify(numbers || []), 'EX', ttl);
-  } catch {}
+  } catch { }
 }
 
-async function clearList(userId){
+async function clearList(userId) {
   const r = getRedis();
-  try { await r.del(listKey(userId)); } catch {}
+  try { await r.del(listKey(userId)); } catch { }
 }
 
 // Heartbeat por usuario (para detectar refresh/cierre)
-async function touchHeartbeat(userId){
+async function touchHeartbeat(userId) {
   const r = getRedis();
   try {
     const ttl = Math.max(10, Number(process.env.HEARTBEAT_TTL_SECONDS || 300));
     await r.set(heartbeatKey(userId), String(Date.now()), 'EX', ttl);
-  } catch {}
+  } catch { }
 }
 
-async function hasHeartbeat(userId){
+async function hasHeartbeat(userId) {
   const r = getRedis();
   try {
     const v = await r.get(heartbeatKey(userId));
@@ -95,7 +95,7 @@ async function hasHeartbeat(userId){
   }
 }
 
-function validateNumbersArray(numbers){
+function validateNumbersArray(numbers) {
   if (!Array.isArray(numbers)) return { valid: false, invalidCount: 1 };
   let invalid = 0;
   for (const entry of numbers) {
@@ -119,7 +119,7 @@ async function addEvent(userId, type, data = {}) {
     await r.ltrim(eventsKey(userId), 0, max - 1);
     await r.expire(eventsKey(userId), ttl); // Establecer TTL cada vez que se agrega un evento
     await r.hset(statusKey(userId), { updatedAt: String(Date.now()) });
-  } catch {}
+  } catch { }
 }
 
 async function getRecentEvents(userId, limit = 100) {
@@ -132,34 +132,34 @@ async function getRecentEvents(userId, limit = 100) {
   }
 }
 
-async function requestCancel(userId){
+async function requestCancel(userId) {
   const r = getRedis();
   const ttl = Math.max(60, Number(process.env.REDIS_CANCEL_TTL_SECONDS || 600));
   await r.set(cancelKey(userId), '1', 'EX', ttl);
   await r.hset(statusKey(userId), { canceled: '1', updatedAt: String(Date.now()) });
 }
 
-async function isCanceled(userId){
+async function isCanceled(userId) {
   const r = getRedis();
   const val = await r.get(cancelKey(userId));
   return String(val) === '1';
 }
 
-async function clearCancel(userId){
+async function clearCancel(userId) {
   const r = getRedis();
-  try { await r.del(cancelKey(userId)); } catch {}
+  try { await r.del(cancelKey(userId)); } catch { }
 }
 
-async function getStatus(userId){
+async function getStatus(userId) {
   const r = getRedis();
   const data = await r.hgetall(statusKey(userId));
   if (!data || Object.keys(data).length === 0) {
     return { total: 0, sent: 0, errors: 0, completed: true, canceled: false, messages: [] };
   }
   return {
-    total: Number(data.total||0),
-    sent: Number(data.sent||0),
-    errors: Number(data.errors||0),
+    total: Number(data.total || 0),
+    sent: Number(data.sent || 0),
+    errors: Number(data.errors || 0),
     completed: data.completed === '1',
     canceled: data.canceled === '1',
     messages: [],
@@ -188,25 +188,25 @@ const REMOVE_ON_COMPLETE = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_COMPLETE,
 const REMOVE_ON_FAIL = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_FAIL, { age: 3600 });
 
 // Public API: enqueue campaign
-async function enqueueCampaign(userId, numbers, message, images, singleImage, audio) {
+async function enqueueCampaign(userId, numbers, templates, images, singleImage, audio) {
   await resetStatus(userId, numbers.length);
   await saveList(userId, numbers);
-  const job = await queue.add('campaign', { userId, numbers, message, images, singleImage, audio }, { removeOnComplete: REMOVE_ON_COMPLETE, removeOnFail: REMOVE_ON_FAIL });
+  const job = await queue.add('campaign', { userId, numbers, templates, images, singleImage, audio }, { removeOnComplete: REMOVE_ON_COMPLETE, removeOnFail: REMOVE_ON_FAIL });
   try {
     const r = getRedis();
     await r.hset(statusKey(userId), { jobId: String(job.id), updatedAt: String(Date.now()) });
     // Log event enqueue
     if (typeof addEvent === 'function') {
-      await addEvent(userId, 'enqueue', { jobId: String(job.id), total: numbers.length });
+      await addEvent(userId, 'enqueue', { jobId: String(job.id), total: numbers.length, templateCount: templates?.length || 1 });
     }
-  } catch {}
+  } catch { }
   return { jobId: job.id };
 }
 
 // Cancelar campañas de un usuario: marca cancel y elimina jobs en espera
-async function cancelCampaign(userId){
+async function cancelCampaign(userId) {
   await requestCancel(userId);
-  try { if (typeof addEvent === 'function') await addEvent(userId, 'cancel_requested', {}); } catch {}
+  try { if (typeof addEvent === 'function') await addEvent(userId, 'cancel_requested', {}); } catch { }
   // Remover jobs en espera/delayed del usuario
   const types = ['waiting', 'delayed', 'paused'];
   const jobs = await queue.getJobs(types, 0, -1, true);
@@ -214,16 +214,16 @@ async function cancelCampaign(userId){
   for (const job of jobs) {
     try {
       if (job?.data?.userId === userId) { await job.remove(); removed++; }
-    } catch {}
+    } catch { }
   }
   await markCanceled(userId);
   await clearProgress(userId);
   await clearList(userId);
-  try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'cancel_api' }); } catch {}
+  try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'cancel_api' }); } catch { }
   return { removed };
 }
 
-async function setProgress(userId, data){
+async function setProgress(userId, data) {
   const r = getRedis();
   const payload = {};
   if (data.currentIndex !== undefined) payload.currentIndex = String(data.currentIndex);
@@ -236,9 +236,9 @@ async function setProgress(userId, data){
   await r.hset(progressKey(userId), payload);
 }
 
-async function clearProgress(userId){
+async function clearProgress(userId) {
   const r = getRedis();
-  try { await r.del(progressKey(userId)); } catch {}
+  try { await r.del(progressKey(userId)); } catch { }
 }
 
 /**
@@ -248,7 +248,7 @@ async function removeUserJobs(userId) {
   try {
     const states = ['waiting', 'delayed', 'active', 'paused'];
     let removed = 0;
-    
+
     for (const state of states) {
       const jobs = await queue.getJobs([state], 0, -1, true);
       for (const job of jobs) {
@@ -258,11 +258,11 @@ async function removeUserJobs(userId) {
         }
       }
     }
-    
+
     if (removed > 0) {
       logger.info({ userId, removed }, 'Jobs del usuario eliminados de la cola');
     }
-    
+
     return removed;
   } catch (error) {
     logger.error({ userId, error: error.message }, 'Error eliminando jobs del usuario');
@@ -277,29 +277,29 @@ async function removeUserJobs(userId) {
 async function cleanupUserData(userId) {
   logger.info({ userId }, 'Limpiando datos de Redis para usuario');
   const r = getRedis();
-  
+
   try {
     // Eliminar todos los jobs pendientes del usuario
     await removeUserJobs(userId);
-    
+
     // Limpiar estado de campaña
     await r.del(statusKey(userId));
     await clearProgress(userId);
     await clearList(userId);
     await clearCancel(userId);
-    
+
     // Limpiar eventos
     const evKey = `ms:events:${userId}`;
     await r.del(evKey);
-    
+
     // Limpiar heartbeat
     const hbKey = `ms:heartbeat:${userId}`;
     await r.del(hbKey);
-    
+
     // Limpiar lock de campaña
     const lockKey = campaignLockKey(userId);
     await r.del(lockKey);
-    
+
     logger.info({ userId }, 'Datos de Redis limpiados exitosamente');
     return true;
   } catch (error) {
@@ -308,9 +308,9 @@ async function cleanupUserData(userId) {
   }
 }
 
-async function getQueueInfo(userId){
+async function getQueueInfo(userId) {
   try {
-    const counts = await queue.getJobCounts('waiting','active','delayed','paused');
+    const counts = await queue.getJobCounts('waiting', 'active', 'delayed', 'paused');
     const waitingJobs = await queue.getJobs(['waiting'], 0, -1, true);
     let position = null;
     let queuedForUser = 0;
@@ -329,7 +329,7 @@ async function getQueueInfo(userId){
   }
 }
 
-async function getStatusDetailed(userId){
+async function getStatusDetailed(userId) {
   const r = getRedis();
   const data = await r.hgetall(statusKey(userId));
   if (!data || Object.keys(data).length === 0) {
@@ -337,9 +337,9 @@ async function getStatusDetailed(userId){
   }
   const prog = await r.hgetall(progressKey(userId));
   const base = {
-    total: Number(data.total||0),
-    sent: Number(data.sent||0),
-    errors: Number(data.errors||0),
+    total: Number(data.total || 0),
+    sent: Number(data.sent || 0),
+    errors: Number(data.errors || 0),
     completed: data.completed === '1',
     canceled: data.canceled === '1',
     startedAt: data.startedAt ? Number(data.startedAt) : null,
@@ -378,8 +378,8 @@ async function getStatusDetailed(userId){
     }
   }
   // Convertir a arreglo; opcionalmente ordenar por timestamp ascendente para tabla
-  const messages = Array.from(latestByNumber.values()).sort((a,b)=> (a.timestamp||0) - (b.timestamp||0));
-  
+  const messages = Array.from(latestByNumber.values()).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
   return {
     ...base,
     resuming_from: prog && prog.resumeFrom ? Number(prog.resumeFrom) : null,
@@ -426,7 +426,7 @@ function processMessageVariables(message, variables) {
   return processedMessage;
 }
 
-async function getImageBufferCached(cache, img){
+async function getImageBufferCached(cache, img) {
   if (!img) return null;
   const key = img.s3Key ? `s3:${img.s3Key}` : (img.path ? `fs:${img.path}` : null);
   if (!key) return null;
@@ -447,9 +447,9 @@ async function ensureConvertedAudio(userId, audio) {
   if (!audio || !audio.s3Key) return null;
   const origKey = audio.s3Key;
   const convKey = origKey.replace(/(\.[^./]+)?$/, '-converted.m4a');
-  
+
   logger.info({ userId, origKey, convKey }, 'Procesando audio desde S3');
-  
+
   // Intentar usar objeto convertido existente
   try {
     const exists = await s3.existsObject(convKey);
@@ -475,34 +475,39 @@ async function ensureConvertedAudio(userId, audio) {
       logger.info({ userId, convKey, size: convBuf.length }, 'Subiendo audio convertido a S3...');
       await s3.putObjectFromBuffer(convKey, convBuf, 'audio/mp4');
       logger.info({ userId, convKey }, 'Audio convertido subido exitosamente');
-      try { fs.unlinkSync(out); } catch {}
+      try { fs.unlinkSync(out); } catch { }
       return out;
     } finally {
-      try { fs.unlinkSync(localOrig); } catch {}
+      try { fs.unlinkSync(localOrig); } catch { }
     }
   })();
-  try { if (localConv && fs.existsSync(localConv)) fs.unlinkSync(localConv); } catch {}
+  try { if (localConv && fs.existsSync(localConv)) fs.unlinkSync(localConv); } catch { }
   return { s3Key: convKey, mimetype: 'audio/mp4' };
 }
 
-async function processCampaign(job){
-  const { userId, numbers, message, images, singleImage, audio } = job.data;
+async function processCampaign(job) {
+  const { userId, numbers, templates, images, singleImage, audio } = job.data;
   // Exclusión por usuario para permitir concurrencia entre usuarios
   const ttlSec = Math.max(300, Number(process.env.REDIS_CAMPAIGN_LOCK_TTL || 3600));
   const { unlock } = await acquireLock(campaignLockKey(userId), ttlSec, { timeoutMs: 15000 });
+
+  // Declarar manager fuera del try para que esté disponible en finally
+  let manager;
+  let client;
+
   try {
     // Asegurar que sólo el owner procese el job de este usuario
     const iAmOwner = await sessOwner.tryEnsureOwnership(userId, sessOwner.getOwnerTtl());
     if (!iAmOwner) {
       // Si otro es owner, reprogramar para que lo tome ese pod
-      try { await job.moveToDelayed(Date.now() + 2000); } catch {}
+      try { await job.moveToDelayed(Date.now() + 2000); } catch { }
       return;
     }
 
     if (await isCanceled(userId)) {
       logger.warn({ userId }, 'Campaña marcada como cancelada antes de iniciar');
       await markCanceled(userId);
-      try { await addEvent(userId, 'job_canceled', { reason: 'pre_start_cancelled' }); } catch {}
+      try { await addEvent(userId, 'job_canceled', { reason: 'pre_start_cancelled' }); } catch { }
       return;
     }
 
@@ -521,43 +526,58 @@ async function processCampaign(job){
           return;
         }
       }
-    } catch {}
+    } catch { }
 
-    const manager = await sessionManager.getSession(userId);
+    manager = await sessionManager.getSession(userId);
     if (!manager || !manager.sock) {
       await sessionManager.initializeSession(userId);
+      manager = await sessionManager.getSession(userId);
     }
-    const client = (await sessionManager.getSession(userId)).sock;
+    client = manager.sock;
     if (!client || !client.user) throw new Error('Socket de WhatsApp no está listo');
 
-  // Validaciones previas
-  const numCheck = validateNumbersArray(numbers);
-  if (!numCheck.valid) {
-    logger.warn({ userId, invalidCount: numCheck.invalidCount }, 'Lista con números inválidos; cancelando campaña');
-    await markCanceled(userId);
-    await clearList(userId);
-    try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_numbers', invalid: numCheck.invalidCount }); } catch {}
-    return;
-  }
-  if (!message && !singleImage && !(images && images.length) && !audio) {
-    logger.warn({ userId }, 'Contenido inválido (sin mensaje ni media); cancelando campaña');
-    await markCanceled(userId);
-    await clearList(userId);
-    try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_content' }); } catch {}
-    return;
-  }
-
-  // Preparaciones de media
-  const imageCache = new Map();
-  let convertedAudio = null;
-  if (audio && audio.s3Key) {
-    try {
-      convertedAudio = await ensureConvertedAudio(userId, audio);
-    } catch (err) {
-      logger.error({ userId, error: err.message }, 'Error procesando audio desde S3');
-      throw new Error(`Error al procesar audio: ${err.message}`);
+    // Validaciones previas
+    const numCheck = validateNumbersArray(numbers);
+    if (!numCheck.valid) {
+      logger.warn({ userId, invalidCount: numCheck.invalidCount }, 'Lista con números inválidos; cancelando campaña');
+      await markCanceled(userId);
+      await clearList(userId);
+      try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_numbers', invalid: numCheck.invalidCount }); } catch { }
+      return;
     }
-  }
+
+    // Validar templates
+    if (!Array.isArray(templates) || templates.length === 0 || templates.length > 5) {
+      logger.warn({ userId, templateCount: templates?.length }, 'Templates inválidos; cancelando campaña');
+      await markCanceled(userId);
+      await clearList(userId);
+      try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_templates' }); } catch { }
+      return;
+    }
+
+    // Validar que al menos un template tenga contenido o haya media
+    const hasValidTemplate = templates.some(t => t && t.trim().length > 0);
+    if (!hasValidTemplate && !singleImage && !(images && images.length) && !audio) {
+      logger.warn({ userId }, 'Contenido inválido (sin mensaje ni media); cancelando campaña');
+      await markCanceled(userId);
+      await clearList(userId);
+      try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_content' }); } catch { }
+      return;
+    }
+
+    logger.info({ userId, templateCount: templates.length, numbersCount: numbers.length }, 'Iniciando campaña con templates múltiples');
+
+    // Preparaciones de media
+    const imageCache = new Map();
+    let convertedAudio = null;
+    if (audio && audio.s3Key) {
+      try {
+        convertedAudio = await ensureConvertedAudio(userId, audio);
+      } catch (err) {
+        logger.error({ userId, error: err.message }, 'Error procesando audio desde S3');
+        throw new Error(`Error al procesar audio: ${err.message}`);
+      }
+    }
 
     // Reanudar desde progreso previo
     let startIdx = 0;
@@ -578,13 +598,13 @@ async function processCampaign(job){
       }
       if (startIdx > 0) {
         logger.info({ userId, startIdx }, 'Reanudando campaña desde índice calculado');
-        try { await setProgress(userId, { resumeFrom: startIdx, status: 'resuming' }); } catch {}
-        try { await addEvent(userId, 'resume', { resumeFrom: startIdx }); } catch {}
+        try { await setProgress(userId, { resumeFrom: startIdx, status: 'resuming' }); } catch { }
+        try { await addEvent(userId, 'resume', { resumeFrom: startIdx }); } catch { }
       }
-    } catch {}
+    } catch { }
 
     // Marca inicio de job
-    try { await addEvent(userId, 'job_started', { total: numbers.length, startIdx }); } catch {}
+    try { await addEvent(userId, 'job_started', { total: numbers.length, startIdx, templateCount: templates.length }); } catch { }
 
     // Activar flag de campaña activa para evitar cooldowns durante envío
     if (manager && typeof manager.setActiveCampaign === 'function') {
@@ -604,7 +624,7 @@ async function processCampaign(job){
         if (!alive) {
           logger.warn({ userId, index: i }, 'Heartbeat ausente (posible refresh). Cancelando campaña y limpiando lista');
           await markCanceled(userId);
-          try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'no_heartbeat_refresh' }); } catch {}
+          try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'no_heartbeat_refresh' }); } catch { }
           await clearList(userId);
           break;
         }
@@ -612,97 +632,109 @@ async function processCampaign(job){
       const entry = numbers[i];
       const number = typeof entry === 'string' ? entry : entry.number;
       const variables = typeof entry === 'object' && entry.variables ? entry.variables : {};
-      try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'sending' }); } catch {}
-      try { await addEvent(userId, 'message', { number, status: 'sending' }); } catch {}
 
-    const processedMessage = processMessageVariables(message, variables || {});
-    const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
+      // LÓGICA DE ROTACIÓN DE TEMPLATES
+      const templateIndex = i % templates.length;
+      const currentTemplate = templates[templateIndex];
 
-    let retries = 0;
-    const MAX_RETRIES = 3;
-    let success = false;
+      logger.debug({
+        lineIndex: i + 1,
+        templateIndex: templateIndex + 1,
+        totalTemplates: templates.length,
+        number
+      }, 'Usando template para línea');
 
-    while (retries <= MAX_RETRIES && !success) {
-      try {
-        // renovar ownership periódicamente
-        try { await sessOwner.renewOwner(userId, sessOwner.getOwnerTtl()); } catch {}
-        // Rate limit deshabilitado por solicitud del cliente
-        // if (manager && typeof manager.waitForRateLimit === 'function') {
-        //   await manager.waitForRateLimit();
-        // }
+      try { await setProgress(userId, { currentIndex: i + 1, total: numbers.length, number, status: 'sending' }); } catch { }
+      try { await addEvent(userId, 'message', { number, status: 'sending' }); } catch { }
 
-        // Verificar que la conexión está activa
-        if (!client || !client.user || !manager || !manager.isReady) {
-          throw new Error('Connection not ready');
-        }
+      const processedMessage = processMessageVariables(currentTemplate, variables || {});
+      const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
 
-        // Audio primero si existe
-        if (convertedAudio) {
-          const buf = await s3.getObjectBuffer(convertedAudio.s3Key);
-          // PTT requiere solo audio y ptt:true, sin mimetype ni fileName
-          await client.sendMessage(jid, { audio: buf, ptt: true });
-          if (processedMessage) {
-            await sleep(SEND_BETWEEN_MS);
-            await client.sendMessage(jid, { text: processedMessage });
+      let retries = 0;
+      const MAX_RETRIES = 3;
+      let success = false;
+
+      while (retries <= MAX_RETRIES && !success) {
+        try {
+          // renovar ownership periódicamente
+          try { await sessOwner.renewOwner(userId, sessOwner.getOwnerTtl()); } catch { }
+          // Rate limit deshabilitado por solicitud del cliente
+          // if (manager && typeof manager.waitForRateLimit === 'function') {
+          //   await manager.waitForRateLimit();
+          // }
+
+          // Verificar que la conexión está activa
+          if (!client || !client.user || !manager || !manager.isReady) {
+            throw new Error('Connection not ready');
           }
-        } else if (singleImage) {
-          const buf = await getImageBufferCached(imageCache, singleImage);
-          await client.sendMessage(jid, { image: buf, caption: processedMessage || '' });
-        } else if (images && images.length > 0) {
-          for (let k = 0; k < images.length; k++) {
-            const img = images[k];
-            const buf = await getImageBufferCached(imageCache, img);
-            await client.sendMessage(jid, { image: buf, caption: k === 0 ? (processedMessage || '') : '' });
-            if (k < images.length - 1) await sleep(SEND_BETWEEN_MS);
-          }
-        } else if (processedMessage) {
-          await client.sendMessage(jid, { text: processedMessage });
-        } else {
-          throw new Error('No se proporcionó contenido');
-        }
 
-        sent++;
-        await incField(userId, 'sent', 1);
-        try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'sent' }); } catch {}
-        try { await addEvent(userId, 'message', { number, status: 'sent' }); } catch {}
-        success = true;
-
-      } catch (err) {
-        retries++;
-        const isConnectionError = err?.message?.includes('Connection') || err?.message?.includes('Socket') || err?.message?.includes('not ready');
-        
-        if (isConnectionError && retries <= MAX_RETRIES) {
-          logger.warn(`Error de conexión enviando a ${number} (intento ${retries}/${MAX_RETRIES}): ${err?.message}. Reintentando en 5s...`);
-          await sleep(5000); // Esperar 5 segundos antes de reintentar
-          
-          // Intentar reconectar si es necesario
-          if (manager && typeof manager.ensureConnection === 'function') {
-            try {
-              await manager.ensureConnection();
-            } catch (reconErr) {
-              logger.error(`Error al reconectar: ${reconErr?.message}`);
+          // Audio primero si existe
+          if (convertedAudio) {
+            const buf = await s3.getObjectBuffer(convertedAudio.s3Key);
+            // PTT requiere solo audio y ptt:true, sin mimetype ni fileName
+            await client.sendMessage(jid, { audio: buf, ptt: true });
+            if (processedMessage) {
+              await sleep(SEND_BETWEEN_MS);
+              await client.sendMessage(jid, { text: processedMessage });
             }
+          } else if (singleImage) {
+            const buf = await getImageBufferCached(imageCache, singleImage);
+            await client.sendMessage(jid, { image: buf, caption: processedMessage || '' });
+          } else if (images && images.length > 0) {
+            for (let k = 0; k < images.length; k++) {
+              const img = images[k];
+              const buf = await getImageBufferCached(imageCache, img);
+              await client.sendMessage(jid, { image: buf, caption: k === 0 ? (processedMessage || '') : '' });
+              if (k < images.length - 1) await sleep(SEND_BETWEEN_MS);
+            }
+          } else if (processedMessage) {
+            await client.sendMessage(jid, { text: processedMessage });
+          } else {
+            throw new Error('No se proporcionó contenido');
           }
-        } else {
-          // Error definitivo o máximo de reintentos alcanzado
-          logger.warn(`Error enviando a ${number} (${retries} intentos): ${err?.message}`);
-          await incField(userId, 'errors', 1);
-          try { await setProgress(userId, { currentIndex: i+1, total: numbers.length, number, status: 'error', message: err?.message }); } catch {}
-          try { await addEvent(userId, 'message', { number, status: 'error', message: err?.message }); } catch {}
-          break;
+
+          sent++;
+          await incField(userId, 'sent', 1);
+          try { await setProgress(userId, { currentIndex: i + 1, total: numbers.length, number, status: 'sent' }); } catch { }
+          try { await addEvent(userId, 'message', { number, status: 'sent' }); } catch { }
+          success = true;
+
+        } catch (err) {
+          retries++;
+          const isConnectionError = err?.message?.includes('Connection') || err?.message?.includes('Socket') || err?.message?.includes('not ready');
+
+          if (isConnectionError && retries <= MAX_RETRIES) {
+            logger.warn(`Error de conexión enviando a ${number} (intento ${retries}/${MAX_RETRIES}): ${err?.message}. Reintentando en 5s...`);
+            await sleep(5000); // Esperar 5 segundos antes de reintentar
+
+            // Intentar reconectar si es necesario
+            if (manager && typeof manager.ensureConnection === 'function') {
+              try {
+                await manager.ensureConnection();
+              } catch (reconErr) {
+                logger.error(`Error al reconectar: ${reconErr?.message}`);
+              }
+            }
+          } else {
+            // Error definitivo o máximo de reintentos alcanzado
+            logger.warn(`Error enviando a ${number} (${retries} intentos): ${err?.message}`);
+            await incField(userId, 'errors', 1);
+            try { await setProgress(userId, { currentIndex: i + 1, total: numbers.length, number, status: 'error', message: err?.message }); } catch { }
+            try { await addEvent(userId, 'message', { number, status: 'error', message: err?.message }); } catch { }
+            break;
+          }
         }
       }
-    }
 
       await sleep(SEND_BETWEEN_MS);
     }
 
     if (await isCanceled(userId)) {
       await markCanceled(userId);
-      try { await addEvent(userId, 'job_canceled', { reason: 'canceled_during_run' }); } catch {}
+      try { await addEvent(userId, 'job_canceled', { reason: 'canceled_during_run' }); } catch { }
     } else {
       await markCompleted(userId);
-      try { const r = getRedis(); const sentCnt = Number((await r.hget(statusKey(userId), 'sent')) || 0); await addEvent(userId, 'job_completed', { sent: sentCnt }); } catch {}
+      try { const r = getRedis(); const sentCnt = Number((await r.hget(statusKey(userId), 'sent')) || 0); await addEvent(userId, 'job_completed', { sent: sentCnt }); } catch { }
     }
 
     // Desactivar flag de campaña activa
@@ -711,10 +743,10 @@ async function processCampaign(job){
       logger.info({ userId }, 'Flag de campaña activa desactivado');
     }
 
-  // Limpieza condicional en S3
+    // Limpieza condicional en S3
     try {
       if (s3.isEnabled() && s3.shouldDeleteAfterSend()) {
-      // borrar imágenes
+        // borrar imágenes
         if (Array.isArray(images)) {
           for (const img of images) if (img?.s3Key) await s3.deleteObject(img.s3Key);
         }
@@ -722,16 +754,16 @@ async function processCampaign(job){
         if (convertedAudio?.s3Key) await s3.deleteObject(convertedAudio.s3Key);
         if (audio?.s3Key) await s3.deleteObject(audio.s3Key);
       }
-    } catch {}
+    } catch { }
   } finally {
     // Asegurar que el flag de campaña activa se desactive SIEMPRE
     if (manager && typeof manager.setActiveCampaign === 'function') {
       manager.setActiveCampaign(false);
     }
-    
-    try { await clearCancel(userId); } catch {}
-    try { await clearProgress(userId); } catch {}
-    try { await clearList(userId); } catch {}
+
+    try { await clearCancel(userId); } catch { }
+    try { await clearProgress(userId); } catch { }
+    try { await clearList(userId); } catch { }
     await unlock();
   }
 }
@@ -746,7 +778,7 @@ const worker = new Worker(QUEUE_NAME, async (job) => {
 worker.on('completed', (job) => logger.info({ jobId: job.id }, 'Job completed'));
 worker.on('failed', async (job, err) => {
   logger.warn({ jobId: job?.id, err: err?.message }, 'Job failed');
-  
+
   // Limpiar datos de Redis si el job falla completamente
   if (job?.data?.userId) {
     try {
