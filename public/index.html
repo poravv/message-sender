@@ -298,22 +298,23 @@
                       <input type="text" id="contactSelectorSearch" placeholder="Buscar contactos...">
                     </div>
                     <div class="selector-actions">
-                      <button type="button" class="btn-secondary btn-sm" id="selectAllContactsBtn">
+                      <button type="button" class="btn-sm" id="selectAllContactsBtn">
                         <i class="bi bi-check-all"></i> Todos
                       </button>
-                      <button type="button" class="btn-secondary btn-sm" id="clearSelectedContactsBtn">
+                      <button type="button" class="btn-sm" id="clearSelectedContactsBtn">
                         <i class="bi bi-x-lg"></i> Limpiar
                       </button>
                     </div>
                   </div>
-                  <div id="contactsList" class="contacts-checklist">
+                  <div id="contactsList" class="contacts-list-scroll">
                     <div class="loading-contacts">
                       <div class="spinner-small"></div>
                       <span>Cargando contactos...</span>
                     </div>
                   </div>
-                  <div class="selected-count">
-                    <span id="selectedContactsCount">0</span> contactos seleccionados
+                  <div class="selected-count-badge">
+                    <i class="bi bi-person-check"></i>
+                    <span id="selectedContactsCount">0</span> seleccionados
                   </div>
                 </div>
               </div>
@@ -321,13 +322,12 @@
               <!-- Group Source -->
               <div id="groupSourceSection" class="source-section d-none">
                 <div class="group-selector">
-                  <label for="groupSelect">Seleccionar grupo:</label>
-                  <select id="groupSelect" name="groupName" class="form-control">
-                    <option value="">-- Cargando grupos --</option>
+                  <select id="groupSelect" name="groupName">
+                    <option value="">-- Seleccionar grupo --</option>
                   </select>
-                  <div id="groupContactsCount" class="group-info d-none">
+                  <div class="help-text" id="groupContactsCount">
                     <i class="bi bi-people"></i>
-                    <span id="groupContactsCountText">0 contactos</span>
+                    <span id="groupContactsCountText">Selecciona un grupo para ver los contactos</span>
                   </div>
                 </div>
               </div>
