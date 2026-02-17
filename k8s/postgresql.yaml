@@ -67,7 +67,7 @@ spec:
             command:
             - pg_isready
             - -U
-            - sender
+            - sender_user
             - -d
             - sender_db
           initialDelaySeconds: 30
@@ -79,7 +79,7 @@ spec:
             command:
             - pg_isready
             - -U
-            - sender
+            - sender_user
             - -d
             - sender_db
           initialDelaySeconds: 5

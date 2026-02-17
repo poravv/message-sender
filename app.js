@@ -116,3 +116,5 @@ process.on('SIGINT', () => {
   logger.info('Recibido SIGINT, cerrando servidor...');
   setTimeout(() => process.exit(0), 500);
 });
+
+
