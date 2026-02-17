@@ -6,6 +6,8 @@ Sistema profesional de envío masivo de mensajes por WhatsApp con arquitectura m
 
 ### 📨 **Envío de Mensajes**
 - **Envío masivo** desde archivos CSV con orden preservado
+- **Importación de contactos desde CSV** con `nombre`, `sustantivo` y `grupo`
+- **Gestión manual de contactos** (alta/edición/eliminación)
 - **Mensajes de texto** con soporte para emojis
 - **Imágenes individuales** con caption personalizado
 - **Múltiples imágenes** por mensaje
@@ -115,6 +117,8 @@ open http://localhost:3000
 
 ### **Gestión de Mensajes**
 - ✅ **CSV Processing**: Carga y valida números desde CSV
+- ✅ **Contact Management**: CRUD de contactos por usuario autenticado
+- ✅ **Campaign History**: Persistencia de campañas, destinatarios y resultados
 - ✅ **Queue Management**: Cola FIFO con manejo de errores
 - ✅ **Retry Logic**: 3 reintentos automáticos con backoff exponencial
 - ✅ **Progress Tracking**: Monitoreo en tiempo real del progreso
@@ -134,20 +138,86 @@ open http://localhost:3000
 - ✅ **Emoji Picker**: 9 categorías de emojis con búsqueda
 - ✅ **Real-time Updates**: Polling cada 15 segundos para estado
 - ✅ **Progress Bar**: Visualización del progreso de envío en tiempo real
+- ✅ **Dashboard**: Línea de tiempo, torta por grupos y métricas mensuales
 - ✅ **Error Handling**: Manejo elegante de errores con alertas
 - ✅ **Keycloak Integration**: Autenticación empresarial opcional
 
 ## 📁 Estructura de Archivos CSV
 
+### Formato básico (compatibilidad)
 ```csv
 595992756462
 595976947110
 595984123456
 ```
 
-- **Formato**: Un número por línea
-- **Prefijo**: Incluir código de país (595 para Paraguay)
-- **Sin símbolos**: Solo números, sin + ni espacios
+### Formato recomendado (con personalización)
+```csv
+numero,sustantivo,nombre,grupo
+595992756462,Sr,Carlos Gómez,Premium
+595976947110,Sra,Ana Benítez,Reactivacion
+595984123456,Dr,José Acosta,VIP
+```
+
+- **Formato**: número obligatorio, columnas adicionales opcionales.
+- **Prefijo**: se normaliza a código de país Paraguay (`595`).
+- **Variables disponibles**: `{sustantivo}`, `{nombre}`, `{grupo}`.
+
+## 📈 Gráficos en Markdown (Mermaid)
+
+### Arquitectura funcional
+```mermaid
+flowchart LR
+  UI["Frontend (Keycloak + Dashboard)"] --> API["Express API"]
+  API --> Q["BullMQ/Redis Queue"]
+  API --> C["Contactos (Redis persistente)"]
+  Q --> WA["Baileys WhatsApp"]
+  Q --> M["Métricas/Campañas (Redis persistente)"]
+  M --> UI
+```
+
+### Flujo de campaña con tracking
+```mermaid
+sequenceDiagram
+  participant U as Usuario
+  participant FE as Frontend
+  participant BE as API
+  participant RQ as Redis Queue
+  participant WA as WhatsApp
+  participant MS as Metrics Store
+
+  U->>FE: Cargar CSV + templates
+  FE->>BE: POST /send-messages
+  BE->>MS: Upsert contactos + crear campaña
+  BE->>RQ: enqueueCampaign(campaignId)
+  RQ->>WA: Enviar mensaje por contacto
+  RQ->>MS: Registrar sent/error por destinatario
+  FE->>BE: GET /dashboard/*
+  BE->>FE: Timeline, torta por grupo, mensual
+```
+
+### Ejemplo de distribución por grupo
+```mermaid
+pie title Mensajes por grupo (ejemplo)
+  "Premium" : 42
+  "Reactivacion" : 28
+  "VIP" : 18
+  "Sin grupo" : 12
+```
+
+## 🔌 Endpoints Nuevos (resumen)
+
+- `POST /contacts` crear contacto manual
+- `PUT /contacts/:contactId` editar contacto
+- `GET /contacts` listar contactos con filtros
+- `DELETE /contacts/:contactId` eliminar contacto
+- `GET /dashboard/summary` resumen por rango
+- `GET /dashboard/timeline` línea de tiempo (`hour|day|month`)
+- `GET /dashboard/by-group` distribución por grupo
+- `GET /dashboard/by-contact` top contactos
+- `GET /dashboard/current-month` métricas del mes actual
+- `GET /dashboard/monthly` tendencia mensual
+- `GET /campaigns/:id` detalle de campaña
 
 ## ⚡ Rendimiento y Límites
 

@@ -3,8 +3,9 @@ const path = require('path');
 const express = require('express');
 const { upload } = require('./media');
 const qrcode = require('qrcode');
-const { cleanupOldFiles, loadNumbersFromCSV } = require('./utils');
+const { cleanupOldFiles, loadNumbersFromCSV, normalizeParaguayanNumber } = require('./utils');
 const redisQueue = require('./queueRedis');
+const metricsStore = require('./metricsStore');
 const { publicDir, retentionHours } = require('./config');
 const logger = require('./logger');
 const { checkJwt, requireRole } = require('./auth');
@@ -163,7 +164,7 @@ function buildRoutes() {
       let audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
 
       // Extract templates from request body
-      const { templates: templatesJson, message } = req.body;
+      const { templates: templatesJson, message, campaignName } = req.body;
       let templates = [];
 
       try {
@@ -202,7 +203,7 @@ function buildRoutes() {
       }, 'Procesando envío con templates múltiples');
 
       const parsed = await loadNumbersFromCSV(csvFilePath);
-      const numbers = parsed?.numbers || [];
+      let numbers = parsed?.numbers || [];
       const invalidCount = parsed?.invalidCount || 0;
       const duplicates = parsed?.duplicates || 0;
 
@@ -225,6 +226,19 @@ function buildRoutes() {
       if (duplicates > 0) {
         logger.info({ duplicates, unique: numbers.length }, 'Duplicados eliminados del CSV');
       }
+
+      // Persistir/actualizar contactos en base histórica y enriquecer payload
+      const userId = req.auth?.sub || 'default';
+      const imported = await metricsStore.importContactsFromEntries(userId, numbers, 'csv');
+      numbers = imported.entries || [];
+
+      // Crear campaña persistente
+      const campaign = await metricsStore.createCampaign(userId, {
+        name: campaignName || `Campaña ${new Date().toLocaleString()}`,
+        totalRecipients: numbers.length,
+        templateCount: templates.length,
+      });
+      await metricsStore.initCampaignRecipients(userId, campaign.id, numbers);
 
       // El CSV ya fue leído, se puede eliminar inmediatamente
       try {
@@ -275,8 +289,7 @@ function buildRoutes() {
 
       const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
       if (useRedisQueue) {
-        const userId = req.auth?.sub || 'default';
-        await redisQueue.enqueueCampaign(userId, numbers, templates, images, singleImage, audioFile);
+        await redisQueue.enqueueCampaign(userId, numbers, templates, images, singleImage, audioFile, { campaignId: campaign.id });
         // Primer heartbeat tras encolar (para detectar refresh)
         if (typeof redisQueue.touchHeartbeat === 'function') {
           try { await redisQueue.touchHeartbeat(userId); } catch { }
@@ -291,6 +304,8 @@ function buildRoutes() {
         message: 'Procesando mensajes',
         totalNumbers: numbers.length,
         templateCount: templates.length,
+        campaignId: campaign.id,
+        importSummary: imported.summary,
         duplicatesRemoved: duplicates || 0,
         invalidNumbers: invalidCount || 0,
         userId: req.auth?.sub,
@@ -323,6 +338,164 @@ function buildRoutes() {
     } catch (error) {
       logger.error({ err: error?.message }, 'Error en /message-status');
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Contactos (alta manual + CRUD)
+  // ---------------------------
+  router.get('/contacts', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { search = '', group = '', page = 1, pageSize = 25 } = req.query || {};
+      const data = await metricsStore.listContacts(userId, { search, group, page, pageSize });
+      return res.json(data);
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /contacts');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.post('/contacts', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { phone, nombre, sustantivo, grupo } = req.body || {};
+      const normalized = normalizeParaguayanNumber(phone);
+      if (!normalized) {
+        return res.status(400).json({ error: 'Número inválido. Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX' });
+      }
+
+      const result = await metricsStore.upsertContact(userId, {
+        phone: normalized,
+        nombre: nombre || null,
+        sustantivo: sustantivo || null,
+        grupo: grupo || null,
+      }, 'manual');
+      return res.json({ success: true, created: result.created, contact: result.contact });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en POST /contacts');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.put('/contacts/:contactId', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { contactId } = req.params;
+      const patch = { ...req.body };
+      if (patch.phone !== undefined) {
+        const normalized = normalizeParaguayanNumber(patch.phone);
+        if (!normalized) {
+          return res.status(400).json({ error: 'Número inválido. Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX' });
+        }
+        patch.phone = normalized;
+      }
+
+      const updated = await metricsStore.updateContact(userId, contactId, patch);
+      if (!updated) return res.status(404).json({ error: 'Contacto no encontrado' });
+      return res.json({ success: true, contact: updated });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en PUT /contacts/:contactId');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.delete('/contacts/:contactId', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { contactId } = req.params;
+      const deleted = await metricsStore.deleteContact(userId, contactId);
+      if (!deleted) return res.status(404).json({ error: 'Contacto no encontrado' });
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en DELETE /contacts/:contactId');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Dashboard analytics
+  // ---------------------------
+  router.get('/dashboard/summary', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { from, to } = req.query || {};
+      const data = await metricsStore.dashboardSummary(userId, from, to);
+      return res.json(data);
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/summary');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/dashboard/timeline', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { from, to, bucket = 'day' } = req.query || {};
+      const data = await metricsStore.dashboardTimeline(userId, from, to, bucket);
+      return res.json({ bucket, rows: data });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/timeline');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/dashboard/by-group', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { from, to } = req.query || {};
+      const rows = await metricsStore.dashboardByGroup(userId, from, to);
+      return res.json({ rows });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/by-group');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/dashboard/by-contact', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { from, to, limit = 20 } = req.query || {};
+      const rows = await metricsStore.dashboardByContact(userId, from, to, Number(limit));
+      return res.json({ rows });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/by-contact');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/dashboard/current-month', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const data = await metricsStore.dashboardCurrentMonth(userId);
+      return res.json(data);
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/current-month');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/dashboard/monthly', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { months = 12 } = req.query || {};
+      const rows = await metricsStore.dashboardMonthly(userId, Number(months));
+      return res.json({ rows });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/monthly');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/campaigns/:id', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const detail = await metricsStore.getCampaignDetail(userId, req.params.id);
+      if (!detail) return res.status(404).json({ error: 'Campaña no encontrada' });
+      return res.json(detail);
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /campaigns/:id');
+      return res.status(500).json({ error: error.message });
     }
   });
 

@@ -42,13 +42,12 @@ services:
         max-file: "3"
 
   redis:
-    image: bitnami/redis:7.2
+    image: redis:7.2-alpine
     container_name: redis
     restart: unless-stopped
-    environment:
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-changeme}
+    command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-changeme}"]
     volumes:
-      - redis-data:/bitnami/redis/data
+      - redis-data:/data
     ports:
       - "6379:6379"  # Expuesto para pruebas locales
     networks:

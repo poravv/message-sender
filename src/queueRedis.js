@@ -8,6 +8,7 @@ const { messageDelay, tempDir } = require('./config');
 const { convertAudioToOpus } = require('./media');
 const { acquireLock } = require('./redisLock');
 const sessOwner = require('./owner');
+const metricsStore = require('./metricsStore');
 
 const s3 = require('./storage/s3');
 
@@ -188,10 +189,18 @@ const REMOVE_ON_COMPLETE = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_COMPLETE,
 const REMOVE_ON_FAIL = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_FAIL, { age: 3600 });
 
 // Public API: enqueue campaign
-async function enqueueCampaign(userId, numbers, templates, images, singleImage, audio) {
+async function enqueueCampaign(userId, numbers, templates, images, singleImage, audio, meta = {}) {
   await resetStatus(userId, numbers.length);
   await saveList(userId, numbers);
-  const job = await queue.add('campaign', { userId, numbers, templates, images, singleImage, audio }, { removeOnComplete: REMOVE_ON_COMPLETE, removeOnFail: REMOVE_ON_FAIL });
+  const job = await queue.add('campaign', {
+    userId,
+    numbers,
+    templates,
+    images,
+    singleImage,
+    audio,
+    campaignId: meta?.campaignId || null,
+  }, { removeOnComplete: REMOVE_ON_COMPLETE, removeOnFail: REMOVE_ON_FAIL });
   try {
     const r = getRedis();
     await r.hset(statusKey(userId), { jobId: String(job.id), updatedAt: String(Date.now()) });
@@ -486,7 +495,7 @@ async function ensureConvertedAudio(userId, audio) {
 }
 
 async function processCampaign(job) {
-  const { userId, numbers, templates, images, singleImage, audio } = job.data;
+  const { userId, numbers, templates, images, singleImage, audio, campaignId } = job.data;
   // Exclusión por usuario para permitir concurrencia entre usuarios
   const ttlSec = Math.max(300, Number(process.env.REDIS_CAMPAIGN_LOCK_TTL || 3600));
   const { unlock } = await acquireLock(campaignLockKey(userId), ttlSec, { timeoutMs: 15000 });
@@ -507,6 +516,9 @@ async function processCampaign(job) {
     if (await isCanceled(userId)) {
       logger.warn({ userId }, 'Campaña marcada como cancelada antes de iniciar');
       await markCanceled(userId);
+      if (campaignId) {
+        try { await metricsStore.setCampaignStatus(userId, campaignId, 'canceled'); } catch { }
+      }
       try { await addEvent(userId, 'job_canceled', { reason: 'pre_start_cancelled' }); } catch { }
       return;
     }
@@ -523,6 +535,9 @@ async function processCampaign(job) {
         if (sdata.canceled === '1') {
           logger.info({ userId }, 'Campaña ya marcada como cancelada. Omitiendo reproceso.');
           await markCanceled(userId);
+          if (campaignId) {
+            try { await metricsStore.setCampaignStatus(userId, campaignId, 'canceled'); } catch { }
+          }
           return;
         }
       }
@@ -536,12 +551,19 @@ async function processCampaign(job) {
     client = manager.sock;
     if (!client || !client.user) throw new Error('Socket de WhatsApp no está listo');
 
+    if (campaignId) {
+      try { await metricsStore.setCampaignStatus(userId, campaignId, 'running', { startedAt: Date.now() }); } catch { }
+    }
+
     // Validaciones previas
     const numCheck = validateNumbersArray(numbers);
     if (!numCheck.valid) {
       logger.warn({ userId, invalidCount: numCheck.invalidCount }, 'Lista con números inválidos; cancelando campaña');
       await markCanceled(userId);
       await clearList(userId);
+      if (campaignId) {
+        try { await metricsStore.setCampaignStatus(userId, campaignId, 'canceled'); } catch { }
+      }
       try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_numbers', invalid: numCheck.invalidCount }); } catch { }
       return;
     }
@@ -551,6 +573,9 @@ async function processCampaign(job) {
       logger.warn({ userId, templateCount: templates?.length }, 'Templates inválidos; cancelando campaña');
       await markCanceled(userId);
       await clearList(userId);
+      if (campaignId) {
+        try { await metricsStore.setCampaignStatus(userId, campaignId, 'canceled'); } catch { }
+      }
       try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_templates' }); } catch { }
       return;
     }
@@ -561,6 +586,9 @@ async function processCampaign(job) {
       logger.warn({ userId }, 'Contenido inválido (sin mensaje ni media); cancelando campaña');
       await markCanceled(userId);
       await clearList(userId);
+      if (campaignId) {
+        try { await metricsStore.setCampaignStatus(userId, campaignId, 'canceled'); } catch { }
+      }
       try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'invalid_content' }); } catch { }
       return;
     }
@@ -624,6 +652,9 @@ async function processCampaign(job) {
         if (!alive) {
           logger.warn({ userId, index: i }, 'Heartbeat ausente (posible refresh). Cancelando campaña y limpiando lista');
           await markCanceled(userId);
+          if (campaignId) {
+            try { await metricsStore.setCampaignStatus(userId, campaignId, 'canceled'); } catch { }
+          }
           try { if (typeof addEvent === 'function') await addEvent(userId, 'job_canceled', { reason: 'no_heartbeat_refresh' }); } catch { }
           await clearList(userId);
           break;
@@ -646,6 +677,11 @@ async function processCampaign(job) {
 
       try { await setProgress(userId, { currentIndex: i + 1, total: numbers.length, number, status: 'sending' }); } catch { }
       try { await addEvent(userId, 'message', { number, status: 'sending' }); } catch { }
+      if (campaignId) {
+        try {
+          await metricsStore.recordRecipientStatus(userId, campaignId, entry, 'sending', { templateIndex: templateIndex + 1 });
+        } catch { }
+      }
 
       const processedMessage = processMessageVariables(currentTemplate, variables || {});
       const jid = number.includes('@') ? number : `${number}@s.whatsapp.net`;
@@ -697,6 +733,15 @@ async function processCampaign(job) {
           await incField(userId, 'sent', 1);
           try { await setProgress(userId, { currentIndex: i + 1, total: numbers.length, number, status: 'sent' }); } catch { }
           try { await addEvent(userId, 'message', { number, status: 'sent' }); } catch { }
+          if (campaignId) {
+            try {
+              await metricsStore.recordRecipientStatus(userId, campaignId, entry, 'sent', {
+                templateIndex: templateIndex + 1,
+                attempts: retries + 1,
+                timestamp: Date.now(),
+              });
+            } catch { }
+          }
           success = true;
 
         } catch (err) {
@@ -721,6 +766,16 @@ async function processCampaign(job) {
             await incField(userId, 'errors', 1);
             try { await setProgress(userId, { currentIndex: i + 1, total: numbers.length, number, status: 'error', message: err?.message }); } catch { }
             try { await addEvent(userId, 'message', { number, status: 'error', message: err?.message }); } catch { }
+            if (campaignId) {
+              try {
+                await metricsStore.recordRecipientStatus(userId, campaignId, entry, 'error', {
+                  errorMessage: err?.message || 'Error desconocido',
+                  templateIndex: templateIndex + 1,
+                  attempts: retries,
+                  timestamp: Date.now(),
+                });
+              } catch { }
+            }
             break;
           }
         }
@@ -731,9 +786,15 @@ async function processCampaign(job) {
 
     if (await isCanceled(userId)) {
       await markCanceled(userId);
+      if (campaignId) {
+        try { await metricsStore.setCampaignStatus(userId, campaignId, 'canceled'); } catch { }
+      }
       try { await addEvent(userId, 'job_canceled', { reason: 'canceled_during_run' }); } catch { }
     } else {
       await markCompleted(userId);
+      if (campaignId) {
+        try { await metricsStore.setCampaignStatus(userId, campaignId, 'completed'); } catch { }
+      }
       try { const r = getRedis(); const sentCnt = Number((await r.hget(statusKey(userId), 'sent')) || 0); await addEvent(userId, 'job_completed', { sent: sentCnt }); } catch { }
     }
 
@@ -778,6 +839,10 @@ const worker = new Worker(QUEUE_NAME, async (job) => {
 worker.on('completed', (job) => logger.info({ jobId: job.id }, 'Job completed'));
 worker.on('failed', async (job, err) => {
   logger.warn({ jobId: job?.id, err: err?.message }, 'Job failed');
+
+  if (job?.data?.userId && job?.data?.campaignId) {
+    try { await metricsStore.setCampaignStatus(job.data.userId, job.data.campaignId, 'failed'); } catch { }
+  }
 
   // Limpiar datos de Redis si el job falla completamente
   if (job?.data?.userId) {

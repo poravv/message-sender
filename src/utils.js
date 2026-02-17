@@ -99,40 +99,93 @@ function normalizeParaguayanNumber(rawNumber) {
 function loadNumbersFromCSV(filePath) {
   const ext = path.extname(filePath).toLowerCase();
 
-  const buildEntry = (line, values, numbers, invalidRef, seenNumbers) => {
-    const rawNumber = String(values[0] || '').trim();
-    
-    // Normalizar el número
+  const aliases = {
+    number: ['numero', 'número', 'phone', 'telefono', 'tel', 'number', 'celular', 'whatsapp'],
+    sustantivo: ['sustantivo', 'tratamiento', 'titulo', 'title'],
+    nombre: ['nombre', 'name', 'cliente', 'contacto'],
+    grupo: ['grupo', 'segmento', 'group', 'categoria', 'categoría'],
+  };
+
+  const normalizeHeader = (v) => String(v || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  const looksLikeHeader = (values) => {
+    const first = normalizeHeader(values[0] || '');
+    const second = normalizeHeader(values[1] || '');
+    const hasKnown = aliases.number.includes(first) || aliases.nombre.includes(first) || aliases.sustantivo.includes(first) || aliases.grupo.includes(first);
+    const hasNonNumberWord = first && !/^\+?\d+$/.test(first);
+    return hasKnown || (hasNonNumberWord && (aliases.nombre.includes(second) || aliases.sustantivo.includes(second) || aliases.grupo.includes(second)));
+  };
+
+  const buildHeaderMap = (values) => {
+    const map = {};
+    const normalized = values.map(normalizeHeader);
+    normalized.forEach((name, idx) => {
+      if (!name) return;
+      if (aliases.number.includes(name)) map.number = idx;
+      if (aliases.sustantivo.includes(name)) map.sustantivo = idx;
+      if (aliases.nombre.includes(name)) map.nombre = idx;
+      if (aliases.grupo.includes(name)) map.grupo = idx;
+    });
+    return map;
+  };
+
+  const mapValuesToFields = (values, headerMap) => {
+    const clean = values.map(v => String(v || '').trim());
+    if (headerMap && Object.keys(headerMap).length > 0) {
+      return {
+        rawNumber: clean[headerMap.number ?? 0],
+        sustantivo: clean[headerMap.sustantivo ?? -1] || '',
+        nombre: clean[headerMap.nombre ?? -1] || '',
+        grupo: clean[headerMap.grupo ?? -1] || '',
+      };
+    }
+    return {
+      rawNumber: clean[0] || '',
+      sustantivo: clean[1] || '',
+      nombre: clean[2] || '',
+      grupo: clean[3] || '',
+    };
+  };
+
+  const buildEntry = (line, values, numbers, invalidRef, seenNumbers, headerCtx) => {
+    if (line === 1 && looksLikeHeader(values)) {
+      headerCtx.map = buildHeaderMap(values);
+      headerCtx.hasHeader = true;
+      logger.info({ line, headerMap: headerCtx.map }, 'Cabecera CSV detectada');
+      return;
+    }
+
+    const { rawNumber, sustantivo, nombre, grupo } = mapValuesToFields(values, headerCtx.hasHeader ? headerCtx.map : null);
+
     const normalized = normalizeParaguayanNumber(rawNumber);
-    
     if (normalized) {
-      // Verificar duplicados
       if (seenNumbers.has(normalized)) {
         logger.warn({ line, number: rawNumber, normalized, reason: 'duplicate' }, 'Número duplicado, omitiendo');
         invalidRef.duplicates++;
         return;
       }
-      
+
       seenNumbers.add(normalized);
-      
+
       const entry = { number: normalized, index: line, variables: {} };
-      if (values.length > 1) {
-        const sustantivo = String(values[1] || '').trim();
-        if (sustantivo) entry.variables.sustantivo = sustantivo;
-      }
-      if (values.length > 2) {
-        const nombre = String(values[2] || '').trim();
-        if (nombre) entry.variables.nombre = nombre;
-      }
+      if (sustantivo) entry.variables.sustantivo = sustantivo;
+      if (nombre) entry.variables.nombre = nombre;
+      if (grupo) entry.variables.grupo = grupo;
+      if (grupo) entry.group = grupo;
       numbers.push(entry);
+
       const variablesInfo = Object.keys(entry.variables).length > 0 ? entry.variables : 'sin variables';
       const wasNormalized = rawNumber !== normalized;
-      logger.info({ 
-        line, 
+      logger.info({
+        line,
         original: wasNormalized ? rawNumber : undefined,
-        number: normalized, 
-        variables: variablesInfo, 
-        totalColumns: values.length 
+        number: normalized,
+        variables: variablesInfo,
+        totalColumns: values.length,
       }, 'Número procesado' + (wasNormalized ? ' (normalizado)' : ''));
     } else {
       logger.warn({ line, number: rawNumber, reason: 'invalid_format' }, 'Número inválido');
@@ -143,7 +196,8 @@ function loadNumbersFromCSV(filePath) {
   return new Promise((resolve, reject) => {
     const numbers = [];
     const invalidRef = { count: 0, duplicates: 0 };
-    const seenNumbers = new Set(); // Para detectar duplicados
+    const seenNumbers = new Set();
+    const headerCtx = { hasHeader: false, map: null };
     let line = 0;
 
     if (ext === '.txt') {
@@ -154,7 +208,7 @@ function loadNumbersFromCSV(filePath) {
           if (!rawLine || !rawLine.trim()) continue;
           line++;
           const parts = rawLine.split(',').map(s => s.trim());
-          buildEntry(line, parts, numbers, invalidRef, seenNumbers);
+          buildEntry(line, parts, numbers, invalidRef, seenNumbers, headerCtx);
         }
         if (numbers.length === 0) return reject(new Error('El archivo TXT no contiene números válidos.'));
         const summary = numbers.reduce((acc, entry) => {
@@ -162,15 +216,15 @@ function loadNumbersFromCSV(filePath) {
           acc[hasVars ? 'withVariables' : 'withoutVariables']++;
           return acc;
         }, { withVariables: 0, withoutVariables: 0 });
-        logger.info({ 
-          total: numbers.length, 
-          invalid: invalidRef.count, 
+        logger.info({
+          total: numbers.length,
+          invalid: invalidRef.count,
           duplicates: invalidRef.duplicates,
           unique: numbers.length,
-          ...summary 
+          ...summary,
         }, 'Resumen de procesamiento TXT');
-        const sorted = numbers.sort((a,b)=>a.index-b.index);
-        resolve({ numbers: sorted, invalidCount: invalidRef.count, duplicates: invalidRef.duplicates, totalRows: line });
+        const sorted = numbers.sort((a, b) => a.index - b.index);
+        resolve({ numbers: sorted, invalidCount: invalidRef.count, duplicates: invalidRef.duplicates, totalRows: line, hasHeader: headerCtx.hasHeader });
       } catch (err) {
         logger.error({ err: err?.message }, 'Error leyendo TXT');
         reject(err);
@@ -184,7 +238,7 @@ function loadNumbersFromCSV(filePath) {
       .on('data', (row) => {
         line++;
         const values = Object.values(row);
-        buildEntry(line, values, numbers, invalidRef, seenNumbers);
+        buildEntry(line, values, numbers, invalidRef, seenNumbers, headerCtx);
       })
       .on('end', () => {
         if (numbers.length === 0) return reject(new Error('El archivo CSV no contiene números válidos.'));
@@ -193,15 +247,16 @@ function loadNumbersFromCSV(filePath) {
           acc[hasVars ? 'withVariables' : 'withoutVariables']++;
           return acc;
         }, { withVariables: 0, withoutVariables: 0 });
-        logger.info({ 
-          total: numbers.length, 
-          invalid: invalidRef.count, 
+        logger.info({
+          total: numbers.length,
+          invalid: invalidRef.count,
           duplicates: invalidRef.duplicates,
           unique: numbers.length,
-          ...summary 
+          hasHeader: headerCtx.hasHeader,
+          ...summary,
         }, 'Resumen de procesamiento CSV');
-        const sorted = numbers.sort((a,b)=>a.index-b.index);
-        resolve({ numbers: sorted, invalidCount: invalidRef.count, duplicates: invalidRef.duplicates, totalRows: line });
+        const sorted = numbers.sort((a, b) => a.index - b.index);
+        resolve({ numbers: sorted, invalidCount: invalidRef.count, duplicates: invalidRef.duplicates, totalRows: line, hasHeader: headerCtx.hasHeader });
       })
       .on('error', (err) => {
         logger.error({ err: err?.message }, 'Error leyendo CSV');

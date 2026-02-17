@@ -684,6 +684,11 @@ async function showTab(tabName) {
     }, 100);
   }
 
+  if (tabName === 'analytics') {
+    loadAnalyticsDashboard();
+    loadContacts();
+  }
+
   // Update URL hash
   window.location.hash = tabName;
 }
@@ -1722,9 +1727,9 @@ function generateTemplateFields(count) {
           id="template${i}" 
           name="templates[]"
           class="message-textarea"
-          placeholder="Escribe el template ${i}... Puedes usar {sustantivo} y {nombre}
+          placeholder="Escribe el template ${i}... Puedes usar {sustantivo}, {nombre} y {grupo}
 
-Ejemplo: 'Buen día {sustantivo} {nombre}, le escribo para...'
+Ejemplo: 'Buen día {sustantivo} {nombre} del grupo {grupo}, le escribo para...'
 
 Este template se usará con las líneas ${lineText} del CSV"
           rows="4"
@@ -1960,6 +1965,8 @@ async function handleMessageFormSubmit(event) {
   formData.append('templates', JSON.stringify(templates)); // Send templates as JSON
   formData.append('csvFile', csvFile);
   formData.append('mode', currentMessageType);
+  const campaignName = document.getElementById('campaignName')?.value?.trim();
+  if (campaignName) formData.append('campaignName', campaignName);
 
   // Add media files
   appendMediaFiles(formData);
@@ -2038,6 +2045,476 @@ function resetFormSubmission(sendBtn) {
   stopProgressPolling();
 }
 
+/** ======== Analytics + Contacts ======== */
+let timelineChartInstance = null;
+let groupPieChartInstance = null;
+
+function getMonthDateRange() {
+  const now = new Date();
+  const from = new Date(now.getFullYear(), now.getMonth(), 1);
+  const to = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const fmt = (d) => d.toISOString().slice(0, 10);
+  return { from: fmt(from), to: fmt(to) };
+}
+
+function getDateRangePreset(preset) {
+  const now = new Date();
+  const to = now.toISOString().slice(0, 10);
+  let from;
+  
+  switch (preset) {
+    case '7d':
+      from = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      break;
+    case '30d':
+      from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      break;
+    case 'month':
+      from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+      break;
+    case '90d':
+      from = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      break;
+    default:
+      from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
+  
+  return { from, to };
+}
+
+function ensureAnalyticsDateDefaults() {
+  const fromInput = document.getElementById('analyticsFrom');
+  const toInput = document.getElementById('analyticsTo');
+  if (!fromInput || !toInput) return null;
+  const range = getDateRangePreset('30d');
+  if (!fromInput.value) fromInput.value = range.from;
+  if (!toInput.value) toInput.value = range.to;
+  return { from: fromInput.value, to: toInput.value };
+}
+
+function buildQuery(params = {}) {
+  const q = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && String(v).trim() !== '') q.set(k, String(v));
+  });
+  const s = q.toString();
+  return s ? `?${s}` : '';
+}
+
+function getChartTextColor() {
+  return getComputedStyle(document.documentElement).getPropertyValue('--text-primary').trim() || '#d8dee9';
+}
+
+function updateMonthlyKpis(currentMonthData) {
+  const sentEl = document.getElementById('monthlySentValue');
+  const rateEl = document.getElementById('monthlySuccessRateValue');
+  const vsPrevEl = document.getElementById('monthlyVsPrevValue');
+  const errEl = document.getElementById('monthlyErrorValue');
+  
+  // Also update KPI cards
+  const kpiMonthlySent = document.getElementById('kpiMonthlySent');
+  const kpiSuccessRate = document.getElementById('kpiSuccessRate');
+  const kpiMonthlyErrors = document.getElementById('kpiMonthlyErrors');
+  const kpiTrendSent = document.getElementById('kpiTrendSent');
+  const kpiRingProgress = document.getElementById('kpiRingProgress');
+  
+  if (!currentMonthData) return;
+
+  const sent = Number(currentMonthData.sent || 0);
+  const errors = Number(currentMonthData.errors || 0);
+  const rate = Number(currentMonthData.successRate || 0);
+  const delta = Number(currentMonthData.deltaPercent || 0);
+
+  if (sentEl) sentEl.textContent = sent.toLocaleString();
+  if (rateEl) rateEl.textContent = `${rate.toFixed(1)}%`;
+  if (vsPrevEl) {
+    const sign = delta > 0 ? '+' : '';
+    vsPrevEl.textContent = `${sign}${delta.toFixed(1)}%`;
+    vsPrevEl.classList.remove('positive', 'negative');
+    vsPrevEl.classList.add(delta >= 0 ? 'positive' : 'negative');
+  }
+  if (errEl) errEl.textContent = `${errors}`;
+  
+  // Update KPI cards
+  if (kpiMonthlySent) kpiMonthlySent.textContent = sent.toLocaleString();
+  if (kpiSuccessRate) kpiSuccessRate.textContent = `${rate.toFixed(1)}%`;
+  if (kpiMonthlyErrors) kpiMonthlyErrors.textContent = errors.toLocaleString();
+  if (kpiTrendSent) {
+    const sign = delta > 0 ? '+' : '';
+    kpiTrendSent.innerHTML = `<i class="bi bi-arrow-${delta >= 0 ? 'up' : 'down'}-short"></i>${sign}${delta.toFixed(1)}%`;
+    kpiTrendSent.classList.remove('positive', 'negative');
+    kpiTrendSent.classList.add(delta >= 0 ? 'positive' : 'negative');
+  }
+  
+  // Update progress ring
+  if (kpiRingProgress) {
+    kpiRingProgress.setAttribute('stroke-dasharray', `${rate}, 100`);
+  }
+  
+  // Update monthly quick stat
+  const monthlyTotalQuick = document.getElementById('monthlyTotalQuick');
+  if (monthlyTotalQuick) monthlyTotalQuick.textContent = sent.toLocaleString();
+}
+
+function renderTimelineChart(rows = []) {
+  const canvas = document.getElementById('timelineChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const labels = rows.map(r => r.bucket);
+  const sent = rows.map(r => Number(r.sent || 0));
+  const errors = rows.map(r => Number(r.errors || 0));
+  const textColor = getChartTextColor();
+
+  if (timelineChartInstance) timelineChartInstance.destroy();
+  timelineChartInstance = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Enviados',
+          data: sent,
+          borderColor: '#22c55e',
+          backgroundColor: 'rgba(34,197,94,0.2)',
+          tension: 0.35,
+          fill: true,
+        },
+        {
+          label: 'Errores',
+          data: errors,
+          borderColor: '#ef4444',
+          backgroundColor: 'rgba(239,68,68,0.15)',
+          tension: 0.35,
+          fill: true,
+        }
+      ]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: textColor } }
+      },
+      scales: {
+        x: { ticks: { color: textColor }, grid: { color: 'rgba(148,163,184,0.15)' } },
+        y: { ticks: { color: textColor }, grid: { color: 'rgba(148,163,184,0.15)' }, beginAtZero: true }
+      }
+    }
+  });
+}
+
+function renderGroupPieChart(rows = []) {
+  const canvas = document.getElementById('groupPieChart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  const textColor = getChartTextColor();
+  const labels = rows.map(r => r.group);
+  const values = rows.map(r => Number(r.total || 0));
+  const palette = ['#22c55e', '#0ea5e9', '#f59e0b', '#ef4444', '#14b8a6', '#8b5cf6', '#f97316', '#84cc16', '#e11d48'];
+
+  if (groupPieChartInstance) groupPieChartInstance.destroy();
+  groupPieChartInstance = new Chart(canvas, {
+    type: 'pie',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Mensajes',
+        data: values,
+        backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+        borderWidth: 1,
+      }]
+    },
+    options: {
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: textColor }
+        }
+      }
+    }
+  });
+}
+
+function renderTopContacts(rows = []) {
+  const tbody = document.getElementById('topContactsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Sin datos en el rango seleccionado</td></tr>';
+    return;
+  }
+  rows.forEach((r) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${r.nombre || '—'}</td>
+      <td>${r.phone || '—'}</td>
+      <td>${r.group || 'Sin grupo'}</td>
+      <td>${Number(r.sent || 0)}</td>
+      <td>${Number(r.errors || 0)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function updateHeroStatsFromSummary(summary = null) {
+  if (!summary) return;
+  const totalSentToday = document.getElementById('totalSentToday');
+  const successRate = document.getElementById('successRate');
+  if (totalSentToday) totalSentToday.textContent = Number(summary.sent || 0).toLocaleString();
+  if (successRate) successRate.textContent = `${Number(summary.successRate || 0).toFixed(1)}%`;
+}
+
+async function loadHeroTodayStats() {
+  try {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const from = start.toISOString().slice(0, 10);
+    const to = now.toISOString().slice(0, 10);
+    const res = await authFetch(`/dashboard/summary${buildQuery({ from, to })}`);
+    if (!res.ok) return;
+    const summary = await res.json();
+    updateHeroStatsFromSummary(summary);
+    updateQuickStats(summary);
+  } catch (e) {
+    console.warn('Error loading hero today stats:', e.message);
+  }
+}
+
+function updateQuickStats(summary) {
+  const totalSent = Number(summary.totalSent || 0);
+  const totalSuccess = Number(summary.totalSuccess || 0);
+  const totalErrors = Number(summary.totalErrors || 0);
+  
+  // Update quick stats dashboard
+  const totalSentEl = document.getElementById('totalSentToday');
+  const successRateEl = document.getElementById('successRate');
+  
+  if (totalSentEl) totalSentEl.textContent = totalSent.toLocaleString();
+  
+  if (successRateEl) {
+    if (totalSent > 0) {
+      const rate = ((totalSuccess / totalSent) * 100).toFixed(1);
+      successRateEl.textContent = `${rate}%`;
+    } else {
+      successRateEl.textContent = '--%';
+    }
+  }
+}
+
+async function loadTotalContacts() {
+  try {
+    const res = await authFetch('/contacts?pageSize=1');
+    if (!res.ok) return;
+    const data = await res.json();
+    const total = data.total || data.items?.length || 0;
+    
+    const totalContactsEl = document.getElementById('totalContacts');
+    const kpiTotalContactsEl = document.getElementById('kpiTotalContacts');
+    
+    if (totalContactsEl) totalContactsEl.textContent = total.toLocaleString();
+    if (kpiTotalContactsEl) kpiTotalContactsEl.textContent = total.toLocaleString();
+  } catch (e) {
+    console.warn('Error loading total contacts:', e.message);
+  }
+}
+
+function setupDatePresets() {
+  const presets = ['7d', '30d', 'month', '90d'];
+  presets.forEach(preset => {
+    const btn = document.getElementById(`preset${preset.charAt(0).toUpperCase() + preset.slice(1)}`);
+    if (!btn) return;
+    
+    btn.addEventListener('click', () => {
+      // Remove active from all preset buttons
+      presets.forEach(p => {
+        const b = document.getElementById(`preset${p.charAt(0).toUpperCase() + p.slice(1)}`);
+        if (b) b.classList.remove('active');
+      });
+      btn.classList.add('active');
+      
+      // Set date range
+      const range = getDateRangePreset(preset);
+      const fromInput = document.getElementById('analyticsFrom');
+      const toInput = document.getElementById('analyticsTo');
+      if (fromInput) fromInput.value = range.from;
+      if (toInput) toInput.value = range.to;
+      
+      // Reload dashboard
+      loadAnalyticsDashboard();
+    });
+  });
+}
+
+async function loadAnalyticsDashboard() {
+  try {
+    const defaults = ensureAnalyticsDateDefaults();
+    if (!defaults) return;
+
+    const { from, to } = defaults;
+    const [_summaryRes, timelineRes, groupRes, topRes, currentMonthRes] = await Promise.all([
+      authFetch(`/dashboard/summary${buildQuery({ from, to })}`),
+      authFetch(`/dashboard/timeline${buildQuery({ from, to, bucket: 'day' })}`),
+      authFetch(`/dashboard/by-group${buildQuery({ from, to })}`),
+      authFetch(`/dashboard/by-contact${buildQuery({ from, to, limit: 10 })}`),
+      authFetch('/dashboard/current-month'),
+    ]);
+
+    await _summaryRes.json();
+    const timeline = await timelineRes.json();
+    const byGroup = await groupRes.json();
+    const byContact = await topRes.json();
+    const currentMonth = await currentMonthRes.json();
+
+    updateMonthlyKpis(currentMonth);
+    renderTimelineChart(timeline.rows || []);
+    renderGroupPieChart(byGroup.rows || []);
+    renderTopContacts(byContact.rows || []);
+  } catch (error) {
+    console.error('Error loading analytics:', error);
+  }
+}
+
+function renderContactsTable(items = []) {
+  const tbody = document.getElementById('contactsTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+  if (!items.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No hay contactos</td></tr>';
+    return;
+  }
+  items.forEach((c) => {
+    const tr = document.createElement('tr');
+    const sourceBadge = c.source === 'csv' 
+      ? '<span class="badge bg-info">CSV</span>' 
+      : '<span class="badge bg-secondary">Manual</span>';
+    const sentCount = c.sent || 0;
+    const errorCount = c.errors || 0;
+    const successRate = sentCount > 0 ? ((sentCount - errorCount) / sentCount * 100).toFixed(0) : 0;
+    const statsBadge = sentCount > 0 
+      ? `<span class="badge ${successRate >= 90 ? 'bg-success' : successRate >= 70 ? 'bg-warning' : 'bg-danger'}">${successRate}%</span>`
+      : '<span class="badge bg-secondary">--%</span>';
+    
+    tr.innerHTML = `
+      <td><code>${c.phone || '—'}</code></td>
+      <td>${c.nombre || '—'}</td>
+      <td>${c.sustantivo || '—'}</td>
+      <td>${c.grupo || '<span class="text-muted">Sin grupo</span>'}</td>
+      <td>${sourceBadge}</td>
+      <td class="text-center">${statsBadge}</td>
+      <td class="d-flex gap-1">
+        <button class="btn btn-sm btn-outline-info" data-action="edit-contact" data-id="${c.id}"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-sm btn-outline-danger" data-action="delete-contact" data-id="${c.id}"><i class="bi bi-trash"></i></button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+async function loadContacts() {
+  try {
+    const search = document.getElementById('contactSearchInput')?.value || '';
+    const group = document.getElementById('contactGroupFilterInput')?.value || '';
+    const res = await authFetch(`/contacts${buildQuery({ search, group, page: 1, pageSize: 200 })}`);
+    const data = await res.json();
+    renderContactsTable(data.items || []);
+  } catch (error) {
+    console.error('Error loading contacts:', error);
+  }
+}
+
+async function createManualContact(event) {
+  event.preventDefault();
+  const phone = document.getElementById('manualPhone')?.value?.trim();
+  const nombre = document.getElementById('manualNombre')?.value?.trim();
+  const sustantivo = document.getElementById('manualSustantivo')?.value?.trim();
+  const grupo = document.getElementById('manualGrupo')?.value?.trim();
+  if (!phone) {
+    showAlert('El número es obligatorio', 'warning');
+    return;
+  }
+  try {
+    const res = await authFetch('/contacts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, nombre, sustantivo, grupo }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showAlert(data.error || 'No se pudo crear el contacto', 'error');
+      return;
+    }
+    const form = document.getElementById('manualContactForm');
+    if (form) form.reset();
+    showAlert('Contacto guardado correctamente', 'success');
+    loadContacts();
+  } catch (error) {
+    showAlert(`Error creando contacto: ${error.message}`, 'error');
+  }
+}
+
+async function handleContactsTableClick(event) {
+  const btn = event.target.closest('button[data-action]');
+  if (!btn) return;
+  const action = btn.getAttribute('data-action');
+  const id = btn.getAttribute('data-id');
+  if (!id) return;
+
+  if (action === 'delete-contact') {
+    if (!confirm('¿Eliminar este contacto?')) return;
+    try {
+      const res = await authFetch(`/contacts/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showAlert(data.error || 'No se pudo eliminar', 'error');
+        return;
+      }
+      showAlert('Contacto eliminado', 'success');
+      loadContacts();
+    } catch (error) {
+      showAlert(`Error eliminando contacto: ${error.message}`, 'error');
+    }
+    return;
+  }
+
+  if (action === 'edit-contact') {
+    const row = btn.closest('tr');
+    if (!row) return;
+    const currentPhone = row.children[0]?.textContent?.trim() || '';
+    const currentNombre = row.children[1]?.textContent?.trim() || '';
+    const currentSustantivo = row.children[2]?.textContent?.trim() || '';
+    const currentGrupo = row.children[3]?.textContent?.trim() || '';
+
+    const phone = prompt('Número (595...):', currentPhone);
+    if (!phone) return;
+    const nombre = prompt('Nombre:', currentNombre === '—' ? '' : currentNombre);
+    const sustantivo = prompt('Sustantivo:', currentSustantivo === '—' ? '' : currentSustantivo);
+    const grupo = prompt('Grupo:', (currentGrupo === '—' || currentGrupo === 'Sin grupo') ? '' : currentGrupo);
+    try {
+      const res = await authFetch(`/contacts/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, nombre, sustantivo, grupo }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        showAlert(data.error || 'No se pudo editar el contacto', 'error');
+        return;
+      }
+      showAlert('Contacto actualizado', 'success');
+      loadContacts();
+    } catch (error) {
+      showAlert(`Error editando contacto: ${error.message}`, 'error');
+    }
+  }
+}
+
+async function setAnalyticsToThisMonth() {
+  const range = getMonthDateRange();
+  const fromInput = document.getElementById('analyticsFrom');
+  const toInput = document.getElementById('analyticsTo');
+  if (fromInput) fromInput.value = range.from;
+  if (toInput) toInput.value = range.to;
+  await loadAnalyticsDashboard();
+}
+
 /** ======== Theme Management ======== */
 function setupThemeToggle() {
   const THEME_KEY = 'ms-theme';
@@ -2110,6 +2587,24 @@ function setupEventListeners() {
       cancelCampaignFrontend();
     });
   }
+
+  const refreshAnalyticsBtn = document.getElementById('refreshAnalyticsBtn');
+  if (refreshAnalyticsBtn) refreshAnalyticsBtn.addEventListener('click', loadAnalyticsDashboard);
+
+  const loadThisMonthBtn = document.getElementById('loadThisMonthBtn');
+  if (loadThisMonthBtn) loadThisMonthBtn.addEventListener('click', setAnalyticsToThisMonth);
+
+  const manualContactForm = document.getElementById('manualContactForm');
+  if (manualContactForm) manualContactForm.addEventListener('submit', createManualContact);
+
+  const contactsRefreshBtn = document.getElementById('contactsRefreshBtn');
+  if (contactsRefreshBtn) contactsRefreshBtn.addEventListener('click', loadContacts);
+
+  const contactsFilterBtn = document.getElementById('contactsFilterBtn');
+  if (contactsFilterBtn) contactsFilterBtn.addEventListener('click', loadContacts);
+
+  const contactsTableBody = document.getElementById('contactsTableBody');
+  if (contactsTableBody) contactsTableBody.addEventListener('click', handleContactsTableClick);
 
   // Logout button  
   console.log('🔍 Buscando botón de logout...');
@@ -2212,6 +2707,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Setup theme toggle
   setupThemeToggle();
+  ensureAnalyticsDateDefaults();
+  setupDatePresets();
+  loadAnalyticsDashboard();
+  loadHeroTodayStats();
+  loadTotalContacts();
+  setInterval(loadHeroTodayStats, 60000);
+  setInterval(loadTotalContacts, 120000);
 
   // Initially disable send tab until WhatsApp is connected
   const sendTabBtn = document.querySelector('[data-tab="send"]');

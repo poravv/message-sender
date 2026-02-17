@@ -3,696 +3,504 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>WhatsApp Message Sender Pro</title>
+  <title>WhatsApp Sender Pro</title>
   <meta name="description" content="Plataforma profesional para envío masivo de mensajes de WhatsApp">
   
-  <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2325D366'/><text x='50%' y='50%' text-anchor='middle' dy='.35em' font-size='50'>📱</text></svg>">
 
-  <!-- Bootstrap + Icons -->
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"/>
-  
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-
-  <!-- Estilos personalizados -->
-  <link rel="stylesheet" href="/styles.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/app.css"/>
 </head>
 
 <body>
-  <!-- Loading Screen -->
+  <!-- Loading -->
   <div id="loading-screen" class="loading-screen">
     <div class="loading-content">
-      <div class="loading-logo">
-        <i class="bi bi-whatsapp"></i>
-      </div>
+      <div class="loading-logo"><i class="bi bi-whatsapp"></i></div>
       <div class="loading-text">WhatsApp Sender Pro</div>
-      <div class="loading-spinner">
-        <div class="spinner-ring"></div>
-      </div>
+      <div class="spinner"></div>
     </div>
   </div>
 
-  <!-- Navigation Bar -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-transparent fixed-top">
+  <!-- Navbar -->
+  <nav class="navbar">
     <div class="container">
-      <a class="navbar-brand d-flex align-items-center" href="#">
-        <div class="brand-icon me-2">
-          <i class="bi bi-whatsapp"></i>
-        </div>
-        <span class="brand-text">WhatsApp Sender Pro</span>
+      <a class="navbar-brand" href="#">
+        <i class="bi bi-whatsapp"></i>
+        <span>WhatsApp Sender Pro</span>
       </a>
       
-      <div class="navbar-nav ms-auto d-flex flex-row align-items-center">
-        <!-- User Info -->
-        <div id="user-info" class="user-info me-3 d-none">
-          <div class="user-avatar">
-            <i class="bi bi-person-circle"></i>
-          </div>
-          <div class="user-details">
-            <span id="user-name" class="user-name">Usuario</span>
-            <small id="user-email" class="user-email">email@ejemplo.com</small>
-          </div>
-          <div class="user-actions">
-            <button id="logout-btn" class="btn-logout" title="Cerrar sesión completa">
-              <i class="bi bi-box-arrow-right"></i>
-            </button>
-          </div>
+      <div class="navbar-end">
+        <div id="user-info" class="user-info d-none">
+          <span id="user-name">Usuario</span>
+          <button id="logout-btn" class="btn-icon" title="Cerrar sesión">
+            <i class="bi bi-box-arrow-right"></i>
+          </button>
         </div>
         
-        <!-- Connection Status -->
-        <div id="connection-status" class="connection-status me-3">
-          <div class="status-indicator"></div>
+        <div id="connection-status" class="connection-badge disconnected">
+          <span class="status-dot"></span>
           <span class="status-text">Desconectado</span>
         </div>
         
-        <!-- Theme Toggle -->
         <div class="theme-toggle">
-          <input type="checkbox" id="themeSwitch" class="theme-switch-checkbox">
-          <label for="themeSwitch" class="theme-switch-label">
-            <span class="theme-switch-inner">
-              <i class="bi bi-sun-fill"></i>
-              <i class="bi bi-moon-fill"></i>
-            </span>
-            <span class="theme-switch-switch"></span>
+          <input type="checkbox" id="themeSwitch">
+          <label for="themeSwitch">
+            <i class="bi bi-sun-fill"></i>
+            <i class="bi bi-moon-fill"></i>
           </label>
         </div>
       </div>
     </div>
   </nav>
 
-  <!-- Alert System -->
+  <!-- Alerts -->
   <div id="alert-container" class="alert-container"></div>
 
-  <!-- Main Content -->
-  <main class="main-content">
+  <!-- Main -->
+  <main class="main">
     <div class="container">
-      <!-- Header Section -->
-      <section class="hero-section text-center mb-5">
-        <div class="hero-content">
-          <h1 class="hero-title">
-            <span class="title-highlight">Envío Masivo</span> de Mensajes
-          </h1>
-          <p class="hero-subtitle">
-            Plataforma profesional para envío controlado y seguro de mensajes de WhatsApp
-          </p>
-          <div class="hero-stats">
-            <div class="stat-item">
-              <div class="stat-number" id="totalSentToday">0</div>
-              <div class="stat-label">Enviados hoy</div>
+      <!-- Tab Navigation -->
+      <nav class="tabs-nav">
+        <button class="tab-btn active" data-tab="dashboard">
+          <i class="bi bi-speedometer2"></i>
+          <span>Dashboard</span>
+        </button>
+        <button class="tab-btn" data-tab="whatsapp">
+          <i class="bi bi-qr-code"></i>
+          <span>Conectar</span>
+        </button>
+        <button class="tab-btn" data-tab="send">
+          <i class="bi bi-send"></i>
+          <span>Enviar</span>
+        </button>
+        <button class="tab-btn" data-tab="contacts">
+          <i class="bi bi-people"></i>
+          <span>Contactos</span>
+        </button>
+      </nav>
+
+      <!-- Tab: Dashboard -->
+      <section id="dashboard" class="tab-pane active">
+        <header class="section-header">
+          <h1>Dashboard</h1>
+          <p>Visualiza el rendimiento de tus envíos</p>
+        </header>
+
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-send-check"></i></div>
+            <div class="stat-data">
+              <span class="stat-value" id="statTotalSent">0</span>
+              <span class="stat-label">Enviados (período)</span>
             </div>
-            <div class="stat-divider"></div>
-            <div class="stat-item">
-              <div class="stat-number" id="successRate">99.8%</div>
-              <div class="stat-label">Tasa de éxito</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon success"><i class="bi bi-check-circle"></i></div>
+            <div class="stat-data">
+              <span class="stat-value" id="statSuccessRate">--%</span>
+              <span class="stat-label">Tasa de éxito</span>
             </div>
-            <div class="stat-divider"></div>
-            <div class="stat-item">
-              <div class="stat-number" id="avgSpeed">3.5s</div>
-              <div class="stat-label">Tiempo promedio</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon warning"><i class="bi bi-exclamation-triangle"></i></div>
+            <div class="stat-data">
+              <span class="stat-value" id="statTotalErrors">0</span>
+              <span class="stat-label">Errores</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon info"><i class="bi bi-calendar-month"></i></div>
+            <div class="stat-data">
+              <span class="stat-value" id="statMonthSent">0</span>
+              <span class="stat-label">Este mes</span>
+              <span class="stat-delta" id="statMonthDelta">+0%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="filters-bar">
+          <div class="date-inputs">
+            <div class="input-group">
+              <span class="input-icon"><i class="bi bi-calendar3"></i></span>
+              <input type="date" id="dashboardFrom" class="form-control">
+            </div>
+            <span class="separator">→</span>
+            <div class="input-group">
+              <span class="input-icon"><i class="bi bi-calendar3"></i></span>
+              <input type="date" id="dashboardTo" class="form-control">
+            </div>
+          </div>
+          <div class="presets">
+            <button class="preset-btn" id="preset7D">7 días</button>
+            <button class="preset-btn active" id="preset30D">30 días</button>
+            <button class="preset-btn" id="presetMonth">Este mes</button>
+            <button class="preset-btn" id="preset90D">90 días</button>
+          </div>
+          <button class="btn-refresh" id="refreshDashboardBtn">
+            <i class="bi bi-arrow-clockwise"></i>
+          </button>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts-grid">
+          <div class="chart-card large">
+            <div class="chart-header">
+              <h3>Tendencia de Envíos</h3>
+              <div class="chart-legend">
+                <span class="legend success"><i class="bi bi-circle-fill"></i> Enviados</span>
+                <span class="legend danger"><i class="bi bi-circle-fill"></i> Errores</span>
+              </div>
+            </div>
+            <div class="chart-body">
+              <canvas id="timelineChart"></canvas>
+            </div>
+          </div>
+          
+          <div class="chart-card">
+            <div class="chart-header">
+              <h3>Resultado de Envíos</h3>
+            </div>
+            <div class="chart-body pie">
+              <canvas id="pieChart"></canvas>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- Tab Navigation -->
-      <div class="tab-navigation">
-        <div class="tab-nav-container">
-          <button class="tab-nav-btn active" data-tab="link" id="linkBtn">
-            <div class="tab-icon">
-              <i class="bi bi-qr-code-scan"></i>
+      <!-- Tab: WhatsApp Connection -->
+      <section id="whatsapp" class="tab-pane">
+        <header class="section-header">
+          <h1>Conectar WhatsApp</h1>
+          <p>Vincula tu cuenta para comenzar a enviar mensajes</p>
+        </header>
+
+        <div class="card">
+          <div id="qr-container" class="qr-section">
+            <div class="qr-steps">
+              <div class="step">
+                <span class="step-num">1</span>
+                <span>Abre WhatsApp en tu teléfono</span>
+              </div>
+              <div class="step">
+                <span class="step-num">2</span>
+                <span>Ve a Configuración → Dispositivos vinculados</span>
+              </div>
+              <div class="step">
+                <span class="step-num">3</span>
+                <span>Escanea el código QR</span>
+              </div>
             </div>
-            <div class="tab-content">
-              <div class="tab-title">Conectar WhatsApp</div>
-              <div class="tab-description">Escanear código QR</div>
+            
+            <div class="qr-display">
+              <div class="qr-wrapper">
+                <img id="qrImage" alt="Código QR" class="qr-image">
+              </div>
+              <div class="qr-actions">
+                <button id="refreshQrBtn" class="btn-secondary">
+                  <i class="bi bi-arrow-clockwise"></i> Refrescar
+                </button>
+                <button id="clearRedisBtn" class="btn-outline-danger">
+                  <i class="bi bi-trash3"></i> Limpiar cache
+                </button>
+              </div>
             </div>
-          </button>
+          </div>
+
+          <div id="authenticated-message" class="connected-section d-none">
+            <div class="success-icon">
+              <i class="bi bi-check-circle-fill"></i>
+            </div>
+            <h2>¡Conectado!</h2>
+            <p>Tu WhatsApp está vinculado y listo para enviar</p>
+            <div class="wa-user-info">
+              <div class="info-row">
+                <span class="label">Usuario:</span>
+                <span class="value" id="wa-user-nickname">—</span>
+              </div>
+              <div class="info-row">
+                <span class="label">Número:</span>
+                <span class="value" id="wa-user-phone">—</span>
+              </div>
+            </div>
+            <button class="btn-primary" onclick="showTab('send')">
+              <i class="bi bi-send"></i> Comenzar a enviar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Send Messages -->
+      <section id="send" class="tab-pane">
+        <header class="section-header">
+          <h1>Enviar Mensajes</h1>
+          <p>Configura y envía mensajes masivos</p>
+        </header>
+
+        <div class="card">
+          <form id="messageForm" enctype="multipart/form-data">
+            <!-- Campaign Name -->
+            <div class="form-group">
+              <label for="campaignName">Nombre de campaña (opcional)</label>
+              <input type="text" id="campaignName" class="form-control" maxlength="120" placeholder="Ej: Promoción Febrero">
+            </div>
+
+            <!-- CSV Upload -->
+            <div class="form-group">
+              <label>Lista de destinatarios</label>
+              <div class="file-upload">
+                <input type="file" id="csvFile" name="csvFile" accept=".csv,.txt" required>
+                <label for="csvFile" class="file-upload-label">
+                  <i class="bi bi-cloud-upload"></i>
+                  <span>Arrastra o selecciona tu archivo CSV/TXT</span>
+                  <small>Formato: 595xxxxxxxxxxx</small>
+                </label>
+                <div id="csvFileInfo" class="file-info"></div>
+              </div>
+              <div class="help-text">
+                <strong>Columnas opcionales:</strong> número, sustantivo, nombre, grupo
+              </div>
+            </div>
+
+            <!-- Message Type -->
+            <div class="form-group">
+              <label>Tipo de mensaje</label>
+              <div class="type-options">
+                <label class="type-option">
+                  <input type="radio" name="messageType" value="none" checked>
+                  <span class="option-content">
+                    <i class="bi bi-chat-text"></i>
+                    <span>Solo texto</span>
+                  </span>
+                </label>
+                <label class="type-option">
+                  <input type="radio" name="messageType" value="single">
+                  <span class="option-content">
+                    <i class="bi bi-image"></i>
+                    <span>Imagen + texto</span>
+                  </span>
+                </label>
+                <label class="type-option">
+                  <input type="radio" name="messageType" value="multiple">
+                  <span class="option-content">
+                    <i class="bi bi-images"></i>
+                    <span>Múltiples imágenes</span>
+                  </span>
+                </label>
+                <label class="type-option">
+                  <input type="radio" name="messageType" value="audio">
+                  <span class="option-content">
+                    <i class="bi bi-mic"></i>
+                    <span>Audio</span>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Media Sections -->
+            <div id="singleImageSection" class="media-section d-none">
+              <div class="file-upload">
+                <input type="file" id="singleImage" name="singleImage" accept="image/*">
+                <label for="singleImage" class="file-upload-label">
+                  <i class="bi bi-image"></i>
+                  <span>Seleccionar imagen</span>
+                </label>
+                <div id="singleImageInfo" class="file-info"></div>
+              </div>
+            </div>
+
+            <div id="multipleImagesSection" class="media-section d-none">
+              <div class="file-upload">
+                <input type="file" id="images" name="images" accept="image/*" multiple>
+                <label for="images" class="file-upload-label">
+                  <i class="bi bi-images"></i>
+                  <span>Seleccionar imágenes</span>
+                </label>
+                <div id="multipleImagesInfo" class="file-info"></div>
+              </div>
+            </div>
+
+            <div id="audioSection" class="media-section d-none">
+              <div class="file-upload">
+                <input type="file" id="audioFile" name="audioFile" accept="audio/*">
+                <label for="audioFile" class="file-upload-label">
+                  <i class="bi bi-mic"></i>
+                  <span>Seleccionar audio</span>
+                </label>
+                <div id="audioFileInfo" class="file-info"></div>
+              </div>
+            </div>
+
+            <!-- Templates -->
+            <div class="form-group">
+              <label>Mensaje</label>
+              <div class="template-selector">
+                <select id="templateCount" class="form-control">
+                  <option value="1">1 template</option>
+                  <option value="2">2 templates (alternan)</option>
+                  <option value="3">3 templates</option>
+                  <option value="4">4 templates</option>
+                  <option value="5">5 templates</option>
+                </select>
+              </div>
+              <div id="templatesContainer" class="templates-container"></div>
+            </div>
+
+            <!-- Variables Helper -->
+            <div id="variablesHelper" class="variables-helper d-none">
+              <span class="helper-label">Variables:</span>
+              <button type="button" class="variable-btn" data-variable="{sustantivo}">
+                <code>{sustantivo}</code>
+              </button>
+              <button type="button" class="variable-btn" data-variable="{nombre}">
+                <code>{nombre}</code>
+              </button>
+              <button type="button" class="variable-btn" data-variable="{grupo}">
+                <code>{grupo}</code>
+              </button>
+            </div>
+
+            <!-- Emoji Picker -->
+            <div id="emojiPicker" class="emoji-picker d-none">
+              <div class="emoji-categories">
+                <button type="button" class="emoji-category active" data-category="smileys">😀</button>
+                <button type="button" class="emoji-category" data-category="people">👤</button>
+                <button type="button" class="emoji-category" data-category="nature">🌱</button>
+                <button type="button" class="emoji-category" data-category="food">🍎</button>
+                <button type="button" class="emoji-category" data-category="activities">⚽</button>
+                <button type="button" class="emoji-category" data-category="objects">💡</button>
+                <button type="button" class="emoji-category" data-category="symbols">❤️</button>
+              </div>
+              <div id="emojiGrid" class="emoji-grid"></div>
+            </div>
+
+            <!-- Submit -->
+            <button type="submit" id="sendMessageBtn" class="btn-primary btn-lg">
+              <i class="bi bi-send"></i>
+              <span>Enviar mensajes</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Progress -->
+        <div id="messageStatus" class="card progress-card d-none">
+          <div class="progress-header">
+            <h3>Progreso del envío</h3>
+            <div class="progress-percentage">0%</div>
+          </div>
+          <div class="progress-bar-wrapper">
+            <div class="progress-bar">
+              <div class="progress-fill"></div>
+            </div>
+          </div>
           
-          <button class="tab-nav-btn" data-tab="send" id="sendBtn">
-            <div class="tab-icon">
-              <i class="bi bi-send-fill"></i>
+          <div class="progress-stats">
+            <div class="progress-stat">
+              <span class="stat-num" id="totalCount">0</span>
+              <span class="stat-label">Total</span>
             </div>
-            <div class="tab-content">
-              <div class="tab-title">Enviar Mensajes</div>
-              <div class="tab-description" id="sendTabDescription">Configurar y enviar</div>
+            <div class="progress-stat success">
+              <span class="stat-num" id="sentCount">0</span>
+              <span class="stat-label">Enviados</span>
             </div>
-          </button>
-          
-          <!-- <button class="tab-nav-btn" data-tab="analytics" id="analyticsBtn">
-            <div class="tab-icon">
-              <i class="bi bi-bar-chart-fill"></i>
-            </div>
-            <div class="tab-content">
-              <div class="tab-title">Estadísticas</div>
-              <div class="tab-description">Ver resultados</div>
-            </div>
-          </button> -->
-        </div>
-      </div>
-
-      <!-- Tab Content -->
-      <div class="tab-content-container">
-        <!-- Link Tab -->
-        <div id="link" class="tab-pane active">
-          <div class="connection-card">
-            <div class="card-header">
-              <div class="card-icon">
-                <i class="bi bi-whatsapp"></i>
-              </div>
-              <div class="card-title-section">
-                <h3 class="card-title">Conectar WhatsApp</h3>
-                <p class="card-subtitle">Vincula tu cuenta de WhatsApp para comenzar</p>
-              </div>
-            </div>
-            
-            <div class="card-body">
-              <div id="qr-container" class="qr-section">
-                <div class="qr-instructions">
-                  <div class="instruction-steps">
-                    <div class="step">
-                      <div class="step-number">1</div>
-                      <div class="step-text">Abre WhatsApp en tu teléfono</div>
-                    </div>
-                    <div class="step">
-                      <div class="step-number">2</div>
-                      <div class="step-text">Ve a Configuración > Dispositivos vinculados</div>
-                    </div>
-                    <div class="step">
-                      <div class="step-number">3</div>
-                      <div class="step-text">Escanea el código QR a continuación</div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="qr-code-container">
-                  <div class="qr-wrapper">
-                    <img id="qrImage" alt="Código QR de WhatsApp" class="qr-image" loading="lazy">
-                    <div class="qr-overlay">
-                      <div class="qr-scanning-line"></div>
-                    </div>
-                  </div>
-                  
-                  <div class="qr-actions">
-                    <button id="refreshQrBtn" class="btn-refresh" onclick="refreshQR()">
-                      <i class="bi bi-arrow-clockwise"></i>
-                      <span>Refrescar código</span>
-                    </button>
-                    <button id="clearRedisBtn" class="btn-refresh btn-danger" onclick="clearRedisSession()" title="Limpiar sesión antigua de Redis (útil si hay conflictos)">
-                      <i class="bi bi-trash3"></i>
-                      <span>Limpiar cache</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div id="authenticated-message" class="authenticated-section d-none">
-                <div class="success-animation">
-                  <div class="success-checkmark">
-                    <i class="bi bi-check-circle-fill"></i>
-                  </div>
-                </div>
-                
-                <div class="connection-info">
-                  <h4 class="connection-title">¡Conectado exitosamente!</h4>
-                  <p class="connection-description" id="connectionDescription">Tu WhatsApp está vinculado y listo para enviar mensajes</p>
-                  
-                  <div class="user-info-card">
-                    <div class="user-avatar">
-                      <i class="bi bi-person-circle"></i>
-                    </div>
-                    <div class="user-details">
-                      <div class="user-name">
-                        <span class="label">Usuario:</span>
-                        <span id="user-nickname" class="value">Cargando...</span>
-                      </div>
-                      <div class="user-phone">
-                        <span class="label">Número:</span>
-                        <span id="user-phone" class="value">Cargando...</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div class="next-steps">
-                  <button class="btn-primary-action" onclick="showTab('send')">
-                    <i class="bi bi-send-fill me-2"></i>
-                    Comenzar a enviar mensajes
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Send Tab -->
-        <div id="send" class="tab-pane">
-          <div class="send-message-card">
-            <div class="card-header">
-              <div class="card-icon">
-                <i class="bi bi-send-fill"></i>
-              </div>
-              <div class="card-title-section">
-                <h3 class="card-title">Enviar Mensajes</h3>
-                <p class="card-subtitle">Configura y envía mensajes masivos de forma controlada</p>
-              </div>
-            </div>
-            
-            <div class="card-body">
-              <form id="messageForm" enctype="multipart/form-data" class="message-form">
-                <!-- CSV Upload Section -->
-                <div class="form-section">
-                  <div class="section-header">
-                    <div class="section-icon">
-                      <i class="bi bi-file-earmark-spreadsheet"></i>
-                    </div>
-                    <div class="section-title">
-                      <h4>Lista de destinatarios</h4>
-                      <p>Carga un archivo CSV o TXT con los números de teléfono</p>
-                    </div>
-                  </div>
-                  
-                  <div class="file-upload-area">
-                    <input type="file" id="csvFile" name="csvFile" class="file-input" accept=".csv,.txt,text/plain" required>
-                    <label for="csvFile" class="file-upload-label">
-                      <div class="upload-icon">
-                        <i class="bi bi-cloud-upload"></i>
-                      </div>
-                      <div class="upload-text">
-                        <div class="upload-title">Arrastra o selecciona tu archivo CSV/TXT</div>
-                        <div class="upload-subtitle">Formato: 595xxxxxxxxxxx (12 dígitos, prefijo 595)</div>
-                      </div>
-                    </label>
-                    <div class="file-info" id="csvFileInfo"></div>
-                    
-                    <!-- Información sobre variables -->
-                    <div class="csv-variables-info mt-3">
-                      <div class="info-header">
-                        <i class="bi bi-info-circle text-info"></i>
-                        <strong>Personalización con variables</strong>
-                      </div>
-                      <div class="info-content">
-                        <p class="mb-2">Tu CSV puede incluir columnas adicionales para personalizar mensajes:</p>
-                        <div class="csv-examples">
-                          <div class="example">
-                            <strong>Formato básico:</strong>
-                            <code>595992756462</code>
-                            <small>→ Las variables se eliminarán del mensaje</small>
-                          </div>
-                          <div class="example">
-                            <strong>Con tratamiento:</strong>
-                            <code>595992756462,Sr</code>
-                            <small>→ Solo {sustantivo} será reemplazado</small>
-                          </div>
-                          <div class="example">
-                            <strong>Con tratamiento y nombre:</strong>
-                            <code>595992756462,Sr,Andrés Vera</code>
-                            <small>→ Ambas variables serán reemplazadas</small>
-                          </div>
-                        </div>
-                        <p class="variables-note">
-                          <i class="bi bi-lightbulb text-warning"></i>
-                          Usa <code>{sustantivo}</code> y <code>{nombre}</code> en tu mensaje. Las variables sin datos se eliminarán automáticamente.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Message Type Section -->
-                <div class="form-section">
-                  <div class="section-header">
-                    <div class="section-icon">
-                      <i class="bi bi-chat-dots"></i>
-                    </div>
-                    <div class="section-title">
-                      <h4>Tipo de mensaje</h4>
-                      <p>Selecciona el formato del contenido a enviar</p>
-                    </div>
-                  </div>
-                  
-                  <div class="message-type-grid">
-                    <div class="message-type-option">
-                      <input type="radio" id="type-text" name="messageType" value="none" checked>
-                      <label for="type-text" class="type-option-label">
-                        <div class="type-icon">
-                          <i class="bi bi-chat-text"></i>
-                        </div>
-                        <div class="type-content">
-                          <div class="type-title">Solo texto</div>
-                          <div class="type-description">Enviar únicamente mensaje de texto</div>
-                        </div>
-                      </label>
-                    </div>
-                    
-                    <div class="message-type-option">
-                      <input type="radio" id="type-single-image" name="messageType" value="single">
-                      <label for="type-single-image" class="type-option-label">
-                        <div class="type-icon">
-                          <i class="bi bi-image"></i>
-                        </div>
-                        <div class="type-content">
-                          <div class="type-title">Imagen + texto</div>
-                          <div class="type-description">Una imagen con comentario</div>
-                        </div>
-                      </label>
-                    </div>
-                    
-                    <div class="message-type-option">
-                      <input type="radio" id="type-multiple-images" name="messageType" value="multiple">
-                      <label for="type-multiple-images" class="type-option-label">
-                        <div class="type-icon">
-                          <i class="bi bi-images"></i>
-                        </div>
-                        <div class="type-content">
-                          <div class="type-title">Múltiples imágenes</div>
-                          <div class="type-description">Varias imágenes en un envío</div>
-                        </div>
-                      </label>
-                    </div>
-                    
-                    <div class="message-type-option">
-                      <input type="radio" id="type-audio" name="messageType" value="audio">
-                      <label for="type-audio" class="type-option-label">
-                        <div class="type-icon">
-                          <i class="bi bi-mic-fill"></i>
-                        </div>
-                        <div class="type-content">
-                          <div class="type-title">Mensaje de audio</div>
-                          <div class="type-description">Enviar archivo de audio</div>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Media Upload Sections -->
-                <div class="media-upload-sections">
-                  <div id="singleImageSection" class="media-section d-none">
-                    <div class="file-upload-area media-upload">
-                      <input type="file" id="singleImage" name="singleImage" class="file-input" accept="image/*">
-                      <label for="singleImage" class="file-upload-label">
-                        <div class="upload-icon">
-                          <i class="bi bi-image"></i>
-                        </div>
-                        <div class="upload-text">
-                          <div class="upload-title">Seleccionar imagen</div>
-                          <div class="upload-subtitle">JPG, PNG, GIF (máx. 16MB)</div>
-                        </div>
-                      </label>
-                      <div class="file-info" id="singleImageInfo"></div>
-                    </div>
-                  </div>
-                  
-                  <div id="multipleImagesSection" class="media-section d-none">
-                    <div class="file-upload-area media-upload">
-                      <input type="file" id="images" name="images" class="file-input" accept="image/*" multiple>
-                      <label for="images" class="file-upload-label">
-                        <div class="upload-icon">
-                          <i class="bi bi-images"></i>
-                        </div>
-                        <div class="upload-text">
-                          <div class="upload-title">Seleccionar múltiples imágenes</div>
-                          <div class="upload-subtitle">JPG, PNG, GIF (máx. 16MB cada una)</div>
-                        </div>
-                      </label>
-                      <div class="file-info" id="multipleImagesInfo"></div>
-                    </div>
-                  </div>
-                  
-                  <div id="audioSection" class="media-section d-none">
-                    <div class="file-upload-area media-upload">
-                      <input type="file" id="audioFile" name="audioFile" class="file-input" accept="audio/*">
-                      <label for="audioFile" class="file-upload-label">
-                        <div class="upload-icon">
-                          <i class="bi bi-mic-fill"></i>
-                        </div>
-                        <div class="upload-text">
-                          <div class="upload-title">Seleccionar archivo de audio</div>
-                          <div class="upload-subtitle">MP3, WAV, M4A, OGG (máx. 16MB)</div>
-                        </div>
-                      </label>
-                      <div class="file-info" id="audioFileInfo"></div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Message Content Section -->
-                <div class="form-section">
-                  <div class="section-header">
-                    <div class="section-icon">
-                      <i class="bi bi-pencil-square"></i>
-                    </div>
-                    <div class="section-title">
-                      <h4>Contenido del mensaje</h4>
-                      <p>Configura uno o varios templates que se rotarán automáticamente</p>
-                    </div>
-                  </div>
-                  
-                  <!-- Template Count Selector -->
-                  <div class="template-count-selector">
-                    <label for="templateCount">
-                      <i class="bi bi-layers"></i>
-                      Cantidad de templates (1-5):
-                    </label>
-                    <select id="templateCount" name="templateCount" class="form-select">
-                      <option value="1" selected>1 template (todos los mensajes iguales)</option>
-                      <option value="2">2 templates (se alternan)</option>
-                      <option value="3">3 templates (rotación de 3)</option>
-                      <option value="4">4 templates (rotación de 4)</option>
-                      <option value="5">5 templates (rotación de 5)</option>
-                    </select>
-                    <div class="templates-info">
-                      <i class="bi bi-info-circle"></i>
-                      <p>Los templates se rotarán automáticamente: Template 1 con línea 1 del CSV, Template 2 con línea 2, etc. Al llegar al último template, vuelve al primero.</p>
-                    </div>
-                  </div>
-                  
-                  <!-- Templates Container (generated dynamically) -->
-                  <div id="templatesContainer" class="templates-container">
-                    <!-- Templates will be generated by JavaScript -->
-                  </div>
-                  
-                  <!-- Variables Helper (shared by all templates) -->
-                  <div id="variablesHelper" class="variables-helper d-none">
-                    <div class="variables-header">
-                      <strong>Variables disponibles:</strong>
-                    </div>
-                    <div class="variables-list">
-                      <button type="button" class="variable-btn" data-variable="{sustantivo}">
-                        <code>{sustantivo}</code>
-                        <span>Tratamiento (Sr, Sra, Dr)</span>
-                      </button>
-                      <button type="button" class="variable-btn" data-variable="{nombre}">
-                        <code>{nombre}</code>
-                        <span>Nombre de la persona</span>
-                      </button>
-                    </div>
-                    <div class="variables-footer">
-                      <small class="text-muted">
-                        <i class="bi bi-info-circle"></i>
-                        Las variables se reemplazarán automáticamente según los datos del CSV
-                      </small>
-                    </div>
-                  </div>
-                  
-                  <!-- Emoji Picker (shared by all templates) -->
-                  <div id="emojiPicker" class="emoji-picker d-none">
-                    <div class="emoji-picker-header">
-                      <div class="emoji-categories">
-                        <button class="emoji-category active" data-category="smileys">😀</button>
-                        <button class="emoji-category" data-category="people">👤</button>
-                        <button class="emoji-category" data-category="nature">🌱</button>
-                        <button class="emoji-category" data-category="food">🍎</button>
-                        <button class="emoji-category" data-category="activities">⚽</button>
-                        <button class="emoji-category" data-category="travel">🚗</button>
-                        <button class="emoji-category" data-category="objects">💡</button>
-                        <button class="emoji-category" data-category="symbols">❤️</button>
-                        <button class="emoji-category" data-category="flags">🏁</button>
-                      </div>
-                    </div>
-                    <div class="emoji-picker-body">
-                      <div class="emoji-grid" id="emojiGrid">
-                        <!-- Emojis will be populated by JavaScript -->
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Send Button -->
-                <div class="form-actions">
-                  <button type="submit" class="btn-send-message" id="sendMessageBtn">
-                    <span class="btn-content">
-                      <i class="bi bi-send-fill"></i>
-                      <span class="btn-text">Enviar mensajes</span>
-                    </span>
-                    <div class="btn-loading">
-                      <div class="btn-spinner"></div>
-                      <span>Enviando...</span>
-                    </div>
-                  </button>
-                </div>
-              </form>
+            <div class="progress-stat danger">
+              <span class="stat-num" id="errorCount">0</span>
+              <span class="stat-label">Errores</span>
             </div>
           </div>
 
-          <!-- Progress Section -->
-          <div id="messageStatus" class="progress-card d-none">
-            <div class="card-header">
-              <div class="card-icon">
-                <i class="bi bi-graph-up"></i>
-              </div>
-              <div class="card-title-section">
-                <h3 class="card-title">Progreso del envío</h3>
-                <p class="card-subtitle">Seguimiento en tiempo real del estado de los mensajes</p>
-              </div>
+          <div class="progress-actions">
+            <button id="cancelBtn" class="btn-danger">
+              <i class="bi bi-x-circle"></i> Cancelar
+            </button>
+            <button id="exportBtn" class="btn-secondary">
+              <i class="bi bi-download"></i> Exportar
+            </button>
+          </div>
+
+          <div class="results-table-wrapper">
+            <table class="results-table">
+              <thead>
+                <tr>
+                  <th>Número</th>
+                  <th>Estado</th>
+                  <th>Hora</th>
+                  <th>Respuesta</th>
+                </tr>
+              </thead>
+              <tbody id="statusTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Contacts -->
+      <section id="contacts" class="tab-pane">
+        <header class="section-header">
+          <h1>Contactos</h1>
+          <p>Gestiona tu lista de contactos</p>
+        </header>
+
+        <div class="card">
+          <!-- Add Contact Form -->
+          <form id="addContactForm" class="add-contact-form">
+            <div class="form-row">
+              <input type="text" id="contactPhone" class="form-control" placeholder="Número (595...)" required>
+              <input type="text" id="contactNombre" class="form-control" placeholder="Nombre">
+              <input type="text" id="contactSustantivo" class="form-control" placeholder="Sr/Sra/Dr">
+              <input type="text" id="contactGrupo" class="form-control" placeholder="Grupo">
+              <button type="submit" class="btn-primary">
+                <i class="bi bi-plus"></i> Agregar
+              </button>
             </div>
-            
-            <div class="card-body">
-              <!-- Overall Progress -->
-              <div class="overall-progress">
-                <div class="progress-header">
-                  <div class="progress-title">Progreso general</div>
-                  <div class="progress-percentage">0%</div>
-                </div>
-                <div class="progress-bar-container">
-                  <div class="progress-bar" id="overallProgressBar">
-                    <div class="progress-fill"></div>
-                  </div>
-                </div>
-              </div>
+          </form>
 
-              <!-- Stats Grid -->
-              <div class="stats-grid">
-                <div class="stat-card stat-total">
-                  <div class="stat-icon">
-                    <i class="bi bi-list-ul"></i>
-                  </div>
-                  <div class="stat-content">
-                    <div class="stat-number" id="totalCount">0</div>
-                    <div class="stat-label">Total</div>
-                  </div>
-                </div>
-                
-                <div class="stat-card stat-sent">
-                  <div class="stat-icon">
-                    <i class="bi bi-check-circle-fill"></i>
-                  </div>
-                  <div class="stat-content">
-                    <div class="stat-number" id="sentCount">0</div>
-                    <div class="stat-label">Enviados</div>
-                  </div>
-                </div>
-                
-                <div class="stat-card stat-errors">
-                  <div class="stat-icon">
-                    <i class="bi bi-exclamation-triangle-fill"></i>
-                  </div>
-                  <div class="stat-content">
-                    <div class="stat-number" id="errorCount">0</div>
-                    <div class="stat-label">Errores</div>
-                  </div>
-                </div>
-                
-                <div class="stat-card stat-speed">
-                  <div class="stat-icon">
-                    <i class="bi bi-speedometer2"></i>
-                  </div>
-                  <div class="stat-content">
-                    <div class="stat-number" id="currentSpeed">0</div>
-                    <div class="stat-label">msg/min</div>
-                  </div>
-                </div>
-              </div>
+          <!-- Search/Filter -->
+          <div class="search-filter-bar">
+            <div class="search-box">
+              <i class="bi bi-search"></i>
+              <input type="text" id="contactSearchInput" placeholder="Buscar contactos...">
+            </div>
+            <div class="filter-box">
+              <i class="bi bi-funnel"></i>
+              <input type="text" id="contactGroupFilter" placeholder="Filtrar por grupo">
+            </div>
+            <button id="searchContactsBtn" class="btn-secondary">
+              <i class="bi bi-search"></i> Buscar
+            </button>
+            <button id="refreshContactsBtn" class="btn-icon">
+              <i class="bi bi-arrow-clockwise"></i>
+            </button>
+            <span id="contactsCount" class="badge">0 contactos</span>
+          </div>
 
-              <!-- Status Table -->
-              <div class="status-table-container">
-                <div class="table-header">
-                  <h4>Detalle de envíos</h4>
-                  <div class="table-actions">
-                    <button class="btn-cancel" id="cancelBtn">
-                      <i class="bi bi-x-circle"></i>
-                      Cancelar
-                    </button>
-                    <button class="btn-export" id="exportBtn">
-                      <i class="bi bi-download"></i>
-                      Exportar
-                    </button>
-                  </div>
-                </div>
-                
-                <div class="table-wrapper">
-                  <table class="status-table">
-                    <thead>
-                      <tr>
-                        <th>Número</th>
-                        <th>Estado</th>
-                        <th>Hora</th>
-                        <th>Respuesta</th>
-                      </tr>
-                    </thead>
-                    <tbody id="statusTableBody">
-                      <!-- Dynamic content -->
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+          <!-- Contacts Table -->
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Número</th>
+                  <th>Nombre</th>
+                  <th>Tratamiento</th>
+                  <th>Grupo</th>
+                  <th>Origen</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="contactsTableBody"></tbody>
+            </table>
+            <div id="contactsEmpty" class="empty-state">
+              <i class="bi bi-person-x"></i>
+              <p>No hay contactos</p>
+              <span>Agregue contactos manualmente o cargue un CSV</span>
             </div>
           </div>
         </div>
-
-        <!-- Analytics Tab -->
-        <div id="analytics" class="tab-pane">
-          <div class="analytics-card">
-            <div class="card-header">
-              <div class="card-icon">
-                <i class="bi bi-bar-chart-fill"></i>
-              </div>
-              <div class="card-title-section">
-                <h3 class="card-title">Estadísticas y análisis</h3>
-                <p class="card-subtitle">Métricas detalladas de rendimiento y uso</p>
-              </div>
-            </div>
-            
-            <div class="card-body">
-              <div class="analytics-grid">
-                <!-- Daily Stats -->
-                <div class="analytics-section">
-                  <h4 class="analytics-title">Resumen diario</h4>
-                  <div class="analytics-stats">
-                    <div class="analytics-stat">
-                      <div class="stat-value">1,247</div>
-                      <div class="stat-label">Mensajes enviados hoy</div>
-                      <div class="stat-change positive">+12.5%</div>
-                    </div>
-                    <div class="analytics-stat">
-                      <div class="stat-value">98.7%</div>
-                      <div class="stat-label">Tasa de entrega</div>
-                      <div class="stat-change positive">+2.1%</div>
-                    </div>
-                    <div class="analytics-stat">
-                      <div class="stat-value">2.3s</div>
-                      <div class="stat-label">Tiempo promedio</div>
-                      <div class="stat-change negative">-0.4s</div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Charts Placeholder -->
-                <div class="analytics-section">
-                  <h4 class="analytics-title">Tendencias de uso</h4>
-                  <div class="chart-placeholder">
-                    <i class="bi bi-graph-up"></i>
-                    <p>Próximamente: Gráficos interactivos de uso y rendimiento</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      </section>
     </div>
   </main>
 
@@ -700,78 +508,28 @@
   <footer class="footer">
     <div class="container">
       <div class="footer-content">
-        <div class="footer-section company-info">
-          <div class="company-logo">
-            <div class="brand-icon">
-              <i class="bi bi-whatsapp"></i>
-            </div>
-            <span class="brand-text">WhatsApp Sender Pro</span>
-          </div>
-          <p class="company-description">
-            Plataforma profesional para envío masivo de mensajes de WhatsApp. 
-            Desarrollado por MindTechPy para optimizar tu comunicación empresarial.
-          </p>
-          <div class="company-website">
-            <i class="bi bi-globe2"></i>
-            <a href="https://mindtechpy.net" target="_blank" rel="noopener">mindtechpy.net</a>
-          </div>
+        <div class="footer-brand">
+          <i class="bi bi-whatsapp"></i>
+          <span>WhatsApp Sender Pro</span>
         </div>
-        
-        <div class="footer-section contact-info">
-          <h4 class="footer-title">Contacto</h4>
-          <div class="contact-item">
-            <i class="bi bi-person-circle"></i>
-            <span>Andrés Vera</span>
-          </div>
-          <div class="contact-item">
-            <i class="bi bi-telephone"></i>
-            <a href="tel:+595992756462">+595 992 756462</a>
-          </div>
-          <div class="contact-item">
-            <i class="bi bi-whatsapp"></i>
-            <a href="https://wa.me/595992756462" target="_blank" rel="noopener">WhatsApp</a>
-          </div>
-        </div>
-        
-        <div class="footer-section social-info">
-          <h4 class="footer-title">Síguenos</h4>
-          <div class="social-links">
-            <a href="https://www.instagram.com/_vienecadames_/" target="_blank" rel="noopener" class="social-link instagram">
-              <i class="bi bi-instagram"></i>
-              <span>Instagram</span>
-            </a>
-            <a href="https://www.facebook.com/profile.php?id=61552838014512" target="_blank" rel="noopener" class="social-link facebook">
-              <i class="bi bi-facebook"></i>
-              <span>Facebook</span>
-            </a>
-          </div>
-        </div>
-      </div>
-      
-      <div class="footer-bottom">
-        <div class="footer-copyright">
-          <p>&copy; 2025 MindTechPy. Todos los derechos reservados.</p>
-        </div>
-        <div class="footer-tech">
-          <p>Desarrollado por Andrés Vera</p>
+        <div class="footer-links">
+          <a href="https://mindtechpy.net" target="_blank">mindtechpy.net</a>
+          <span>•</span>
+          <span>Desarrollado por Andrés Vera</span>
         </div>
       </div>
     </div>
   </footer>
 
-  <!-- Loading Overlay for Actions -->
-  <div id="loading-overlay" class="loading-overlay d-none">
-    <div class="loading-content">
-      <div class="loading-spinner">
-        <div class="spinner-ring"></div>
-      </div>
-      <div class="loading-text">Procesando...</div>
-    </div>
-  </div>
-
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/keycloak-js@latest/dist/keycloak.min.js"></script>
-  <script src="/app.js"></script>
+  <script src="/js/core.js"></script>
+  <script src="/js/dashboard.js"></script>
+  <script src="/js/whatsapp.js"></script>
+  <script src="/js/messages.js"></script>
+  <script src="/js/contacts.js"></script>
+  <script src="/js/main.js"></script>
 </body>
 </html>
