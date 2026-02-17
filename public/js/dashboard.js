@@ -110,11 +110,11 @@ async function loadDashboard() {
 
 // Update summary cards
 function updateSummaryCards(summary, currentMonth) {
-  const totalSent = Number(summary.totalSent || 0);
-  const totalSuccess = Number(summary.totalSuccess || 0);
-  const totalErrors = Number(summary.totalErrors || 0);
+  const totalSent = Number(summary.sent ?? summary.totalSent ?? 0);
+  const totalErrors = Number(summary.errors ?? summary.totalErrors ?? 0);
+  const delivered = Number(summary.delivered ?? (totalSent + totalErrors));
+  const totalSuccess = Number(summary.totalSuccess ?? totalSent);
   const monthSent = Number(currentMonth.sent || 0);
-  const monthErrors = Number(currentMonth.errors || 0);
   const monthRate = Number(currentMonth.successRate || 0);
   const delta = Number(currentMonth.deltaPercent || 0);
   
@@ -133,7 +133,9 @@ function updateSummaryCards(summary, currentMonth) {
   if (els.monthSent) els.monthSent.textContent = monthSent.toLocaleString();
   
   if (els.successRate) {
-    const rate = totalSent > 0 ? ((totalSuccess / totalSent) * 100).toFixed(1) : 0;
+    const rate = delivered > 0
+      ? Number(summary.successRate ?? ((totalSuccess / delivered) * 100)).toFixed(1)
+      : 0;
     els.successRate.textContent = `${rate}%`;
   }
   
@@ -158,8 +160,27 @@ function renderTimelineChart(rows) {
   }
   
   const labels = rows.map(r => {
-    const d = new Date(r.date);
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    const bucket = String(r.bucket || r.date || '').trim();
+    if (!bucket) return '';
+
+    if (/^\d{4}-\d{2}-\d{2}$/.test(bucket)) {
+      const [y, m, d] = bucket.split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      return dt.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    }
+
+    if (/^\d{4}-\d{2}$/.test(bucket)) {
+      const [y, m] = bucket.split('-').map(Number);
+      const dt = new Date(y, m - 1, 1);
+      return dt.toLocaleDateString('es-ES', { month: 'short', year: '2-digit' });
+    }
+
+    const parsed = new Date(bucket);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+    }
+
+    return bucket;
   });
   const sentData = rows.map(r => Number(r.sent || 0));
   const errorData = rows.map(r => Number(r.errors || 0));
@@ -236,8 +257,8 @@ function renderPieChart(groupRows, summary) {
     pieChartInstance.destroy();
   }
   
-  const totalSuccess = Number(summary.totalSuccess || 0);
-  const totalErrors = Number(summary.totalErrors || 0);
+  const totalSuccess = Number(summary.sent ?? summary.totalSuccess ?? 0);
+  const totalErrors = Number(summary.errors ?? summary.totalErrors ?? 0);
   
   pieChartInstance = new Chart(ctx, {
     type: 'doughnut',
@@ -292,8 +313,10 @@ async function loadQuickStats() {
     if (!res.ok) return;
     
     const summary = await res.json();
-    const totalSent = Number(summary.totalSent || 0);
-    const totalSuccess = Number(summary.totalSuccess || 0);
+    const totalSent = Number(summary.sent ?? summary.totalSent ?? 0);
+    const totalErrors = Number(summary.errors ?? summary.totalErrors ?? 0);
+    const delivered = Number(summary.delivered ?? (totalSent + totalErrors));
+    const totalSuccess = Number(summary.totalSuccess ?? totalSent);
     
     // Quick stat elements
     const todayEl = document.getElementById('quickStatToday');
@@ -301,8 +324,8 @@ async function loadQuickStats() {
     
     if (todayEl) todayEl.textContent = totalSent.toLocaleString();
     if (rateEl) {
-      rateEl.textContent = totalSent > 0 
-        ? `${((totalSuccess / totalSent) * 100).toFixed(1)}%`
+      rateEl.textContent = delivered > 0
+        ? `${Number(summary.successRate ?? ((totalSuccess / delivered) * 100)).toFixed(1)}%`
         : '--%';
     }
   } catch (e) {
