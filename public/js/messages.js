@@ -517,11 +517,15 @@ async function loadContactsForSelector() {
   `;
   
   try {
-    const res = await authFetch('/contacts');
+    const res = await authFetch('/contacts?pageSize=500');
     if (!res.ok) throw new Error('Error al cargar contactos');
     
     const data = await res.json();
-    allContactsForSend = data.contacts || [];
+    allContactsForSend = data.items || [];
+    
+    // Update total contacts count
+    const totalEl = document.getElementById('totalContactsCount');
+    if (totalEl) totalEl.textContent = allContactsForSend.length;
     
     if (allContactsForSend.length === 0) {
       container.innerHTML = `
@@ -557,8 +561,8 @@ function renderContactsCheckList(contacts) {
     item.innerHTML = `
       <input type="checkbox" value="${contact.id}" ${selectedContactIds.has(contact.id) ? 'checked' : ''}>
       <div class="contact-info">
-        <span class="contact-name">${contact.nombre || contact.numero}</span>
-        <span class="contact-number">${contact.numero}</span>
+        <span class="contact-name">${contact.nombre || contact.phone}</span>
+        <span class="contact-number">${contact.phone}</span>
       </div>
       ${contact.grupo ? `<span class="contact-group-badge">${contact.grupo}</span>` : ''}
     `;
@@ -594,7 +598,7 @@ function setupContactsSearch() {
     const query = searchInput.value.toLowerCase().trim();
     const filtered = allContactsForSend.filter(c => 
       (c.nombre && c.nombre.toLowerCase().includes(query)) ||
-      (c.numero && c.numero.includes(query)) ||
+      (c.phone && c.phone.includes(query)) ||
       (c.grupo && c.grupo.toLowerCase().includes(query))
     );
     renderContactsCheckList(filtered);
@@ -675,11 +679,11 @@ async function loadGroupContactsCount() {
   }
   
   try {
-    const res = await authFetch('/contacts');
+    const res = await authFetch(`/contacts?group=${encodeURIComponent(groupName)}&pageSize=500`);
     if (!res.ok) throw new Error('Error');
     
     const data = await res.json();
-    const contacts = (data.contacts || []).filter(c => c.grupo === groupName);
+    const contacts = data.items || [];
     
     countText.textContent = `${contacts.length} contactos`;
     countEl.classList.remove('d-none');
