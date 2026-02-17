@@ -2,6 +2,8 @@
  * Contacts - Contact Management
  */
 
+let editingContactId = null;
+
 // Load contacts
 async function loadContacts() {
   try {
@@ -112,29 +114,79 @@ async function addContact(e) {
 async function editContact(id) {
   try {
     const res = await authFetch(`/contacts/${id}`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.error || 'No se pudo cargar el contacto');
+    }
     const contact = await res.json();
-    
-    const phone = prompt('Número:', contact.phone || '');
-    if (phone === null) return;
-    
-    const nombre = prompt('Nombre:', contact.nombre || '');
-    const sustantivo = prompt('Tratamiento:', contact.sustantivo || '');
-    const grupo = prompt('Grupo:', contact.grupo || '');
-    
-    const updateRes = await authFetch(`/contacts/${id}`, {
+
+    editingContactId = id;
+    const phoneInput = document.getElementById('editContactPhone');
+    const nombreInput = document.getElementById('editContactNombre');
+    const sustantivoInput = document.getElementById('editContactSustantivo');
+    const grupoInput = document.getElementById('editContactGrupo');
+
+    if (phoneInput) phoneInput.value = contact.phone || '';
+    if (nombreInput) nombreInput.value = contact.nombre || '';
+    if (sustantivoInput) sustantivoInput.value = contact.sustantivo || '';
+    if (grupoInput) grupoInput.value = contact.grupo || '';
+
+    openEditContactModal();
+  } catch (error) {
+    showAlert(error.message, 'danger');
+  }
+}
+
+function openEditContactModal() {
+  const modal = document.getElementById('editContactModal');
+  if (!modal) return;
+  modal.classList.remove('d-none');
+}
+
+function closeEditContactModal() {
+  const modal = document.getElementById('editContactModal');
+  const form = document.getElementById('editContactForm');
+  if (modal) modal.classList.add('d-none');
+  if (form) form.reset();
+  editingContactId = null;
+}
+
+async function submitEditContact(e) {
+  e.preventDefault();
+
+  if (!editingContactId) return;
+
+  const phone = document.getElementById('editContactPhone')?.value?.trim() || '';
+  const nombre = document.getElementById('editContactNombre')?.value?.trim() || '';
+  const sustantivo = document.getElementById('editContactSustantivo')?.value?.trim() || '';
+  const grupo = document.getElementById('editContactGrupo')?.value?.trim() || '';
+
+  if (!phone) {
+    showAlert('El número es requerido', 'warning');
+    return;
+  }
+
+  const saveBtn = document.getElementById('editContactSaveBtn');
+  if (saveBtn) saveBtn.disabled = true;
+
+  try {
+    const updateRes = await authFetch(`/contacts/${editingContactId}`, {
       method: 'PUT',
       body: JSON.stringify({ phone, nombre, sustantivo, grupo })
     });
-    
+
     if (!updateRes.ok) {
-      throw new Error('Error al actualizar');
+      const data = await updateRes.json().catch(() => ({}));
+      throw new Error(data.error || 'Error al actualizar');
     }
-    
+
     showAlert('Contacto actualizado', 'success');
+    closeEditContactModal();
     loadContacts();
-    
   } catch (error) {
     showAlert(error.message, 'danger');
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
   }
 }
 
@@ -188,8 +240,37 @@ function setupContacts() {
     refreshBtn.addEventListener('click', loadContacts);
   }
 
+  // Edit modal
+  setupEditModal();
+
   // CSV Import
   setupCsvImport();
+}
+
+function setupEditModal() {
+  const form = document.getElementById('editContactForm');
+  const closeBtn = document.getElementById('editContactCloseBtn');
+  const cancelBtn = document.getElementById('editContactCancelBtn');
+  const modal = document.getElementById('editContactModal');
+
+  if (form) form.addEventListener('submit', submitEditContact);
+  if (closeBtn) closeBtn.addEventListener('click', closeEditContactModal);
+  if (cancelBtn) cancelBtn.addEventListener('click', closeEditContactModal);
+
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target && e.target.dataset && e.target.dataset.modalClose === 'true') {
+        closeEditContactModal();
+      }
+    });
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const isOpen = modal && !modal.classList.contains('d-none');
+      if (isOpen) closeEditContactModal();
+    }
+  });
 }
 
 // Setup CSV Import

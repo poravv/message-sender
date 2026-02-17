@@ -524,6 +524,19 @@ function buildRoutes() {
     }
   });
 
+  router.get('/contacts/:contactId', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const { contactId } = req.params;
+      const contact = await metricsStore.getContactById(userId, contactId);
+      if (!contact) return res.status(404).json({ error: 'Contacto no encontrado' });
+      return res.json(contact);
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /contacts/:contactId');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
   // ---------------------------
   // Dashboard analytics
   // ---------------------------

@@ -2146,3 +2146,83 @@ a.btn-link:hover {
   margin-bottom: var(--space-sm);
   display: block;
 }
+
+/* ========== App Modal ========== */
+.app-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+}
+
+.app-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.app-modal-card {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.app-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.app-modal-header h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.app-modal-close {
+  padding: var(--space-xs);
+}
+
+.app-modal-body {
+  padding: var(--space-lg);
+  overflow-y: auto;
+}
+
+.app-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-sm);
+  margin-top: var(--space-md);
+}
+
+@media (max-width: 768px) {
+  .app-modal {
+    padding: var(--space-sm);
+  }
+
+  .app-modal-card {
+    width: 100%;
+    max-height: 95vh;
+  }
+
+  .app-modal-footer {
+    flex-direction: column-reverse;
+  }
+
+  .app-modal-footer .btn-secondary,
+  .app-modal-footer .btn-primary {
+    width: 100%;
+  }
+}

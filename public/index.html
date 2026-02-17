@@ -598,6 +598,43 @@
     </div>
   </main>
 
+  <!-- Edit Contact Modal -->
+  <div id="editContactModal" class="app-modal d-none" role="dialog" aria-modal="true" aria-labelledby="editContactTitle">
+    <div class="app-modal-backdrop" data-modal-close="true"></div>
+    <div class="app-modal-card" role="document">
+      <div class="app-modal-header">
+        <h3 id="editContactTitle">Editar contacto</h3>
+        <button type="button" class="btn-icon app-modal-close" id="editContactCloseBtn" aria-label="Cerrar">
+          <i class="bi bi-x-lg"></i>
+        </button>
+      </div>
+      <form id="editContactForm" class="app-modal-body">
+        <div class="form-group">
+          <label for="editContactPhone">Número</label>
+          <input type="text" id="editContactPhone" class="form-control" placeholder="595..." required>
+        </div>
+        <div class="form-group">
+          <label for="editContactNombre">Nombre</label>
+          <input type="text" id="editContactNombre" class="form-control" placeholder="Nombre">
+        </div>
+        <div class="form-group">
+          <label for="editContactSustantivo">Tratamiento</label>
+          <input type="text" id="editContactSustantivo" class="form-control" placeholder="Sr/Sra/Dr">
+        </div>
+        <div class="form-group">
+          <label for="editContactGrupo">Grupo</label>
+          <input type="text" id="editContactGrupo" class="form-control" placeholder="Grupo">
+        </div>
+        <div class="app-modal-footer">
+          <button type="button" class="btn-secondary" id="editContactCancelBtn">Cancelar</button>
+          <button type="submit" class="btn-primary" id="editContactSaveBtn">
+            <i class="bi bi-check2"></i> Guardar cambios
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Footer -->
   <footer class="footer">
     <div class="container">
