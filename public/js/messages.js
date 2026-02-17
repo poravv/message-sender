@@ -474,6 +474,14 @@ function exportResults() {
 // ========== Recipient Source Selection ==========
 let allContactsForSend = [];
 let selectedContactIds = new Set();
+const contactSelectorState = {
+  page: 1,
+  pageSize: 50,
+  total: 0,
+  totalPages: 1,
+  search: ''
+};
+let contactSelectorSearchTimer = null;
 
 // Setup recipient source tabs
 function setupRecipientSourceTabs() {
@@ -507,38 +515,63 @@ function setupRecipientSourceTabs() {
       
       // Load data if needed
       if (source === 'contacts') {
-        loadContactsForSelector();
+        loadContactsForSelector(1);
       } else if (source === 'group') {
         loadGroupsForSelector();
       }
     });
   });
+
+  setupContactsSearch();
+  setupContactsSelectAll();
+  setupContactSelectorPagination();
 }
 
 // Load contacts for multi-select
-async function loadContactsForSelector() {
+async function loadContactsForSelector(page = 1) {
   const container = document.getElementById('contactsList');
   if (!container) return;
-  
+
   container.innerHTML = `
     <div class="loading-contacts">
       <div class="spinner-small"></div>
       <span>Cargando contactos...</span>
     </div>
   `;
-  
+
   try {
-    const res = await authFetch('/contacts?pageSize=500');
-    if (!res.ok) throw new Error('Error al cargar contactos');
-    
+    const searchInput = document.getElementById('contactSelectorSearch');
+    const search = searchInput?.value?.trim() || '';
+    const targetPage = Math.max(1, Number(page) || 1);
+
+    const res = await authFetch(`/contacts${buildQuery({
+      search,
+      page: targetPage,
+      pageSize: contactSelectorState.pageSize
+    })}`);
     const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Error al cargar contactos');
+
+    contactSelectorState.search = search;
+    contactSelectorState.total = Number(data.total || 0);
+    contactSelectorState.pageSize = Number(data.pageSize || contactSelectorState.pageSize);
+    contactSelectorState.totalPages = Math.max(1, Math.ceil(contactSelectorState.total / contactSelectorState.pageSize));
+    contactSelectorState.page = Math.min(Math.max(1, Number(data.page || targetPage)), contactSelectorState.totalPages);
+
     allContactsForSend = data.items || [];
-    
-    // Update total contacts count
+
+    // If contact list changed after deletes/filters and page is now empty, move one page back
+    if (allContactsForSend.length === 0 && contactSelectorState.total > 0 && contactSelectorState.page > 1) {
+      return loadContactsForSelector(contactSelectorState.page - 1);
+    }
+
+    // Update totals and paging
     const totalEl = document.getElementById('totalContactsCount');
-    if (totalEl) totalEl.textContent = allContactsForSend.length;
-    
-    if (allContactsForSend.length === 0) {
+    if (totalEl) totalEl.textContent = contactSelectorState.total;
+    updateContactSelectorPagination();
+    updateSelectedCount();
+
+    if (contactSelectorState.total === 0) {
       container.innerHTML = `
         <div class="no-contacts-message">
           <i class="bi bi-person-x"></i>
@@ -548,11 +581,8 @@ async function loadContactsForSelector() {
       `;
       return;
     }
-    
+
     renderContactsCheckList(allContactsForSend);
-    setupContactsSearch();
-    setupContactsSelectAll();
-    
   } catch (error) {
     container.innerHTML = `<div class="no-contacts-message"><i class="bi bi-exclamation-triangle"></i><p>Error al cargar contactos</p></div>`;
     console.error('Error loading contacts:', error);
@@ -604,15 +634,15 @@ function updateSelectedCount() {
 function setupContactsSearch() {
   const searchInput = document.getElementById('contactSelectorSearch');
   if (!searchInput) return;
-  
+
+  if (searchInput.dataset.bound === '1') return;
+  searchInput.dataset.bound = '1';
+
   searchInput.addEventListener('input', () => {
-    const query = searchInput.value.toLowerCase().trim();
-    const filtered = allContactsForSend.filter(c => 
-      (c.nombre && c.nombre.toLowerCase().includes(query)) ||
-      (c.phone && c.phone.includes(query)) ||
-      (c.grupo && c.grupo.toLowerCase().includes(query))
-    );
-    renderContactsCheckList(filtered);
+    if (contactSelectorSearchTimer) clearTimeout(contactSelectorSearchTimer);
+    contactSelectorSearchTimer = setTimeout(() => {
+      loadContactsForSelector(1);
+    }, 250);
   });
 }
 
@@ -620,22 +650,59 @@ function setupContactsSearch() {
 function setupContactsSelectAll() {
   const selectAllBtn = document.getElementById('selectAllContactsBtn');
   const clearBtn = document.getElementById('clearSelectedContactsBtn');
-  
-  if (selectAllBtn) {
+
+  if (selectAllBtn && selectAllBtn.dataset.bound !== '1') {
+    selectAllBtn.dataset.bound = '1';
     selectAllBtn.addEventListener('click', () => {
       allContactsForSend.forEach(c => selectedContactIds.add(c.id));
       renderContactsCheckList(allContactsForSend);
       updateSelectedCount();
     });
   }
-  
-  if (clearBtn) {
+
+  if (clearBtn && clearBtn.dataset.bound !== '1') {
+    clearBtn.dataset.bound = '1';
     clearBtn.addEventListener('click', () => {
       selectedContactIds.clear();
       renderContactsCheckList(allContactsForSend);
       updateSelectedCount();
     });
   }
+}
+
+function setupContactSelectorPagination() {
+  const prevBtn = document.getElementById('contactSelectorPrevBtn');
+  const nextBtn = document.getElementById('contactSelectorNextBtn');
+
+  if (prevBtn && prevBtn.dataset.bound !== '1') {
+    prevBtn.dataset.bound = '1';
+    prevBtn.addEventListener('click', () => {
+      if (contactSelectorState.page > 1) {
+        loadContactsForSelector(contactSelectorState.page - 1);
+      }
+    });
+  }
+
+  if (nextBtn && nextBtn.dataset.bound !== '1') {
+    nextBtn.dataset.bound = '1';
+    nextBtn.addEventListener('click', () => {
+      if (contactSelectorState.page < contactSelectorState.totalPages) {
+        loadContactsForSelector(contactSelectorState.page + 1);
+      }
+    });
+  }
+}
+
+function updateContactSelectorPagination() {
+  const pageInfo = document.getElementById('contactSelectorPageInfo');
+  const prevBtn = document.getElementById('contactSelectorPrevBtn');
+  const nextBtn = document.getElementById('contactSelectorNextBtn');
+
+  if (pageInfo) {
+    pageInfo.textContent = `Página ${contactSelectorState.page} de ${contactSelectorState.totalPages}`;
+  }
+  if (prevBtn) prevBtn.disabled = contactSelectorState.page <= 1;
+  if (nextBtn) nextBtn.disabled = contactSelectorState.page >= contactSelectorState.totalPages;
 }
 
 // Load groups for dropdown
@@ -690,13 +757,13 @@ async function loadGroupContactsCount() {
   }
   
   try {
-    const res = await authFetch(`/contacts?group=${encodeURIComponent(groupName)}&pageSize=500`);
+    const res = await authFetch(`/contacts${buildQuery({ group: groupName, page: 1, pageSize: 1 })}`);
     if (!res.ok) throw new Error('Error');
     
     const data = await res.json();
-    const contacts = data.items || [];
+    const total = Number(data.total || 0);
     
-    countText.textContent = `${contacts.length} contactos`;
+    countText.textContent = `${total} contactos`;
     countEl.classList.remove('d-none');
     
   } catch (error) {

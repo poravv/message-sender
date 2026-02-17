@@ -322,6 +322,17 @@
                       <span id="selectedContactsCount">0</span> seleccionados
                     </div>
                   </div>
+                  <div class="pagination-bar compact">
+                    <div class="pagination-controls">
+                      <button type="button" class="btn-secondary" id="contactSelectorPrevBtn">
+                        <i class="bi bi-chevron-left"></i> Anterior
+                      </button>
+                      <span class="pagination-info" id="contactSelectorPageInfo">Página 1 de 1</span>
+                      <button type="button" class="btn-secondary" id="contactSelectorNextBtn">
+                        Siguiente <i class="bi bi-chevron-right"></i>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -573,7 +584,7 @@
           </div>
 
           <!-- Contacts Table -->
-          <div class="table-wrapper">
+          <div class="table-wrapper contacts-table-scroll">
             <table class="data-table">
               <thead>
                 <tr>
@@ -591,6 +602,25 @@
               <i class="bi bi-person-x"></i>
               <p>No hay contactos</p>
               <span>Agregue contactos manualmente o cargue un CSV</span>
+            </div>
+          </div>
+          <div class="pagination-bar">
+            <div class="pagination-controls">
+              <button type="button" class="btn-secondary" id="contactsPrevPageBtn">
+                <i class="bi bi-chevron-left"></i> Anterior
+              </button>
+              <span class="pagination-info" id="contactsPageInfo">Página 1 de 1</span>
+              <button type="button" class="btn-secondary" id="contactsNextPageBtn">
+                Siguiente <i class="bi bi-chevron-right"></i>
+              </button>
+            </div>
+            <div class="pagination-size">
+              <label for="contactsPageSize">Mostrar</label>
+              <select id="contactsPageSize" class="form-control">
+                <option value="25">25</option>
+                <option value="50" selected>50</option>
+                <option value="100">100</option>
+              </select>
             </div>
           </div>
         </div>

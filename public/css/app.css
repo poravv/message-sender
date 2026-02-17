@@ -1611,6 +1611,19 @@ a.btn-link:hover {
   overflow-x: auto;
 }
 
+.contacts-table-scroll {
+  max-height: 460px;
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.contacts-table-scroll .data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
 .data-table {
   width: 100%;
   border-collapse: collapse;
@@ -1665,6 +1678,46 @@ a.btn-link:hover {
 .empty-state p {
   font-size: 1.125rem;
   margin-bottom: var(--space-sm);
+}
+
+.pagination-bar {
+  margin-top: var(--space-md);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.pagination-info {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.pagination-size {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.pagination-size select {
+  width: 96px;
+  height: 36px;
+  padding: 0 var(--space-md);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ========== Footer ========== */
@@ -1966,7 +2019,7 @@ a.btn-link:hover {
 }
 
 .contacts-list-scroll {
-  max-height: 250px;
+  max-height: 320px;
   overflow-y: auto;
   padding: var(--space-sm);
 }
@@ -1979,6 +2032,22 @@ a.btn-link:hover {
   padding: var(--space-sm) var(--space-md);
   border-top: 1px solid var(--border-color);
   background: var(--bg-secondary);
+}
+
+.contacts-selector .pagination-bar {
+  margin-top: 0;
+  border-top: 1px solid var(--border-color);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-secondary);
+}
+
+.pagination-bar.compact .pagination-info {
+  font-size: 0.8125rem;
+}
+
+.pagination-bar.compact .btn-secondary {
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8125rem;
 }
 
 .contacts-total,
@@ -2132,6 +2201,15 @@ a.btn-link:hover {
   .contacts-status-bar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .pagination-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .pagination-size select {
+    width: 84px;
   }
 }
 

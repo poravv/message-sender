@@ -3,21 +3,52 @@
  */
 
 let editingContactId = null;
+const contactsState = {
+  page: 1,
+  pageSize: 50,
+  total: 0,
+  totalPages: 1
+};
+
+function getContactsFilters() {
+  return {
+    search: document.getElementById('contactSearchInput')?.value?.trim() || '',
+    group: document.getElementById('contactGroupFilter')?.value?.trim() || ''
+  };
+}
 
 // Load contacts
-async function loadContacts() {
+async function loadContacts(page = contactsState.page) {
   try {
-    const search = document.getElementById('contactSearchInput')?.value || '';
-    const group = document.getElementById('contactGroupFilter')?.value || '';
-    
-    const res = await authFetch(`/contacts${buildQuery({ search, group, page: 1, pageSize: 200 })}`);
+    const { search, group } = getContactsFilters();
+    const targetPage = Math.max(1, Number(page) || 1);
+
+    const res = await authFetch(`/contacts${buildQuery({
+      search,
+      group,
+      page: targetPage,
+      pageSize: contactsState.pageSize
+    })}`);
     const data = await res.json();
-    
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al cargar contactos');
+    }
+
+    contactsState.total = Number(data.total || 0);
+    contactsState.pageSize = Number(data.pageSize || contactsState.pageSize);
+    contactsState.totalPages = Math.max(1, Math.ceil(contactsState.total / contactsState.pageSize));
+    contactsState.page = Math.min(Math.max(1, Number(data.page || targetPage)), contactsState.totalPages);
+
+    if ((data.items || []).length === 0 && contactsState.total > 0 && contactsState.page > 1) {
+      return loadContacts(contactsState.page - 1);
+    }
+
     renderContactsTable(data.items || []);
-    updateContactsCount(data.total || data.items?.length || 0);
-    
+    updateContactsCount(contactsState.total);
+    updateContactsPagination();
   } catch (error) {
-    console.error('Error loading contacts:', error);
+    showAlert(error.message || 'Error al cargar contactos', 'danger');
   }
 }
 
@@ -70,6 +101,22 @@ function updateContactsCount(count) {
   }
 }
 
+function updateContactsPagination() {
+  const infoEl = document.getElementById('contactsPageInfo');
+  const prevBtn = document.getElementById('contactsPrevPageBtn');
+  const nextBtn = document.getElementById('contactsNextPageBtn');
+  const sizeSelect = document.getElementById('contactsPageSize');
+
+  if (infoEl) {
+    infoEl.textContent = `Página ${contactsState.page} de ${contactsState.totalPages} • ${contactsState.total} contactos`;
+  }
+  if (prevBtn) prevBtn.disabled = contactsState.page <= 1;
+  if (nextBtn) nextBtn.disabled = contactsState.page >= contactsState.totalPages;
+  if (sizeSelect && String(sizeSelect.value) !== String(contactsState.pageSize)) {
+    sizeSelect.value = String(contactsState.pageSize);
+  }
+}
+
 // Add contact
 async function addContact(e) {
   e.preventDefault();
@@ -103,7 +150,7 @@ async function addContact(e) {
     document.getElementById('contactSustantivo').value = '';
     document.getElementById('contactGrupo').value = '';
     
-    loadContacts();
+    loadContacts(1);
     
   } catch (error) {
     showAlert(error.message, 'danger');
@@ -220,7 +267,7 @@ function setupContacts() {
   // Search/filter
   const searchBtn = document.getElementById('searchContactsBtn');
   if (searchBtn) {
-    searchBtn.addEventListener('click', loadContacts);
+    searchBtn.addEventListener('click', () => loadContacts(1));
   }
   
   // Search on enter
@@ -229,7 +276,17 @@ function setupContacts() {
     searchInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        loadContacts();
+        loadContacts(1);
+      }
+    });
+  }
+
+  const groupInput = document.getElementById('contactGroupFilter');
+  if (groupInput) {
+    groupInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        loadContacts(1);
       }
     });
   }
@@ -237,7 +294,30 @@ function setupContacts() {
   // Refresh button
   const refreshBtn = document.getElementById('refreshContactsBtn');
   if (refreshBtn) {
-    refreshBtn.addEventListener('click', loadContacts);
+    refreshBtn.addEventListener('click', () => loadContacts());
+  }
+
+  const prevBtn = document.getElementById('contactsPrevPageBtn');
+  if (prevBtn) {
+    prevBtn.addEventListener('click', () => {
+      if (contactsState.page > 1) loadContacts(contactsState.page - 1);
+    });
+  }
+
+  const nextBtn = document.getElementById('contactsNextPageBtn');
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      if (contactsState.page < contactsState.totalPages) loadContacts(contactsState.page + 1);
+    });
+  }
+
+  const pageSizeSelect = document.getElementById('contactsPageSize');
+  if (pageSizeSelect) {
+    pageSizeSelect.value = String(contactsState.pageSize);
+    pageSizeSelect.addEventListener('change', () => {
+      contactsState.pageSize = Math.max(1, Number(pageSizeSelect.value) || 50);
+      loadContacts(1);
+    });
   }
 
   // Edit modal
