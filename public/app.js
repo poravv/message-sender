@@ -2675,6 +2675,7 @@ function setupRecipientSourceTabs() {
 
 async function loadContactsForSelector() {
   const contactsList = document.getElementById('contactsList');
+  const totalCountEl = document.getElementById('totalContactsCount');
   if (!contactsList) return;
 
   contactsList.innerHTML = `
@@ -2688,10 +2689,15 @@ async function loadContactsForSelector() {
     const res = await authFetch('/contacts?pageSize=500');
     const data = await res.json();
     selectorContactsCache = data.items || [];
+    
+    // Update total count
+    if (totalCountEl) totalCountEl.textContent = selectorContactsCache.length;
+    
     renderContactsSelector(selectorContactsCache);
   } catch (error) {
     console.error('Error loading contacts for selector:', error);
     contactsList.innerHTML = '<div class="text-center text-muted p-3">Error al cargar contactos</div>';
+    if (totalCountEl) totalCountEl.textContent = '0';
   }
 }
 
@@ -2700,7 +2706,15 @@ function renderContactsSelector(contacts) {
   if (!contactsList) return;
 
   if (!contacts.length) {
-    contactsList.innerHTML = '<div class="text-center text-muted p-3">No hay contactos guardados</div>';
+    contactsList.innerHTML = `
+      <div class="empty-contacts-message">
+        <i class="bi bi-person-plus"></i>
+        <p>No hay contactos guardados</p>
+        <button type="button" class="btn-add-contacts" onclick="showTab('contacts')">
+          <i class="bi bi-plus-lg"></i> Agregar contactos
+        </button>
+      </div>
+    `;
     return;
   }
 
@@ -2710,6 +2724,7 @@ function renderContactsSelector(contacts) {
       <div class="contact-info">
         <div class="contact-name">${c.nombre || 'Sin nombre'}</div>
         <div class="contact-phone">${c.phone}</div>
+        ${c.grupo ? `<div class="contact-group"><i class="bi bi-tag"></i> ${c.grupo}</div>` : ''}
       </div>
     </label>
   `).join('');
