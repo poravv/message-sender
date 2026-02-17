@@ -2593,15 +2593,25 @@ let selectedContactIds = [];
 let selectorContactsCache = [];
 
 function setupRecipientSourceTabs() {
+  console.log('🎛️ setupRecipientSourceTabs: iniciando...');
   const tabs = document.querySelectorAll('.source-tab');
   const csvSection = document.getElementById('csvSourceSection');
   const contactsSection = document.getElementById('contactsSourceSection');
   const groupSection = document.getElementById('groupSourceSection');
   const recipientSourceInput = document.getElementById('recipientSource');
+  
+  console.log('🎛️ Elements found:', {
+    tabs: tabs.length,
+    csvSection: !!csvSection,
+    contactsSection: !!contactsSection,
+    groupSection: !!groupSection,
+    recipientSourceInput: !!recipientSourceInput
+  });
 
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       const source = tab.dataset.source;
+      console.log('🎛️ Tab clicked:', source);
       
       // Update active tab
       tabs.forEach(t => t.classList.remove('active'));
@@ -2623,6 +2633,8 @@ function setupRecipientSourceTabs() {
       }
     });
   });
+
+  console.log('🎛️ Tab event listeners attached');
 
   // Select All button
   const selectAllBtn = document.getElementById('selectAllContactsBtn');
@@ -2674,9 +2686,15 @@ function setupRecipientSourceTabs() {
 }
 
 async function loadContactsForSelector() {
+  console.log('📋 loadContactsForSelector: iniciando...');
   const contactsList = document.getElementById('contactsList');
   const totalCountEl = document.getElementById('totalContactsCount');
-  if (!contactsList) return;
+  console.log('📋 Elements found:', { contactsList: !!contactsList, totalCountEl: !!totalCountEl });
+  
+  if (!contactsList) {
+    console.warn('📋 contactsList element not found!');
+    return;
+  }
 
   contactsList.innerHTML = `
     <div class="loading-contacts">
@@ -2686,16 +2704,23 @@ async function loadContactsForSelector() {
   `;
 
   try {
+    console.log('📋 Fetching /contacts?pageSize=500...');
     const res = await authFetch('/contacts?pageSize=500');
     const data = await res.json();
+    console.log('📋 API response:', data);
+    
     selectorContactsCache = data.items || [];
+    console.log('📋 Contacts cached:', selectorContactsCache.length);
     
     // Update total count
-    if (totalCountEl) totalCountEl.textContent = selectorContactsCache.length;
+    if (totalCountEl) {
+      totalCountEl.textContent = selectorContactsCache.length;
+      console.log('📋 Updated totalContactsCount to:', selectorContactsCache.length);
+    }
     
     renderContactsSelector(selectorContactsCache);
   } catch (error) {
-    console.error('Error loading contacts for selector:', error);
+    console.error('📋 Error loading contacts for selector:', error);
     contactsList.innerHTML = '<div class="text-center text-muted p-3">Error al cargar contactos</div>';
     if (totalCountEl) totalCountEl.textContent = '0';
   }
