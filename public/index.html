@@ -453,8 +453,8 @@
               <input type="file" id="csvFileInput" accept=".csv,.txt" hidden>
               <div class="upload-content">
                 <i class="bi bi-cloud-upload"></i>
-                <p>Arrastra tu archivo CSV aquí o <button type="button" class="btn-link" onclick="document.getElementById('csvFileInput').click()">selecciona un archivo</button></p>
-                <small>Formato: phone,nombre,sustantivo,grupo (encabezado opcional)</small>
+                <p>Arrastra tu archivo CSV aquí o <a href="#" class="btn-link" onclick="event.preventDefault(); document.getElementById('csvFileInput').click()">selecciona un archivo</a></p>
+                <small>Formato: phone, nombre, sustantivo, grupo (encabezado opcional)</small>
               </div>
               <div id="csvFileInfo" class="file-info d-none">
                 <i class="bi bi-file-check"></i>

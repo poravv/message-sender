@@ -153,6 +153,13 @@ function setupEmojiPicker() {
   
   let currentTextarea = null;
   
+  // Track last focused textarea
+  document.addEventListener('focusin', (e) => {
+    if (e.target.classList.contains('message-textarea')) {
+      currentTextarea = e.target;
+    }
+  });
+  
   function renderEmojis(category) {
     grid.innerHTML = '';
     const emojis = emojiCategories[category] || emojiCategories.smileys;
@@ -189,10 +196,12 @@ function setupEmojiPicker() {
     const emojiBtn = e.target.closest('.btn-emoji');
     if (emojiBtn) {
       const templateNum = emojiBtn.dataset.template;
-      currentTextarea = document.getElementById(`message${templateNum}`);
+      const textarea = document.getElementById(`message${templateNum}`);
+      if (textarea) currentTextarea = textarea;
       picker.classList.toggle('d-none');
       if (!picker.classList.contains('d-none')) {
         renderEmojis('smileys');
+        picker.querySelector('.emoji-category').classList.add('active');
       }
       e.stopPropagation();
     }
@@ -206,22 +215,44 @@ function setupEmojiPicker() {
   });
 }
 
+// Track last active textarea for variables
+let lastActiveTextarea = null;
+
 // Setup variables helper
 function setupVariables() {
   const helper = document.getElementById('variablesHelper');
   if (!helper) return;
   
+  // Track focus on message textareas
+  document.addEventListener('focusin', (e) => {
+    if (e.target.classList.contains('message-textarea')) {
+      lastActiveTextarea = e.target;
+    }
+  });
+  
   helper.querySelectorAll('.variable-btn').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      // Prevent losing focus from textarea
+      e.preventDefault();
+    });
+    
     btn.addEventListener('click', () => {
       const variable = btn.dataset.variable;
-      const activeTextarea = document.querySelector('.message-textarea:focus');
-      if (activeTextarea) {
-        const pos = activeTextarea.selectionStart;
-        const text = activeTextarea.value;
-        activeTextarea.value = text.slice(0, pos) + variable + text.slice(pos);
-        activeTextarea.focus();
-        activeTextarea.selectionStart = activeTextarea.selectionEnd = pos + variable.length;
-        activeTextarea.dispatchEvent(new Event('input'));
+      if (lastActiveTextarea) {
+        const pos = lastActiveTextarea.selectionStart;
+        const text = lastActiveTextarea.value;
+        lastActiveTextarea.value = text.slice(0, pos) + variable + text.slice(pos);
+        lastActiveTextarea.focus();
+        lastActiveTextarea.selectionStart = lastActiveTextarea.selectionEnd = pos + variable.length;
+        lastActiveTextarea.dispatchEvent(new Event('input'));
+      } else {
+        // If no textarea was focused, use the first one
+        const firstTextarea = document.querySelector('.message-textarea');
+        if (firstTextarea) {
+          firstTextarea.value += variable;
+          firstTextarea.focus();
+          firstTextarea.dispatchEvent(new Event('input'));
+        }
       }
     });
   });

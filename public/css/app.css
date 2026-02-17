@@ -61,13 +61,13 @@
 [data-theme="dark"] input,
 [data-theme="dark"] select,
 [data-theme="dark"] textarea {
-  color: var(--text-primary);
-  background: var(--bg-tertiary);
+  color: var(--text-primary) !important;
+  background: var(--bg-tertiary) !important;
 }
 
 [data-theme="dark"] .form-control::placeholder,
 [data-theme="dark"] input::placeholder {
-  color: var(--text-muted);
+  color: var(--text-muted) !important;
 }
 
 [data-theme="dark"] .badge,
@@ -77,35 +77,165 @@
 [data-theme="dark"] label,
 [data-theme="dark"] p,
 [data-theme="dark"] span,
+[data-theme="dark"] small,
 [data-theme="dark"] h1, 
 [data-theme="dark"] h2, 
 [data-theme="dark"] h3, 
-[data-theme="dark"] h4 {
-  color: var(--text-primary);
+[data-theme="dark"] h4,
+[data-theme="dark"] .card,
+[data-theme="dark"] .csv-upload-area,
+[data-theme="dark"] .csv-upload-area p,
+[data-theme="dark"] .csv-upload-area small,
+[data-theme="dark"] .upload-content p,
+[data-theme="dark"] .upload-content small,
+[data-theme="dark"] .section-divider span {
+  color: var(--text-primary) !important;
 }
 
 [data-theme="dark"] .text-muted,
 [data-theme="dark"] .stat-label,
 [data-theme="dark"] .section-header p,
-[data-theme="dark"] .helper-label {
-  color: var(--text-secondary);
+[data-theme="dark"] .helper-label,
+[data-theme="dark"] .csv-upload-area small,
+[data-theme="dark"] .upload-content small {
+  color: var(--text-secondary) !important;
 }
 
 [data-theme="dark"] .data-table th {
-  color: var(--text-secondary);
+  color: var(--text-secondary) !important;
 }
 
 [data-theme="dark"] .data-table td {
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
 }
 
 [data-theme="dark"] code {
-  color: var(--accent);
+  color: var(--accent) !important;
 }
 
 [data-theme="dark"] .empty-state p,
 [data-theme="dark"] .empty-state span {
-  color: var(--text-secondary);
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .btn-link {
+  color: var(--accent) !important;
+}
+
+[data-theme="dark"] .section-divider {
+  color: var(--text-muted) !important;
+}
+
+/* Dark mode form elements */
+[data-theme="dark"] .form-group label {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .add-contact-form input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Dark mode table headers */
+[data-theme="dark"] table th,
+[data-theme="dark"] .data-table thead th {
+  color: var(--text-secondary) !important;
+  background: var(--bg-tertiary) !important;
+}
+
+/* Dark mode table cells */
+[data-theme="dark"] table td,
+[data-theme="dark"] .data-table tbody td {
+  color: var(--text-primary) !important;
+}
+
+/* Dark mode search boxes */
+[data-theme="dark"] .search-box input,
+[data-theme="dark"] .filter-box input {
+  color: var(--text-primary) !important;
+  background: var(--bg-tertiary) !important;
+}
+
+[data-theme="dark"] .search-box input::placeholder,
+[data-theme="dark"] .filter-box input::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Dark mode labels and form groups */
+[data-theme="dark"] .form-group label,
+[data-theme="dark"] form label {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .template-number,
+[data-theme="dark"] .template-item {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .char-count {
+  color: var(--text-muted) !important;
+}
+
+/* Dark mode emoji picker */
+[data-theme="dark"] .emoji-picker {
+  background: var(--bg-card) !important;
+}
+
+[data-theme="dark"] .emoji-category {
+  background: var(--bg-tertiary) !important;
+}
+
+[data-theme="dark"] .emoji-btn {
+  background: transparent !important;
+}
+
+[data-theme="dark"] .emoji-btn:hover {
+  background: var(--bg-tertiary) !important;
+}
+
+/* Dark mode variables helper */
+[data-theme="dark"] .variables-helper {
+  background: var(--bg-tertiary) !important;
+}
+
+[data-theme="dark"] .variable-btn {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .variable-btn code {
+  color: var(--accent) !important;
+}
+
+/* Dark mode template tools */
+[data-theme="dark"] .btn-emoji,
+[data-theme="dark"] .btn-variables {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .btn-emoji i,
+[data-theme="dark"] .btn-variables i {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .btn-emoji:hover,
+[data-theme="dark"] .btn-variables:hover {
+  border-color: var(--accent) !important;
+}
+
+[data-theme="dark"] .template-item {
+  background: var(--bg-tertiary) !important;
+}
+
+[data-theme="dark"] .message-textarea {
+  background: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+[data-theme="dark"] .message-textarea::placeholder {
+  color: var(--text-muted) !important;
 }
 
 /* ========== Base ========== */
@@ -786,6 +916,7 @@ body {
 /* ========== File Upload ========== */
 .file-upload {
   position: relative;
+  overflow: hidden;
 }
 
 .file-upload input[type="file"] {
@@ -793,6 +924,9 @@ body {
   inset: 0;
   opacity: 0;
   cursor: pointer;
+  z-index: 10;
+  width: 100%;
+  height: 100%;
 }
 
 .file-upload-label {
@@ -808,6 +942,7 @@ body {
   text-align: center;
   cursor: pointer;
   transition: var(--transition);
+  color: var(--text-primary);
 }
 
 .file-upload-label:hover {
@@ -826,6 +961,34 @@ body {
 
 .file-upload-label small {
   color: var(--text-muted);
+}
+
+/* Dark mode file upload */
+[data-theme="dark"] .file-upload-label {
+  background: var(--bg-tertiary);
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .file-upload-label span {
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .file-upload-label small {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .help-text,
+[data-theme="dark"] .help-text strong {
+  color: var(--text-secondary) !important;
+}
+
+[data-theme="dark"] .type-option .option-content {
+  background: var(--bg-tertiary);
+  color: var(--text-primary) !important;
+}
+
+[data-theme="dark"] .type-option .option-content span {
+  color: var(--text-primary) !important;
 }
 
 .file-info {
@@ -1302,18 +1465,23 @@ body {
   font-size: 0.8125rem;
 }
 
-.btn-link {
+.btn-link,
+a.btn-link {
   background: none;
   border: none;
   color: var(--accent);
   text-decoration: underline;
   cursor: pointer;
   font-size: inherit;
+  font-weight: 500;
   padding: 0;
+  display: inline;
 }
 
-.btn-link:hover {
+.btn-link:hover,
+a.btn-link:hover {
   color: var(--accent-hover);
+  text-decoration: none;
 }
 
 .file-info {
