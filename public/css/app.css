@@ -1938,6 +1938,75 @@ a.btn-link:hover {
   gap: var(--space-xs);
 }
 
+.selector-actions .btn-sm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  padding: 0.42rem 0.75rem;
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.selector-actions .btn-sm:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+  background: rgba(37, 211, 102, 0.08);
+}
+
+.selector-actions .btn-sm:active {
+  transform: translateY(1px);
+}
+
+.contacts-list-scroll {
+  max-height: 250px;
+  overflow-y: auto;
+  padding: var(--space-sm);
+}
+
+.contacts-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+}
+
+.contacts-total,
+.selected-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding-left: var(--space-xs);
+  font-size: 0.875rem;
+}
+
+.contacts-total {
+  color: var(--text-secondary);
+}
+
+.selected-count-badge {
+  padding: var(--space-xs) var(--space-sm);
+  border: 1px solid rgba(37, 211, 102, 0.35);
+  border-radius: 999px;
+  color: var(--accent);
+  background: rgba(37, 211, 102, 0.1);
+}
+
+.contacts-total span,
+.selected-count-badge span {
+  font-weight: 700;
+}
+
 .contacts-checklist {
   max-height: 250px;
   overflow-y: auto;
@@ -2057,6 +2126,13 @@ a.btn-link:hover {
 .btn-sm {
   padding: var(--space-xs) var(--space-sm);
   font-size: 0.8rem;
+}
+
+@media (max-width: 768px) {
+  .contacts-status-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 
 .no-contacts-message {

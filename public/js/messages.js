@@ -308,10 +308,21 @@ async function sendMessages() {
   
   // Add all message templates
   const templateCount = parseInt(document.getElementById('templateCount')?.value || 1);
+  const templates = [];
   for (let i = 1; i <= templateCount; i++) {
     const msg = document.getElementById(`message${i}`)?.value || '';
     formData.set(`message${i}`, msg);
+    if (msg.trim()) templates.push(msg.trim());
   }
+
+  if (templates.length === 0) {
+    showAlert('Debes escribir al menos un template de mensaje', 'warning');
+    return;
+  }
+
+  // Keep compatibility with current and older backend variants
+  formData.set('templates', JSON.stringify(templates));
+  formData.set('message', templates[0]);
   
   submitBtn.classList.add('loading');
   submitBtn.disabled = true;

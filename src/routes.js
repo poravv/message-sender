@@ -159,6 +159,9 @@ function buildRoutes() {
       
       let numbers = [];
       let source = recipientSource || 'csv';
+      let importSummary = null;
+      let duplicates = 0;
+      let invalidCount = 0;
 
       // Obtener destinatarios según la fuente
       if (source === 'contacts' && contactIds) {
@@ -203,8 +206,8 @@ function buildRoutes() {
         
         const csvFilePath = req.files['csvFile'][0].path;
         const parsed = await loadNumbersFromCSV(csvFilePath);
-        const invalidCount = parsed?.invalidCount || 0;
-        const duplicates = parsed?.duplicates || 0;
+        invalidCount = parsed?.invalidCount || 0;
+        duplicates = parsed?.duplicates || 0;
         
         if ((parsed?.numbers || []).length === 0) {
           return res.status(400).json({ error: 'No se encontraron números válidos' });
@@ -230,6 +233,7 @@ function buildRoutes() {
         // Importar contactos y enriquecer
         const imported = await metricsStore.importContactsFromEntries(userId, parsed.numbers, 'csv');
         numbers = imported.entries || [];
+        importSummary = imported.summary || null;
         
         // Limpiar archivo CSV
         if (fs.existsSync(csvFilePath)) fs.unlinkSync(csvFilePath);
@@ -251,10 +255,23 @@ function buildRoutes() {
           templates = JSON.parse(templatesJson);
         } else if (message) {
           templates = [message];
+        } else {
+          for (let i = 1; i <= 5; i++) {
+            const field = req.body?.[`message${i}`];
+            if (typeof field === 'string' && field.trim()) {
+              templates.push(field.trim());
+            }
+          }
         }
       } catch (e) {
         logger.error({ error: e.message }, 'Error parsing templates JSON');
         return res.status(400).json({ error: 'Formato de templates inválido' });
+      }
+
+      if (Array.isArray(templates)) {
+        templates = templates
+          .map((tpl) => (typeof tpl === 'string' ? tpl.trim() : tpl))
+          .filter((tpl) => typeof tpl === 'string' && tpl.length > 0);
       }
 
       if (!templates || !Array.isArray(templates) || templates.length === 0) {
@@ -341,9 +358,9 @@ function buildRoutes() {
         totalNumbers: numbers.length,
         templateCount: templates.length,
         campaignId: campaign.id,
-        importSummary: imported.summary,
-        duplicatesRemoved: duplicates || 0,
-        invalidNumbers: invalidCount || 0,
+        importSummary,
+        duplicatesRemoved: duplicates,
+        invalidNumbers: invalidCount,
         userId: req.auth?.sub,
         initialStats: useRedisQueue ? { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false } : whatsappManager.messageQueue.getStats()
       });
