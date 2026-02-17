@@ -1939,10 +1939,38 @@ async function handleMessageFormSubmit(event) {
   lastUpdateTime = Date.now();
   speedHistory = [];
 
-  // Validate form
-  const csvFile = document.getElementById('csvFile').files[0];
-  if (!csvFile) {
-    showAlert('Debe seleccionar un archivo CSV o TXT', 'error', 'Error de validación');
+  // Get recipient source
+  const recipientSource = document.getElementById('recipientSource')?.value || 'csv';
+  
+  // Validate recipients based on source
+  let hasRecipients = false;
+  if (recipientSource === 'csv') {
+    const csvFile = document.getElementById('csvFile')?.files[0];
+    if (!csvFile) {
+      showAlert('Debe seleccionar un archivo CSV o TXT', 'error', 'Error de validación');
+      resetFormSubmission(sendBtn);
+      return;
+    }
+    hasRecipients = true;
+  } else if (recipientSource === 'contacts') {
+    if (selectedContactIds.length === 0) {
+      showAlert('Debe seleccionar al menos un contacto', 'error', 'Error de validación');
+      resetFormSubmission(sendBtn);
+      return;
+    }
+    hasRecipients = true;
+  } else if (recipientSource === 'group') {
+    const groupName = document.getElementById('groupSelect')?.value;
+    if (!groupName) {
+      showAlert('Debe seleccionar un grupo', 'error', 'Error de validación');
+      resetFormSubmission(sendBtn);
+      return;
+    }
+    hasRecipients = true;
+  }
+
+  if (!hasRecipients) {
+    showAlert('Debe especificar destinatarios', 'error', 'Error de validación');
     resetFormSubmission(sendBtn);
     return;
   }
@@ -1963,8 +1991,20 @@ async function handleMessageFormSubmit(event) {
   // Prepare form data
   const formData = new FormData();
   formData.append('templates', JSON.stringify(templates)); // Send templates as JSON
-  formData.append('csvFile', csvFile);
+  formData.append('recipientSource', recipientSource);
   formData.append('mode', currentMessageType);
+  
+  // Add recipients based on source
+  if (recipientSource === 'csv') {
+    const csvFile = document.getElementById('csvFile').files[0];
+    formData.append('csvFile', csvFile);
+  } else if (recipientSource === 'contacts') {
+    formData.append('contactIds', JSON.stringify(selectedContactIds));
+  } else if (recipientSource === 'group') {
+    const groupName = document.getElementById('groupSelect').value;
+    formData.append('groupName', groupName);
+  }
+  
   const campaignName = document.getElementById('campaignName')?.value?.trim();
   if (campaignName) formData.append('campaignName', campaignName);
 
@@ -2548,6 +2588,203 @@ async function setAnalyticsToThisMonth() {
   await loadAnalyticsDashboard();
 }
 
+/** ======== Recipient Source Tabs ======== */
+let selectedContactIds = [];
+let selectorContactsCache = [];
+
+function setupRecipientSourceTabs() {
+  const tabs = document.querySelectorAll('.source-tab');
+  const csvSection = document.getElementById('csvSourceSection');
+  const contactsSection = document.getElementById('contactsSourceSection');
+  const groupSection = document.getElementById('groupSourceSection');
+  const recipientSourceInput = document.getElementById('recipientSource');
+
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const source = tab.dataset.source;
+      
+      // Update active tab
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      // Update hidden input
+      if (recipientSourceInput) recipientSourceInput.value = source;
+      
+      // Show/hide sections
+      if (csvSection) csvSection.classList.toggle('d-none', source !== 'csv');
+      if (contactsSection) contactsSection.classList.toggle('d-none', source !== 'contacts');
+      if (groupSection) groupSection.classList.toggle('d-none', source !== 'group');
+      
+      // Load data when switching tabs
+      if (source === 'contacts') {
+        loadContactsForSelector();
+      } else if (source === 'group') {
+        loadGroupsForSelector();
+      }
+    });
+  });
+
+  // Select All button
+  const selectAllBtn = document.getElementById('selectAllContactsBtn');
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => {
+      const checkboxes = document.querySelectorAll('#contactsList input[type="checkbox"]');
+      checkboxes.forEach(cb => {
+        cb.checked = true;
+        const id = cb.value;
+        if (!selectedContactIds.includes(id)) selectedContactIds.push(id);
+      });
+      updateSelectedCount();
+    });
+  }
+
+  // Clear button
+  const clearBtn = document.getElementById('clearSelectedContactsBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const checkboxes = document.querySelectorAll('#contactsList input[type="checkbox"]');
+      checkboxes.forEach(cb => cb.checked = false);
+      selectedContactIds = [];
+      updateSelectedCount();
+    });
+  }
+
+  // Search in contacts
+  const searchInput = document.getElementById('contactSelectorSearch');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      const query = searchInput.value.toLowerCase();
+      filterContactsList(query);
+    });
+  }
+
+  // Group select change
+  const groupSelect = document.getElementById('groupSelect');
+  if (groupSelect) {
+    groupSelect.addEventListener('change', () => {
+      const group = groupSelect.value;
+      if (group) {
+        loadGroupContactCount(group);
+      } else {
+        const countText = document.getElementById('groupContactsCountText');
+        if (countText) countText.textContent = 'Selecciona un grupo para ver los contactos';
+      }
+    });
+  }
+}
+
+async function loadContactsForSelector() {
+  const contactsList = document.getElementById('contactsList');
+  if (!contactsList) return;
+
+  contactsList.innerHTML = `
+    <div class="loading-contacts">
+      <div class="spinner-small"></div>
+      <span>Cargando contactos...</span>
+    </div>
+  `;
+
+  try {
+    const res = await authFetch('/contacts?pageSize=500');
+    const data = await res.json();
+    selectorContactsCache = data.items || [];
+    renderContactsSelector(selectorContactsCache);
+  } catch (error) {
+    console.error('Error loading contacts for selector:', error);
+    contactsList.innerHTML = '<div class="text-center text-muted p-3">Error al cargar contactos</div>';
+  }
+}
+
+function renderContactsSelector(contacts) {
+  const contactsList = document.getElementById('contactsList');
+  if (!contactsList) return;
+
+  if (!contacts.length) {
+    contactsList.innerHTML = '<div class="text-center text-muted p-3">No hay contactos guardados</div>';
+    return;
+  }
+
+  contactsList.innerHTML = contacts.map(c => `
+    <label class="contact-checkbox-item">
+      <input type="checkbox" value="${c.id}" ${selectedContactIds.includes(c.id) ? 'checked' : ''}>
+      <div class="contact-info">
+        <div class="contact-name">${c.nombre || 'Sin nombre'}</div>
+        <div class="contact-phone">${c.phone}</div>
+      </div>
+    </label>
+  `).join('');
+
+  // Add event listeners
+  contactsList.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const id = cb.value;
+      if (cb.checked) {
+        if (!selectedContactIds.includes(id)) selectedContactIds.push(id);
+      } else {
+        selectedContactIds = selectedContactIds.filter(x => x !== id);
+      }
+      updateSelectedCount();
+    });
+  });
+}
+
+function filterContactsList(query) {
+  const filtered = selectorContactsCache.filter(c => {
+    const name = (c.nombre || '').toLowerCase();
+    const phone = (c.phone || '').toLowerCase();
+    return name.includes(query) || phone.includes(query);
+  });
+  renderContactsSelector(filtered);
+}
+
+function updateSelectedCount() {
+  const countEl = document.getElementById('selectedContactsCount');
+  if (countEl) countEl.textContent = selectedContactIds.length;
+}
+
+async function loadGroupsForSelector() {
+  const groupSelect = document.getElementById('groupSelect');
+  if (!groupSelect) return;
+
+  groupSelect.innerHTML = '<option value="">-- Cargando grupos --</option>';
+
+  try {
+    const res = await authFetch('/contacts/groups');
+    const data = await res.json();
+    const groups = data.groups || [];
+
+    if (!groups.length) {
+      groupSelect.innerHTML = '<option value="">-- No hay grupos --</option>';
+      return;
+    }
+
+    groupSelect.innerHTML = '<option value="">-- Seleccionar grupo --</option>' +
+      groups.map(g => `<option value="${g}">${g}</option>`).join('');
+  } catch (error) {
+    console.error('Error loading groups:', error);
+    groupSelect.innerHTML = '<option value="">-- Error al cargar --</option>';
+  }
+}
+
+async function loadGroupContactCount(group) {
+  const countText = document.getElementById('groupContactsCountText');
+  if (!countText) return;
+
+  try {
+    const res = await authFetch(`/contacts?group=${encodeURIComponent(group)}&pageSize=1`);
+    const data = await res.json();
+    const total = data.total || 0;
+    countText.textContent = `${total} contacto${total === 1 ? '' : 's'} en este grupo`;
+  } catch (error) {
+    countText.textContent = 'Error al contar';
+  }
+}
+
+// Get selected contact IDs for form submission
+function getSelectedContactIds() {
+  return selectedContactIds;
+}
+
 /** ======== Theme Management ======== */
 function setupThemeToggle() {
   const THEME_KEY = 'ms-theme';
@@ -2646,6 +2883,9 @@ function setupEventListeners() {
 
   const contactsTableBody = document.getElementById('contactsTableBody');
   if (contactsTableBody) contactsTableBody.addEventListener('click', handleContactsTableClick);
+
+  // ===== RECIPIENT SOURCE TABS =====
+  setupRecipientSourceTabs();
 
   // Logout button  
   console.log('🔍 Buscando botón de logout...');
