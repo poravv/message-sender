@@ -414,6 +414,50 @@ function buildRoutes() {
   });
 
   // ---------------------------
+  // Importar contactos desde CSV
+  // ---------------------------
+  router.post('/contacts/import', conditionalAuth, conditionalRole('sender_api'), upload.single('csvFile'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      
+      if (!req.file) {
+        return res.status(400).json({ error: 'Archivo CSV no proporcionado' });
+      }
+
+      const csvFilePath = req.file.path;
+      const { loadNumbersFromCSV } = require('./utils');
+      
+      const parsed = await loadNumbersFromCSV(csvFilePath);
+      
+      if (parsed.invalidRows && parsed.invalidRows.length > 0) {
+        fs.unlinkSync(csvFilePath);
+        return res.status(400).json({
+          error: 'Se detectaron filas inválidas en el CSV.',
+          invalidRows: parsed.invalidRows.slice(0, 10)
+        });
+      }
+
+      const result = await metricsStore.importContactsFromEntries(userId, parsed.entries || [], 'csv');
+
+      // Limpiar archivo temporal
+      if (fs.existsSync(csvFilePath)) {
+        fs.unlinkSync(csvFilePath);
+      }
+
+      logger.info({ userId, imported: result.summary }, 'Contactos importados desde CSV');
+      return res.json({
+        success: true,
+        imported: result.summary.inserted,
+        updated: result.summary.updated,
+        total: result.summary.total
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en POST /contacts/import');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
   // Dashboard analytics
   // ---------------------------
   router.get('/dashboard/summary', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {

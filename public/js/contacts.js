@@ -2,6 +2,8 @@
  * Contacts - Contact Management
  */
 
+let selectedCsvFile = null;
+
 // Load contacts
 async function loadContacts() {
   try {
@@ -187,6 +189,130 @@ function setupContacts() {
   if (refreshBtn) {
     refreshBtn.addEventListener('click', loadContacts);
   }
+
+  // CSV Import
+  setupCsvImport();
+}
+
+// Setup CSV Import
+function setupCsvImport() {
+  const dropZone = document.getElementById('csvDropZone');
+  const fileInput = document.getElementById('csvFileInput');
+  const importBtn = document.getElementById('importCsvBtn');
+  
+  if (!dropZone || !fileInput) return;
+  
+  // Drag & Drop
+  dropZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    dropZone.classList.add('dragover');
+  });
+  
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.classList.remove('dragover');
+  });
+  
+  dropZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      handleCsvFile(files[0]);
+    }
+  });
+  
+  // File input change
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length > 0) {
+      handleCsvFile(e.target.files[0]);
+    }
+  });
+  
+  // Import button
+  if (importBtn) {
+    importBtn.addEventListener('click', importCsvContacts);
+  }
+}
+
+// Handle CSV file selection
+function handleCsvFile(file) {
+  const validTypes = ['text/csv', 'text/plain', 'application/vnd.ms-excel'];
+  const validExt = file.name.endsWith('.csv') || file.name.endsWith('.txt');
+  
+  if (!validTypes.includes(file.type) && !validExt) {
+    showAlert('Por favor selecciona un archivo CSV o TXT', 'warning');
+    return;
+  }
+  
+  selectedCsvFile = file;
+  
+  // Show file info
+  const uploadContent = document.querySelector('#csvDropZone .upload-content');
+  const fileInfo = document.getElementById('csvFileInfo');
+  const fileName = document.getElementById('csvFileName');
+  const importBtn = document.getElementById('importCsvBtn');
+  
+  if (uploadContent) uploadContent.classList.add('d-none');
+  if (fileInfo) fileInfo.classList.remove('d-none');
+  if (fileName) fileName.textContent = file.name;
+  if (importBtn) importBtn.disabled = false;
+}
+
+// Clear selected CSV file
+function clearCsvFile() {
+  selectedCsvFile = null;
+  
+  const uploadContent = document.querySelector('#csvDropZone .upload-content');
+  const fileInfo = document.getElementById('csvFileInfo');
+  const fileInput = document.getElementById('csvFileInput');
+  const importBtn = document.getElementById('importCsvBtn');
+  
+  if (uploadContent) uploadContent.classList.remove('d-none');
+  if (fileInfo) fileInfo.classList.add('d-none');
+  if (fileInput) fileInput.value = '';
+  if (importBtn) importBtn.disabled = true;
+}
+
+// Import CSV contacts
+async function importCsvContacts() {
+  if (!selectedCsvFile) {
+    showAlert('Selecciona un archivo CSV primero', 'warning');
+    return;
+  }
+  
+  const importBtn = document.getElementById('importCsvBtn');
+  const progress = document.getElementById('importProgress');
+  
+  // Show loading
+  if (importBtn) importBtn.classList.add('d-none');
+  if (progress) progress.classList.remove('d-none');
+  
+  try {
+    const formData = new FormData();
+    formData.append('csvFile', selectedCsvFile);
+    
+    const res = await authFetch('/contacts/import', {
+      method: 'POST',
+      body: formData
+    });
+    
+    const data = await res.json();
+    
+    if (!res.ok) {
+      throw new Error(data.error || 'Error al importar contactos');
+    }
+    
+    showAlert(`Importados: ${data.imported} nuevos, ${data.updated} actualizados (Total: ${data.total})`, 'success');
+    clearCsvFile();
+    loadContacts();
+    
+  } catch (error) {
+    showAlert(error.message, 'danger');
+  } finally {
+    // Hide loading
+    if (importBtn) importBtn.classList.remove('d-none');
+    if (progress) progress.classList.add('d-none');
+  }
 }
 
 // Initialize Contacts module
@@ -199,3 +325,5 @@ window.loadContacts = loadContacts;
 window.initContacts = initContacts;
 window.editContact = editContact;
 window.deleteContact = deleteContact;
+window.clearCsvFile = clearCsvFile;
+window.importCsvContacts = importCsvContacts;

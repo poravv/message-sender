@@ -446,6 +446,37 @@
         </header>
 
         <div class="card">
+          <!-- Import CSV Section -->
+          <div class="csv-import-section">
+            <h3><i class="bi bi-file-earmark-spreadsheet"></i> Importar desde CSV</h3>
+            <div class="csv-upload-area" id="csvDropZone">
+              <input type="file" id="csvFileInput" accept=".csv,.txt" hidden>
+              <div class="upload-content">
+                <i class="bi bi-cloud-upload"></i>
+                <p>Arrastra tu archivo CSV aquí o <button type="button" class="btn-link" onclick="document.getElementById('csvFileInput').click()">selecciona un archivo</button></p>
+                <small>Formato: phone,nombre,sustantivo,grupo (encabezado opcional)</small>
+              </div>
+              <div id="csvFileInfo" class="file-info d-none">
+                <i class="bi bi-file-check"></i>
+                <span id="csvFileName">archivo.csv</span>
+                <button type="button" class="btn-remove" onclick="clearCsvFile()"><i class="bi bi-x"></i></button>
+              </div>
+            </div>
+            <div class="csv-actions">
+              <button id="importCsvBtn" class="btn-primary" disabled>
+                <i class="bi bi-upload"></i> Importar contactos
+              </button>
+              <div id="importProgress" class="import-progress d-none">
+                <div class="spinner-small"></div>
+                <span>Importando...</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="section-divider">
+            <span>o agregar manualmente</span>
+          </div>
+
           <!-- Add Contact Form -->
           <form id="addContactForm" class="add-contact-form">
             <div class="form-row">
