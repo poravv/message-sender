@@ -12,8 +12,7 @@ spec:
     requests:
       storage: 5Gi
 ---
-apiVersion: v1
-# Secret creado dinámicamente por el workflow desde GitHub Secrets
+# Secret "postgres-secrets" creado dinámicamente por el workflow desde GitHub Secrets
 # Ver: .github/workflows/deploy.yml -> "Create PostgreSQL secrets"
 ---
 apiVersion: apps/v1
