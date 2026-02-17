@@ -157,10 +157,10 @@ jobs:
         echo "🐘 Deploying PostgreSQL with Longhorn persistence..."
         kubectl apply -f k8s/postgresql.yaml
         echo "⏳ Waiting for PostgreSQL to be ready..."
-        kubectl wait --for=condition=available --timeout=180s deployment/sender-postgres -n ${{ env.NAMESPACE }} || {
+        kubectl wait --for=condition=available --timeout=180s deployment/postgres -n ${{ env.NAMESPACE }} || {
           echo "⚠️ PostgreSQL deployment timed out, checking status..."
-          kubectl describe deployment/sender-postgres -n ${{ env.NAMESPACE }}
-          kubectl get pods -n ${{ env.NAMESPACE }} -l app=sender-postgres
+          kubectl describe deployment/postgres -n ${{ env.NAMESPACE }}
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app=postgres
         }
 
     - name: Deploy configmap
