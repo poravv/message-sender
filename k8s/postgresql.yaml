@@ -1,0 +1,269 @@
+# PostgreSQL Deployment with Longhorn PVC for persistent storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+  namespace: sender
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: v1
+# Secret creado dinámicamente por el workflow desde GitHub Secrets
+# Ver: .github/workflows/deploy.yml -> "Create PostgreSQL secrets"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: sender
+  labels:
+    app: postgres
+    tier: database
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate  # Required for persistent volume
+  selector:
+    matchLabels:
+      app: postgres
+      tier: database
+  template:
+    metadata:
+      labels:
+        app: postgres
+        tier: database
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:16-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+          name: postgres
+        envFrom:
+        - secretRef:
+            name: postgres-secrets
+        env:
+        - name: PGDATA
+          value: /var/lib/postgresql/data/pgdata
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        - name: init-scripts
+          mountPath: /docker-entrypoint-initdb.d
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - sender
+            - -d
+            - sender_db
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - sender
+            - -d
+            - sender_db
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: postgres-pvc
+      - name: init-scripts
+        configMap:
+          name: postgres-init-scripts
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: sender
+  labels:
+    app: postgres
+    tier: database
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+    tier: database
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: sender
+data:
+  01-init.sql: |
+    -- WhatsApp Message Sender Database Schema
+    
+    -- Extensions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    
+    -- Contacts table
+    CREATE TABLE IF NOT EXISTS contacts (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      user_id VARCHAR(255) NOT NULL,
+      phone VARCHAR(50) NOT NULL,
+      nombre VARCHAR(255),
+      sustantivo VARCHAR(50),
+      grupo VARCHAR(100),
+      source VARCHAR(50) DEFAULT 'manual',
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      last_seen_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, phone)
+    );
+    
+    CREATE INDEX idx_contacts_user_id ON contacts(user_id);
+    CREATE INDEX idx_contacts_phone ON contacts(phone);
+    CREATE INDEX idx_contacts_grupo ON contacts(grupo);
+    CREATE INDEX idx_contacts_user_grupo ON contacts(user_id, grupo);
+    
+    -- Campaigns table
+    CREATE TABLE IF NOT EXISTS campaigns (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      user_id VARCHAR(255) NOT NULL,
+      name VARCHAR(255) NOT NULL,
+      status VARCHAR(50) DEFAULT 'queued',
+      message_type VARCHAR(50) DEFAULT 'text',
+      template_count INTEGER DEFAULT 1,
+      total_recipients INTEGER DEFAULT 0,
+      sent_count INTEGER DEFAULT 0,
+      error_count INTEGER DEFAULT 0,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      started_at TIMESTAMPTZ,
+      finished_at TIMESTAMPTZ
+    );
+    
+    CREATE INDEX idx_campaigns_user_id ON campaigns(user_id);
+    CREATE INDEX idx_campaigns_status ON campaigns(status);
+    CREATE INDEX idx_campaigns_created_at ON campaigns(created_at DESC);
+    
+    -- Campaign recipients table
+    CREATE TABLE IF NOT EXISTS campaign_recipients (
+      id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+      campaign_id UUID NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+      phone VARCHAR(50) NOT NULL,
+      nombre VARCHAR(255),
+      sustantivo VARCHAR(50),
+      grupo VARCHAR(100),
+      status VARCHAR(50) DEFAULT 'queued',
+      template_index INTEGER,
+      attempts INTEGER DEFAULT 0,
+      error_message TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      sent_at TIMESTAMPTZ,
+      error_at TIMESTAMPTZ
+    );
+    
+    CREATE INDEX idx_recipients_campaign_id ON campaign_recipients(campaign_id);
+    CREATE INDEX idx_recipients_status ON campaign_recipients(status);
+    CREATE INDEX idx_recipients_phone ON campaign_recipients(phone);
+    
+    -- Metric events table (for dashboard analytics)
+    CREATE TABLE IF NOT EXISTS metric_events (
+      id BIGSERIAL PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL,
+      event_type VARCHAR(100) NOT NULL,
+      campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL,
+      phone VARCHAR(50),
+      contact_id UUID,
+      grupo VARCHAR(100),
+      error_message TEXT,
+      metadata JSONB,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    );
+    
+    CREATE INDEX idx_events_user_id ON metric_events(user_id);
+    CREATE INDEX idx_events_type ON metric_events(event_type);
+    CREATE INDEX idx_events_created_at ON metric_events(created_at DESC);
+    CREATE INDEX idx_events_user_date ON metric_events(user_id, created_at DESC);
+    CREATE INDEX idx_events_campaign ON metric_events(campaign_id);
+    
+    -- Monthly stats aggregation table
+    CREATE TABLE IF NOT EXISTS monthly_stats (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL,
+      month VARCHAR(7) NOT NULL, -- YYYY-MM format
+      sent_count INTEGER DEFAULT 0,
+      error_count INTEGER DEFAULT 0,
+      campaign_count INTEGER DEFAULT 0,
+      updated_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, month)
+    );
+    
+    CREATE INDEX idx_monthly_user ON monthly_stats(user_id);
+    CREATE INDEX idx_monthly_month ON monthly_stats(month);
+    
+    -- Contact stats table
+    CREATE TABLE IF NOT EXISTS contact_stats (
+      id SERIAL PRIMARY KEY,
+      user_id VARCHAR(255) NOT NULL,
+      phone VARCHAR(50) NOT NULL,
+      contact_id UUID,
+      nombre VARCHAR(255),
+      grupo VARCHAR(100),
+      sent_count INTEGER DEFAULT 0,
+      error_count INTEGER DEFAULT 0,
+      last_activity_at TIMESTAMPTZ,
+      UNIQUE(user_id, phone)
+    );
+    
+    CREATE INDEX idx_contact_stats_user ON contact_stats(user_id);
+    CREATE INDEX idx_contact_stats_phone ON contact_stats(phone);
+    
+    -- Function to update updated_at timestamp
+    CREATE OR REPLACE FUNCTION update_updated_at_column()
+    RETURNS TRIGGER AS $$
+    BEGIN
+      NEW.updated_at = NOW();
+      RETURN NEW;
+    END;
+    $$ language 'plpgsql';
+    
+    -- Triggers for updated_at
+    CREATE TRIGGER update_contacts_updated_at
+      BEFORE UPDATE ON contacts
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column();
+    
+    CREATE TRIGGER update_campaigns_updated_at
+      BEFORE UPDATE ON campaigns
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column();
+    
+    CREATE TRIGGER update_recipients_updated_at
+      BEFORE UPDATE ON campaign_recipients
+      FOR EACH ROW
+      EXECUTE FUNCTION update_updated_at_column();
+    
+    -- Grant permissions (el owner ya tiene todos los permisos)

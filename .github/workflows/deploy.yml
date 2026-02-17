@@ -127,6 +127,11 @@ jobs:
           --from-literal=REDIS_TTL_SECONDS="${{ secrets.REDIS_TTL_SECONDS }}" \
           --from-literal=REDIS_QR_TTL_SECONDS="${{ secrets.REDIS_QR_TTL_SECONDS }}" \
           --from-literal=REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}" \
+          --from-literal=POSTGRES_HOST="${{ secrets.POSTGRES_HOST }}" \
+          --from-literal=POSTGRES_PORT="${{ secrets.POSTGRES_PORT }}" \
+          --from-literal=POSTGRES_USER="${{ secrets.POSTGRES_USER }}" \
+          --from-literal=POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+          --from-literal=POSTGRES_DB="${{ secrets.POSTGRES_DB }}" \
           --from-literal=MINIO_ENDPOINT="${{ secrets.MINIO_ENDPOINT }}" \
           --from-literal=MINIO_REGION="${{ secrets.MINIO_REGION }}" \
           --from-literal=MINIO_EXTERNAL_ENDPOINT="${{ secrets.MINIO_EXTERNAL_ENDPOINT }}" \
@@ -136,6 +141,27 @@ jobs:
           --from-literal=MINIO_BUCKET="${{ secrets.MINIO_BUCKET }}" \
           --from-literal=MINIO_FORCE_PATH_STYLE="${{ secrets.MINIO_FORCE_PATH_STYLE }}" \
           --from-literal=MINIO_DELETE_AFTER_SEND="${{ secrets.MINIO_DELETE_AFTER_SEND }}"
+
+    - name: Create PostgreSQL secrets
+      run: |
+        echo "🔐 Creating PostgreSQL secrets from GitHub Secrets..."
+        kubectl delete secret postgres-secrets -n ${{ env.NAMESPACE }} --ignore-not-found=true
+        kubectl create secret generic postgres-secrets \
+          --namespace=${{ env.NAMESPACE }} \
+          --from-literal=POSTGRES_USER="${{ secrets.POSTGRES_USER }}" \
+          --from-literal=POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+          --from-literal=POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+
+    - name: Deploy PostgreSQL
+      run: |
+        echo "🐘 Deploying PostgreSQL with Longhorn persistence..."
+        kubectl apply -f k8s/postgresql.yaml
+        echo "⏳ Waiting for PostgreSQL to be ready..."
+        kubectl wait --for=condition=available --timeout=180s deployment/sender-postgres -n ${{ env.NAMESPACE }} || {
+          echo "⚠️ PostgreSQL deployment timed out, checking status..."
+          kubectl describe deployment/sender-postgres -n ${{ env.NAMESPACE }}
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app=sender-postgres
+        }
 
     - name: Deploy configmap
       run: |

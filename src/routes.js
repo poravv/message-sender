@@ -1067,6 +1067,33 @@ function buildRoutes() {
     }
   });
 
+  // Limpiar caché de métricas y contactos del usuario en Redis
+  router.delete('/cache/user', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub;
+      logger.info({ userId }, 'Solicitud de limpieza de caché de usuario');
+
+      const result = await metricsStore.clearUserCache(userId);
+
+      logger.info({ userId, deletedKeys: result.deletedKeys }, 'Caché de usuario limpiado');
+      res.json({
+        success: true,
+        message: `Caché limpiado: ${result.deletedKeys} claves eliminadas`,
+        deletedKeys: result.deletedKeys,
+        timestamp: new Date().toISOString()
+      });
+
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error limpiando caché de usuario');
+      res.status(500).json({
+        success: false,
+        error: 'Error limpiando caché',
+        details: error?.message,
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+
   return router;
 }
 

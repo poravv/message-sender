@@ -18,6 +18,9 @@ Sistema profesional de envío masivo de mensajes por WhatsApp con arquitectura m
 ### 🔧 **Arquitectura Técnica**
 - **Backend**: Node.js 20+ con Express
 - **WhatsApp Integration**: @whiskeysockets/baileys (socket-based)
+- **Base de datos**: PostgreSQL 16 con persistencia Longhorn (K8s)
+- **Caché/Colas**: Redis 7.2 con BullMQ
+- **Almacenamiento**: MinIO/S3 para archivos multimedia
 - **Autenticación**: Keycloak con bypass para desarrollo
 - **Frontend**: Bootstrap con emoji picker y actualizaciones en tiempo real
 - **Containerización**: Docker con multi-stage builds
@@ -63,7 +66,14 @@ KEYCLOAK_URL=https://auth.mindtechpy.net
 KEYCLOAK_REALM=message-sender
 KEYCLOAK_AUDIENCE=message-sender-api
 
-# Sesiones (Redis)
+# PostgreSQL (persistencia principal)
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=sender
+POSTGRES_PASSWORD=changeme
+POSTGRES_DB=sender
+
+# Redis (sesiones y cola)
 SESSION_STORE=redis
 REDIS_HOST=redis.mindtechpy.net
 REDIS_PORT=6379
@@ -73,6 +83,12 @@ REDIS_TLS=false                 # true si el endpoint ofrece TLS
 REDIS_TLS_REJECT_UNAUTHORIZED=true
 REDIS_TTL_SECONDS=43200         # 12h para credenciales/keys
 REDIS_QR_TTL_SECONDS=180        # 3m para QR temporal
+
+# MinIO/S3 (archivos multimedia)
+MINIO_ENDPOINT=s3.mindtechpy.net
+MINIO_ACCESS_KEY=...
+MINIO_SECRET_KEY=...
+MINIO_BUCKET=sender
 
 # Logs (opcional)
 # LOG_LEVEL=info
@@ -87,6 +103,7 @@ REDIS_QR_TTL_SECONDS=180        # 3m para QR temporal
 ### Manifests incluidos (namespace: `sender`)
 - `k8s/namespace.yaml` — crea el namespace `sender`.
 - `k8s/configmap.yaml` — configuración no sensible (PORT=3010 en K8s, TTLs, LOG_LEVEL, KEYCLOAK_* por defecto).
+- `k8s/postgresql.yaml` — PostgreSQL 16 con Longhorn PVC (5Gi), Secret e init SQL.
 - `k8s/backend-deployment.yaml` — Deployment/Service/HPA del backend.
   - Deployment: `sender-backend` (puerto contenedor 3010)
   - Service: `sender-backend-service` (ClusterIP 3010)
@@ -97,16 +114,20 @@ REDIS_QR_TTL_SECONDS=180        # 3m para QR temporal
 - Secret `backend-env-secrets` se recrea en cada deploy con tus Secrets:
   - `NODE_ENV`, `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_AUDIENCE`
   - `SESSION_STORE`, `AUTHORIZED_PHONES`, `FILE_RETENTION_HOURS`, `MESSAGE_DELAY_MS`, `LOG_LEVEL`
-  - Redis (usa REDIS_URL o REDIS_HOST/REDIS_PORT/REDIS_DB/REDIS_TLS/REDIS_PASSWORD)
+  - Redis: `REDIS_URL`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_TLS`, `REDIS_PASSWORD`
+  - PostgreSQL: `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+  - MinIO: `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`
 - Asegúrate de definirlos en Settings → Secrets and variables → Actions.
 
 ### Puertos y acceso
 - Desarrollo local: `http://localhost:3000`
 - Kubernetes: Ingress en `https://sender.mindtechpy.net` → Service `sender-backend-service:3010`.
 
-### Redis únicamente (sin MySQL)
-- Este proyecto no despliega base de datos. La app usa solo Redis externo para sesiones.
-- Las sesiones de WhatsApp están centralizadas (Redis + TTL + lock distribuido) y resisten autoescalado/restarts.
+### PostgreSQL + Redis (almacenamiento híbrido)
+- **PostgreSQL**: Base de datos principal para contactos, campañas y métricas. Desplegado con Longhorn PVC para persistencia.
+- **Redis**: Sesiones de WhatsApp, cola BullMQ y caché. Externo (redis.mindtechpy.net).
+- El backend auto-selecciona PostgreSQL si `POSTGRES_HOST` está definido, sino usa Redis como fallback.
+- **Botón Limpiar Caché**: En el dashboard puedes limpiar el caché Redis de tu usuario (métricas, contactos temporales).
 ### Docker Compose (local)
 ```bash
 docker compose up -d
@@ -170,10 +191,11 @@ numero,sustantivo,nombre,grupo
 flowchart LR
   UI["Frontend (Keycloak + Dashboard)"] --> API["Express API"]
   API --> Q["BullMQ/Redis Queue"]
-  API --> C["Contactos (Redis persistente)"]
+  API --> PG["PostgreSQL<br/>(Contactos/Campañas)"]
+  API --> R["Redis<br/>(Sesiones/Caché)"]
   Q --> WA["Baileys WhatsApp"]
-  Q --> M["Métricas/Campañas (Redis persistente)"]
-  M --> UI
+  Q --> PG
+  PG --> UI
 ```
 
 ### Flujo de campaña con tracking
@@ -182,17 +204,18 @@ sequenceDiagram
   participant U as Usuario
   participant FE as Frontend
   participant BE as API
+  participant PG as PostgreSQL
   participant RQ as Redis Queue
   participant WA as WhatsApp
-  participant MS as Metrics Store
 
   U->>FE: Cargar CSV + templates
   FE->>BE: POST /send-messages
-  BE->>MS: Upsert contactos + crear campaña
+  BE->>PG: Upsert contactos + crear campaña
   BE->>RQ: enqueueCampaign(campaignId)
   RQ->>WA: Enviar mensaje por contacto
-  RQ->>MS: Registrar sent/error por destinatario
+  RQ->>PG: Registrar sent/error por destinatario
   FE->>BE: GET /dashboard/*
+  BE->>PG: SELECT métricas
   BE->>FE: Timeline, torta por grupo, mensual
 ```
 
@@ -205,19 +228,32 @@ pie title Mensajes por grupo (ejemplo)
   "Sin grupo" : 12
 ```
 
+> 📖 **Más diagramas**: Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) para diagramas detallados de la arquitectura, flujos de datos, esquema de BD y deployment K8s.
+
 ## 🔌 Endpoints Nuevos (resumen)
 
+### Contactos
 - `POST /contacts` crear contacto manual
 - `PUT /contacts/:contactId` editar contacto
 - `GET /contacts` listar contactos con filtros
 - `DELETE /contacts/:contactId` eliminar contacto
+- `POST /contacts/import` importar desde CSV
+- `GET /contacts/groups` listar grupos únicos
+
+### Dashboard
 - `GET /dashboard/summary` resumen por rango
 - `GET /dashboard/timeline` línea de tiempo (`hour|day|month`)
 - `GET /dashboard/by-group` distribución por grupo
 - `GET /dashboard/by-contact` top contactos
 - `GET /dashboard/current-month` métricas del mes actual
 - `GET /dashboard/monthly` tendencia mensual
+
+### Campañas
 - `GET /campaigns/:id` detalle de campaña
+- `POST /cancel-campaign` cancelar campaña activa
+
+### Cache
+- `DELETE /cache/user` **NUEVO** - Limpiar caché Redis del usuario actual
 
 ## ⚡ Rendimiento y Límites
 

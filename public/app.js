@@ -2372,6 +2372,39 @@ async function loadAnalyticsDashboard() {
   }
 }
 
+// Limpiar caché Redis del usuario actual
+async function clearUserCache() {
+  const btn = document.getElementById('clearCacheBtn');
+  if (!btn) return;
+
+  if (!confirm('¿Seguro que deseas limpiar tu caché? Se eliminarán las métricas almacenadas en Redis.')) {
+    return;
+  }
+
+  const originalContent = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+
+  try {
+    const res = await authFetch('/cache/user', { method: 'DELETE' });
+    const data = await res.json();
+
+    if (data.success) {
+      showAlert(`Caché limpiado: ${data.deletedKeys || 0} claves eliminadas`, 'success');
+      // Recargar dashboard
+      loadAnalyticsDashboard();
+    } else {
+      showAlert(data.error || 'Error al limpiar caché', 'danger');
+    }
+  } catch (error) {
+    console.error('Error clearing cache:', error);
+    showAlert('Error al limpiar caché', 'danger');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalContent;
+  }
+}
+
 function renderContactsTable(items = []) {
   const tbody = document.getElementById('contactsTableBody');
   if (!tbody) return;
@@ -2590,6 +2623,14 @@ function setupEventListeners() {
 
   const refreshAnalyticsBtn = document.getElementById('refreshAnalyticsBtn');
   if (refreshAnalyticsBtn) refreshAnalyticsBtn.addEventListener('click', loadAnalyticsDashboard);
+
+  // Botón refrescar dashboard (nuevo ID)
+  const refreshDashboardBtn = document.getElementById('refreshDashboardBtn');
+  if (refreshDashboardBtn) refreshDashboardBtn.addEventListener('click', loadAnalyticsDashboard);
+
+  // Botón limpiar caché de usuario
+  const clearCacheBtn = document.getElementById('clearCacheBtn');
+  if (clearCacheBtn) clearCacheBtn.addEventListener('click', clearUserCache);
 
   const loadThisMonthBtn = document.getElementById('loadThisMonthBtn');
   if (loadThisMonthBtn) loadThisMonthBtn.addEventListener('click', setAnalyticsToThisMonth);
