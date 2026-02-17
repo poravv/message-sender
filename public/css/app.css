@@ -1850,3 +1850,223 @@ a.btn-link:hover {
 .spin {
   animation: spin 1s linear infinite;
 }
+
+/* ========== Recipient Source Selector ========== */
+.recipient-source-tabs {
+  display: flex;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-md);
+}
+
+.source-tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-md);
+  border: 2px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.source-tab:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.source-tab.active {
+  border-color: var(--accent);
+  background: rgba(37, 211, 102, 0.1);
+  color: var(--accent);
+}
+
+.source-tab i {
+  font-size: 1.5rem;
+}
+
+.source-tab span {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.source-section {
+  margin-top: var(--space-md);
+}
+
+/* Contacts Selector */
+.contacts-selector {
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  overflow: hidden;
+}
+
+.selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-sm) var(--space-md);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  gap: var(--space-sm);
+  flex-wrap: wrap;
+}
+
+.selector-header .search-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex: 1;
+  min-width: 150px;
+}
+
+.selector-header .search-box input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+}
+
+.selector-actions {
+  display: flex;
+  gap: var(--space-xs);
+}
+
+.contacts-checklist {
+  max-height: 250px;
+  overflow-y: auto;
+  padding: var(--space-sm);
+}
+
+.contact-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.contact-checkbox-item:hover {
+  background: var(--bg-secondary);
+}
+
+.contact-checkbox-item input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.contact-checkbox-item .contact-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.contact-checkbox-item .contact-name {
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.contact-checkbox-item .contact-number {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.contact-checkbox-item .contact-group-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  background: rgba(37, 211, 102, 0.15);
+  color: var(--accent);
+  border-radius: 12px;
+}
+
+.selected-count {
+  padding: var(--space-sm) var(--space-md);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  text-align: center;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.selected-count span {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.loading-contacts {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-xl);
+  color: var(--text-secondary);
+}
+
+.spinner-small {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-color);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+/* Group Selector */
+.group-selector {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.group-selector label {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.group-selector select {
+  padding: var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.group-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  background: rgba(37, 211, 102, 0.1);
+  border-radius: var(--radius-sm);
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+.btn-sm {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 0.8rem;
+}
+
+.no-contacts-message {
+  text-align: center;
+  padding: var(--space-xl);
+  color: var(--text-muted);
+}
+
+.no-contacts-message i {
+  font-size: 2rem;
+  margin-bottom: var(--space-sm);
+  display: block;
+}

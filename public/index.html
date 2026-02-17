@@ -252,17 +252,81 @@
             <!-- CSV Upload -->
             <div class="form-group">
               <label>Lista de destinatarios</label>
-              <div class="file-upload">
-                <input type="file" id="csvFile" name="csvFile" accept=".csv,.txt" required>
-                <label for="csvFile" class="file-upload-label">
-                  <i class="bi bi-cloud-upload"></i>
-                  <span>Arrastra o selecciona tu archivo CSV/TXT</span>
-                  <small>Formato: 595xxxxxxxxxxx</small>
-                </label>
-                <div id="csvFileInfo" class="file-info"></div>
+              
+              <!-- Recipient Source Selector -->
+              <div class="recipient-source-tabs">
+                <button type="button" class="source-tab active" data-source="csv">
+                  <i class="bi bi-file-earmark-spreadsheet"></i>
+                  <span>Subir CSV</span>
+                </button>
+                <button type="button" class="source-tab" data-source="contacts">
+                  <i class="bi bi-person-check"></i>
+                  <span>Seleccionar Contactos</span>
+                </button>
+                <button type="button" class="source-tab" data-source="group">
+                  <i class="bi bi-people"></i>
+                  <span>Por Grupo</span>
+                </button>
               </div>
-              <div class="help-text">
-                <strong>Columnas opcionales:</strong> número, sustantivo, nombre, grupo
+              <input type="hidden" id="recipientSource" name="recipientSource" value="csv">
+
+              <!-- CSV Source -->
+              <div id="csvSourceSection" class="source-section">
+                <div class="file-upload">
+                  <input type="file" id="csvFile" name="csvFile" accept=".csv,.txt">
+                  <label for="csvFile" class="file-upload-label">
+                    <i class="bi bi-cloud-upload"></i>
+                    <span>Arrastra o selecciona tu archivo CSV/TXT</span>
+                    <small>Formato: 595xxxxxxxxxxx</small>
+                  </label>
+                  <div id="csvFileInfo" class="file-info"></div>
+                </div>
+                <div class="help-text">
+                  <strong>Columnas opcionales:</strong> número, sustantivo, nombre, grupo
+                </div>
+              </div>
+
+              <!-- Contacts Source -->
+              <div id="contactsSourceSection" class="source-section d-none">
+                <div class="contacts-selector">
+                  <div class="selector-header">
+                    <div class="search-box">
+                      <i class="bi bi-search"></i>
+                      <input type="text" id="contactSelectorSearch" placeholder="Buscar contactos...">
+                    </div>
+                    <div class="selector-actions">
+                      <button type="button" class="btn-secondary btn-sm" id="selectAllContactsBtn">
+                        <i class="bi bi-check-all"></i> Todos
+                      </button>
+                      <button type="button" class="btn-secondary btn-sm" id="clearSelectedContactsBtn">
+                        <i class="bi bi-x-lg"></i> Limpiar
+                      </button>
+                    </div>
+                  </div>
+                  <div id="contactsList" class="contacts-checklist">
+                    <div class="loading-contacts">
+                      <div class="spinner-small"></div>
+                      <span>Cargando contactos...</span>
+                    </div>
+                  </div>
+                  <div class="selected-count">
+                    <span id="selectedContactsCount">0</span> contactos seleccionados
+                  </div>
+                </div>
+              </div>
+
+              <!-- Group Source -->
+              <div id="groupSourceSection" class="source-section d-none">
+                <div class="group-selector">
+                  <label for="groupSelect">Seleccionar grupo:</label>
+                  <select id="groupSelect" name="groupName" class="form-control">
+                    <option value="">-- Cargando grupos --</option>
+                  </select>
+                  <div id="groupContactsCount" class="group-info d-none">
+                    <i class="bi bi-people"></i>
+                    <span id="groupContactsCountText">0 contactos</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -451,24 +515,14 @@
             <h3><i class="bi bi-file-earmark-spreadsheet"></i> Importar desde CSV</h3>
             <div class="csv-upload-area" id="csvDropZone">
               <input type="file" id="csvFileInput" accept=".csv,.txt" hidden>
-              <div class="upload-content">
+              <div class="upload-content" id="csvUploadContent">
                 <i class="bi bi-cloud-upload"></i>
                 <p>Arrastra tu archivo CSV aquí o <a href="#" class="btn-link" onclick="event.preventDefault(); document.getElementById('csvFileInput').click()">selecciona un archivo</a></p>
                 <small>Formato: phone, nombre, sustantivo, grupo (encabezado opcional)</small>
               </div>
-              <div id="csvFileInfo" class="file-info d-none">
-                <i class="bi bi-file-check"></i>
-                <span id="csvFileName">archivo.csv</span>
-                <button type="button" class="btn-remove" onclick="clearCsvFile()"><i class="bi bi-x"></i></button>
-              </div>
-            </div>
-            <div class="csv-actions">
-              <button id="importCsvBtn" class="btn-primary" disabled>
-                <i class="bi bi-upload"></i> Importar contactos
-              </button>
               <div id="importProgress" class="import-progress d-none">
                 <div class="spinner-small"></div>
-                <span>Importando...</span>
+                <span id="importProgressText">Importando...</span>
               </div>
             </div>
           </div>

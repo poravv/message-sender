@@ -176,6 +176,48 @@ async function listContacts(userId, opts = {}) {
   return { items: paged, total, page, pageSize };
 }
 
+// Obtener grupos únicos de contactos
+async function getContactGroups(userId) {
+  const r = getRedis();
+  const rawMap = await r.hgetall(contactsKey(userId));
+  const items = Object.values(rawMap)
+    .map(safeJsonParse)
+    .filter(Boolean);
+
+  const groups = new Set();
+  items.forEach((c) => {
+    if (c.grupo && String(c.grupo).trim()) {
+      groups.add(String(c.grupo).trim());
+    }
+  });
+
+  return Array.from(groups).sort();
+}
+
+// Obtener contactos por IDs
+async function getContactsByIds(userId, contactIds) {
+  const r = getRedis();
+  const rawMap = await r.hgetall(contactsKey(userId));
+  const all = Object.values(rawMap)
+    .map(safeJsonParse)
+    .filter(Boolean);
+
+  const idSet = new Set(contactIds);
+  return all.filter((c) => idSet.has(c.id));
+}
+
+// Obtener contactos por grupo
+async function getContactsByGroup(userId, groupName) {
+  const r = getRedis();
+  const rawMap = await r.hgetall(contactsKey(userId));
+  const items = Object.values(rawMap)
+    .map(safeJsonParse)
+    .filter(Boolean);
+
+  const group = String(groupName || '').trim().toLowerCase();
+  return items.filter((c) => String(c.grupo || '').toLowerCase() === group);
+}
+
 async function importContactsFromEntries(userId, entries, source = 'csv') {
   const summary = { inserted: 0, updated: 0, total: 0 };
   const enriched = [];
@@ -621,6 +663,9 @@ module.exports = {
   deleteContact,
   listContacts,
   getContactById,
+  getContactGroups,
+  getContactsByIds,
+  getContactsByGroup,
   importContactsFromEntries,
   createCampaign,
   initCampaignRecipients,

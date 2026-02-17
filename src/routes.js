@@ -154,25 +154,102 @@ function buildRoutes() {
         });
       }
 
-      if (!req.files || !req.files['csvFile']) {
-        return res.status(400).json({ error: 'Archivo CSV/TXT no proporcionado' });
+      const userId = req.auth?.sub || 'default';
+      const { recipientSource, contactIds, groupName, templates: templatesJson, message, campaignName } = req.body;
+      
+      let numbers = [];
+      let source = recipientSource || 'csv';
+
+      // Obtener destinatarios según la fuente
+      if (source === 'contacts' && contactIds) {
+        // Enviar a contactos seleccionados
+        const ids = typeof contactIds === 'string' ? JSON.parse(contactIds) : contactIds;
+        if (!Array.isArray(ids) || ids.length === 0) {
+          return res.status(400).json({ error: 'Debes seleccionar al menos un contacto' });
+        }
+        const contacts = await metricsStore.getContactsByIds(userId, ids);
+        if (contacts.length === 0) {
+          return res.status(400).json({ error: 'No se encontraron los contactos seleccionados' });
+        }
+        numbers = contacts.map(c => ({
+          number: c.phone,
+          contactId: c.id,
+          variables: {
+            nombre: c.nombre || '',
+            sustantivo: c.sustantivo || '',
+            grupo: c.grupo || ''
+          }
+        }));
+      } else if (source === 'group' && groupName) {
+        // Enviar a un grupo completo
+        const contacts = await metricsStore.getContactsByGroup(userId, groupName);
+        if (contacts.length === 0) {
+          return res.status(400).json({ error: `No se encontraron contactos en el grupo "${groupName}"` });
+        }
+        numbers = contacts.map(c => ({
+          number: c.phone,
+          contactId: c.id,
+          variables: {
+            nombre: c.nombre || '',
+            sustantivo: c.sustantivo || '',
+            grupo: c.grupo || ''
+          }
+        }));
+      } else {
+        // Fuente CSV (comportamiento original)
+        if (!req.files || !req.files['csvFile']) {
+          return res.status(400).json({ error: 'Archivo CSV/TXT no proporcionado' });
+        }
+        
+        const csvFilePath = req.files['csvFile'][0].path;
+        const parsed = await loadNumbersFromCSV(csvFilePath);
+        const invalidCount = parsed?.invalidCount || 0;
+        const duplicates = parsed?.duplicates || 0;
+        
+        if ((parsed?.numbers || []).length === 0) {
+          return res.status(400).json({ error: 'No se encontraron números válidos' });
+        }
+        
+        if (invalidCount > 0) {
+          try { if (redisQueue && typeof redisQueue.cancelCampaign === 'function') await redisQueue.cancelCampaign(userId); } catch { }
+          try { if (redisQueue && typeof redisQueue.clearList === 'function') await redisQueue.clearList(userId); } catch { }
+          // Limpiar archivo
+          if (fs.existsSync(csvFilePath)) fs.unlinkSync(csvFilePath);
+          return res.status(400).json({
+            error: 'Se detectaron filas inválidas en el CSV. Envío cancelado.',
+            invalidCount,
+            duplicates,
+            details: 'Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX'
+          });
+        }
+        
+        if (duplicates > 0) {
+          logger.info({ duplicates, unique: parsed.numbers.length }, 'Duplicados eliminados del CSV');
+        }
+        
+        // Importar contactos y enriquecer
+        const imported = await metricsStore.importContactsFromEntries(userId, parsed.numbers, 'csv');
+        numbers = imported.entries || [];
+        
+        // Limpiar archivo CSV
+        if (fs.existsSync(csvFilePath)) fs.unlinkSync(csvFilePath);
       }
 
-      const csvFilePath = req.files['csvFile'][0].path;
+      if (numbers.length === 0) {
+        return res.status(400).json({ error: 'No se encontraron destinatarios válidos' });
+      }
+
       let images = req.files['images'];
       let singleImage = req.files['singleImage'] ? req.files['singleImage'][0] : null;
       let audioFile = req.files['audioFile'] ? req.files['audioFile'][0] : null;
 
       // Extract templates from request body
-      const { templates: templatesJson, message, campaignName } = req.body;
       let templates = [];
 
       try {
-        // Try to parse templates JSON
         if (templatesJson) {
           templates = JSON.parse(templatesJson);
         } else if (message) {
-          // Fallback: if no templates JSON, use the old 'message' field for backward compatibility
           templates = [message];
         }
       } catch (e) {
@@ -180,7 +257,6 @@ function buildRoutes() {
         return res.status(400).json({ error: 'Formato de templates inválido' });
       }
 
-      // Validate templates
       if (!templates || !Array.isArray(templates) || templates.length === 0) {
         return res.status(400).json({ error: 'Debes proporcionar al menos un template de mensaje' });
       }
@@ -189,7 +265,6 @@ function buildRoutes() {
         return res.status(400).json({ error: 'Máximo 5 templates permitidos' });
       }
 
-      // Validate each template
       for (let i = 0; i < templates.length; i++) {
         if (typeof templates[i] !== 'string' || templates[i].trim().length === 0) {
           return res.status(400).json({ error: `Template ${i + 1} está vacío o es inválido` });
@@ -197,40 +272,11 @@ function buildRoutes() {
       }
 
       logger.info({
-        userId: req.auth?.sub,
+        userId,
         templateCount: templates.length,
-        numbersCount: 0  // Will be updated after CSV parsing
+        numbersCount: numbers.length,
+        source
       }, 'Procesando envío con templates múltiples');
-
-      const parsed = await loadNumbersFromCSV(csvFilePath);
-      let numbers = parsed?.numbers || [];
-      const invalidCount = parsed?.invalidCount || 0;
-      const duplicates = parsed?.duplicates || 0;
-
-      if (numbers.length === 0) return res.status(400).json({ error: 'No se encontraron números válidos' });
-
-      // Si hay registros inválidos en el CSV, cancelar automáticamente y limpiar lista
-      if (invalidCount > 0) {
-        const userId = req.auth?.sub || 'default';
-        try { if (redisQueue && typeof redisQueue.cancelCampaign === 'function') await redisQueue.cancelCampaign(userId); } catch { }
-        try { if (redisQueue && typeof redisQueue.clearList === 'function') await redisQueue.clearList(userId); } catch { }
-        return res.status(400).json({
-          error: 'Se detectaron filas inválidas en el CSV. Envío cancelado.',
-          invalidCount,
-          duplicates,
-          details: 'Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX'
-        });
-      }
-
-      // Informar sobre duplicados encontrados (pero continuar con los únicos)
-      if (duplicates > 0) {
-        logger.info({ duplicates, unique: numbers.length }, 'Duplicados eliminados del CSV');
-      }
-
-      // Persistir/actualizar contactos en base histórica y enriquecer payload
-      const userId = req.auth?.sub || 'default';
-      const imported = await metricsStore.importContactsFromEntries(userId, numbers, 'csv');
-      numbers = imported.entries || [];
 
       // Crear campaña persistente
       const campaign = await metricsStore.createCampaign(userId, {
@@ -239,16 +285,6 @@ function buildRoutes() {
         templateCount: templates.length,
       });
       await metricsStore.initCampaignRecipients(userId, campaign.id, numbers);
-
-      // El CSV ya fue leído, se puede eliminar inmediatamente
-      try {
-        if (fs.existsSync(csvFilePath)) {
-          fs.unlinkSync(csvFilePath);
-          logger.info(`CSV temporal eliminado: ${csvFilePath}`);
-        }
-      } catch (csvCleanupErr) {
-        logger.warn(`No se pudo eliminar CSV temporal ${csvFilePath}: ${csvCleanupErr.message}`);
-      }
 
       // Si S3 está habilitado, subir imágenes y referenciarlas por s3Key
       try {
@@ -453,6 +489,20 @@ function buildRoutes() {
       });
     } catch (error) {
       logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en POST /contacts/import');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Obtener grupos de contactos
+  // ---------------------------
+  router.get('/contacts/groups', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.sub || 'default';
+      const groups = await metricsStore.getContactGroups(userId);
+      return res.json({ groups });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /contacts/groups');
       return res.status(500).json({ error: error.message });
     }
   });

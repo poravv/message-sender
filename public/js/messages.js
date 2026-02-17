@@ -266,8 +266,45 @@ async function sendMessages() {
   
   if (!form || !submitBtn) return;
   
+  // Get recipient source
+  const recipientSource = document.getElementById('recipientSource')?.value || 'csv';
+  
+  // Validate based on source
+  if (recipientSource === 'csv') {
+    const csvFile = document.getElementById('csvFile');
+    if (!csvFile?.files?.length) {
+      showAlert('Debes seleccionar un archivo CSV', 'warning');
+      return;
+    }
+  } else if (recipientSource === 'contacts') {
+    if (selectedContactIds.size === 0) {
+      showAlert('Debes seleccionar al menos un contacto', 'warning');
+      return;
+    }
+  } else if (recipientSource === 'group') {
+    const groupSelect = document.getElementById('groupSelect');
+    if (!groupSelect?.value) {
+      showAlert('Debes seleccionar un grupo', 'warning');
+      return;
+    }
+  }
+  
   // Collect form data
   const formData = new FormData(form);
+  
+  // Set recipient source
+  formData.set('recipientSource', recipientSource);
+  
+  // Add source-specific data
+  if (recipientSource === 'contacts') {
+    formData.set('contactIds', JSON.stringify(Array.from(selectedContactIds)));
+    // Remove CSV file if present
+    formData.delete('csvFile');
+  } else if (recipientSource === 'group') {
+    formData.set('groupName', document.getElementById('groupSelect')?.value || '');
+    // Remove CSV file if present
+    formData.delete('csvFile');
+  }
   
   // Add all message templates
   const templateCount = parseInt(document.getElementById('templateCount')?.value || 1);
@@ -423,6 +460,235 @@ function exportResults() {
   showAlert('Resultados exportados', 'success');
 }
 
+// ========== Recipient Source Selection ==========
+let allContactsForSend = [];
+let selectedContactIds = new Set();
+
+// Setup recipient source tabs
+function setupRecipientSourceTabs() {
+  const tabs = document.querySelectorAll('.source-tab');
+  const sourceInput = document.getElementById('recipientSource');
+  const sections = {
+    csv: document.getElementById('csvSourceSection'),
+    contacts: document.getElementById('contactsSourceSection'),
+    group: document.getElementById('groupSourceSection')
+  };
+  
+  if (!tabs.length || !sourceInput) return;
+  
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      const source = tab.dataset.source;
+      
+      // Update active tab
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      
+      // Update hidden input
+      sourceInput.value = source;
+      
+      // Show/hide sections
+      Object.entries(sections).forEach(([key, section]) => {
+        if (section) {
+          section.classList.toggle('d-none', key !== source);
+        }
+      });
+      
+      // Load data if needed
+      if (source === 'contacts') {
+        loadContactsForSelector();
+      } else if (source === 'group') {
+        loadGroupsForSelector();
+      }
+    });
+  });
+}
+
+// Load contacts for multi-select
+async function loadContactsForSelector() {
+  const container = document.getElementById('contactsList');
+  if (!container) return;
+  
+  container.innerHTML = `
+    <div class="loading-contacts">
+      <div class="spinner-small"></div>
+      <span>Cargando contactos...</span>
+    </div>
+  `;
+  
+  try {
+    const res = await authFetch('/contacts');
+    if (!res.ok) throw new Error('Error al cargar contactos');
+    
+    const data = await res.json();
+    allContactsForSend = data.contacts || [];
+    
+    if (allContactsForSend.length === 0) {
+      container.innerHTML = `
+        <div class="no-contacts-message">
+          <i class="bi bi-person-x"></i>
+          <p>No tienes contactos guardados</p>
+          <small>Ve a la sección Contactos para agregar o importar</small>
+        </div>
+      `;
+      return;
+    }
+    
+    renderContactsCheckList(allContactsForSend);
+    setupContactsSearch();
+    setupContactsSelectAll();
+    
+  } catch (error) {
+    container.innerHTML = `<div class="no-contacts-message"><i class="bi bi-exclamation-triangle"></i><p>Error al cargar contactos</p></div>`;
+    console.error('Error loading contacts:', error);
+  }
+}
+
+// Render contacts checklist
+function renderContactsCheckList(contacts) {
+  const container = document.getElementById('contactsList');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  
+  contacts.forEach(contact => {
+    const item = document.createElement('label');
+    item.className = 'contact-checkbox-item';
+    item.innerHTML = `
+      <input type="checkbox" value="${contact.id}" ${selectedContactIds.has(contact.id) ? 'checked' : ''}>
+      <div class="contact-info">
+        <span class="contact-name">${contact.nombre || contact.numero}</span>
+        <span class="contact-number">${contact.numero}</span>
+      </div>
+      ${contact.grupo ? `<span class="contact-group-badge">${contact.grupo}</span>` : ''}
+    `;
+    
+    const checkbox = item.querySelector('input');
+    checkbox.addEventListener('change', () => {
+      if (checkbox.checked) {
+        selectedContactIds.add(contact.id);
+      } else {
+        selectedContactIds.delete(contact.id);
+      }
+      updateSelectedCount();
+    });
+    
+    container.appendChild(item);
+  });
+}
+
+// Update selected count
+function updateSelectedCount() {
+  const countEl = document.getElementById('selectedContactsCount');
+  if (countEl) {
+    countEl.textContent = selectedContactIds.size;
+  }
+}
+
+// Setup contacts search
+function setupContactsSearch() {
+  const searchInput = document.getElementById('contactSelectorSearch');
+  if (!searchInput) return;
+  
+  searchInput.addEventListener('input', () => {
+    const query = searchInput.value.toLowerCase().trim();
+    const filtered = allContactsForSend.filter(c => 
+      (c.nombre && c.nombre.toLowerCase().includes(query)) ||
+      (c.numero && c.numero.includes(query)) ||
+      (c.grupo && c.grupo.toLowerCase().includes(query))
+    );
+    renderContactsCheckList(filtered);
+  });
+}
+
+// Setup select all/clear buttons
+function setupContactsSelectAll() {
+  const selectAllBtn = document.getElementById('selectAllContactsBtn');
+  const clearBtn = document.getElementById('clearSelectedContactsBtn');
+  
+  if (selectAllBtn) {
+    selectAllBtn.addEventListener('click', () => {
+      allContactsForSend.forEach(c => selectedContactIds.add(c.id));
+      renderContactsCheckList(allContactsForSend);
+      updateSelectedCount();
+    });
+  }
+  
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      selectedContactIds.clear();
+      renderContactsCheckList(allContactsForSend);
+      updateSelectedCount();
+    });
+  }
+}
+
+// Load groups for dropdown
+async function loadGroupsForSelector() {
+  const select = document.getElementById('groupSelect');
+  if (!select) return;
+  
+  select.innerHTML = '<option value="">-- Cargando grupos --</option>';
+  
+  try {
+    const res = await authFetch('/contacts/groups');
+    if (!res.ok) throw new Error('Error al cargar grupos');
+    
+    const data = await res.json();
+    const groups = data.groups || [];
+    
+    if (groups.length === 0) {
+      select.innerHTML = '<option value="">-- No hay grupos --</option>';
+      return;
+    }
+    
+    select.innerHTML = '<option value="">-- Selecciona un grupo --</option>';
+    groups.forEach(g => {
+      const option = document.createElement('option');
+      option.value = g;
+      option.textContent = g;
+      select.appendChild(option);
+    });
+    
+    // Setup change handler to show count
+    select.addEventListener('change', loadGroupContactsCount);
+    
+  } catch (error) {
+    select.innerHTML = '<option value="">-- Error al cargar --</option>';
+    console.error('Error loading groups:', error);
+  }
+}
+
+// Load group contacts count
+async function loadGroupContactsCount() {
+  const select = document.getElementById('groupSelect');
+  const countEl = document.getElementById('groupContactsCount');
+  const countText = document.getElementById('groupContactsCountText');
+  
+  if (!select || !countEl || !countText) return;
+  
+  const groupName = select.value;
+  
+  if (!groupName) {
+    countEl.classList.add('d-none');
+    return;
+  }
+  
+  try {
+    const res = await authFetch('/contacts');
+    if (!res.ok) throw new Error('Error');
+    
+    const data = await res.json();
+    const contacts = (data.contacts || []).filter(c => c.grupo === groupName);
+    
+    countText.textContent = `${contacts.length} contactos`;
+    countEl.classList.remove('d-none');
+    
+  } catch (error) {
+    countEl.classList.add('d-none');
+  }
+}
+
 // Initialize Messages module
 function initMessages() {
   setupMessageForm();
@@ -431,6 +697,7 @@ function initMessages() {
   setupTemplates();
   setupEmojiPicker();
   setupVariables();
+  setupRecipientSourceTabs();
   
   // Cancel button
   const cancelBtn = document.getElementById('cancelBtn');

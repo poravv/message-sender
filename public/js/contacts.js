@@ -2,8 +2,6 @@
  * Contacts - Contact Management
  */
 
-let selectedCsvFile = null;
-
 // Load contacts
 async function loadContacts() {
   try {
@@ -198,7 +196,6 @@ function setupContacts() {
 function setupCsvImport() {
   const dropZone = document.getElementById('csvDropZone');
   const fileInput = document.getElementById('csvFileInput');
-  const importBtn = document.getElementById('importCsvBtn');
   
   if (!dropZone || !fileInput) return;
   
@@ -217,25 +214,20 @@ function setupCsvImport() {
     dropZone.classList.remove('dragover');
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      handleCsvFile(files[0]);
+      importCsvFile(files[0]);
     }
   });
   
-  // File input change
+  // File input change - auto import
   fileInput.addEventListener('change', (e) => {
     if (e.target.files.length > 0) {
-      handleCsvFile(e.target.files[0]);
+      importCsvFile(e.target.files[0]);
     }
   });
-  
-  // Import button
-  if (importBtn) {
-    importBtn.addEventListener('click', importCsvContacts);
-  }
 }
 
-// Handle CSV file selection
-function handleCsvFile(file) {
+// Import CSV file directly
+async function importCsvFile(file) {
   const validTypes = ['text/csv', 'text/plain', 'application/vnd.ms-excel'];
   const validExt = file.name.endsWith('.csv') || file.name.endsWith('.txt');
   
@@ -244,52 +236,19 @@ function handleCsvFile(file) {
     return;
   }
   
-  selectedCsvFile = file;
-  
-  // Show file info
-  const uploadContent = document.querySelector('#csvDropZone .upload-content');
-  const fileInfo = document.getElementById('csvFileInfo');
-  const fileName = document.getElementById('csvFileName');
-  const importBtn = document.getElementById('importCsvBtn');
-  
-  if (uploadContent) uploadContent.classList.add('d-none');
-  if (fileInfo) fileInfo.classList.remove('d-none');
-  if (fileName) fileName.textContent = file.name;
-  if (importBtn) importBtn.disabled = false;
-}
-
-// Clear selected CSV file
-function clearCsvFile() {
-  selectedCsvFile = null;
-  
-  const uploadContent = document.querySelector('#csvDropZone .upload-content');
-  const fileInfo = document.getElementById('csvFileInfo');
-  const fileInput = document.getElementById('csvFileInput');
-  const importBtn = document.getElementById('importCsvBtn');
-  
-  if (uploadContent) uploadContent.classList.remove('d-none');
-  if (fileInfo) fileInfo.classList.add('d-none');
-  if (fileInput) fileInput.value = '';
-  if (importBtn) importBtn.disabled = true;
-}
-
-// Import CSV contacts
-async function importCsvContacts() {
-  if (!selectedCsvFile) {
-    showAlert('Selecciona un archivo CSV primero', 'warning');
-    return;
-  }
-  
-  const importBtn = document.getElementById('importCsvBtn');
+  const uploadContent = document.getElementById('csvUploadContent');
   const progress = document.getElementById('importProgress');
+  const progressText = document.getElementById('importProgressText');
+  const fileInput = document.getElementById('csvFileInput');
   
   // Show loading
-  if (importBtn) importBtn.classList.add('d-none');
+  if (uploadContent) uploadContent.classList.add('d-none');
   if (progress) progress.classList.remove('d-none');
+  if (progressText) progressText.textContent = `Importando ${file.name}...`;
   
   try {
     const formData = new FormData();
-    formData.append('csvFile', selectedCsvFile);
+    formData.append('csvFile', file);
     
     const res = await authFetch('/contacts/import', {
       method: 'POST',
@@ -303,15 +262,15 @@ async function importCsvContacts() {
     }
     
     showAlert(`Importados: ${data.imported} nuevos, ${data.updated} actualizados (Total: ${data.total})`, 'success');
-    clearCsvFile();
     loadContacts();
     
   } catch (error) {
     showAlert(error.message, 'danger');
   } finally {
-    // Hide loading
-    if (importBtn) importBtn.classList.remove('d-none');
+    // Reset UI
+    if (uploadContent) uploadContent.classList.remove('d-none');
     if (progress) progress.classList.add('d-none');
+    if (fileInput) fileInput.value = '';
   }
 }
 
@@ -325,5 +284,3 @@ window.loadContacts = loadContacts;
 window.initContacts = initContacts;
 window.editContact = editContact;
 window.deleteContact = deleteContact;
-window.clearCsvFile = clearCsvFile;
-window.importCsvContacts = importCsvContacts;
