@@ -693,7 +693,26 @@ function buildRoutes() {
 
       const whatsappManager = await sessionManager.getSessionByToken(req);
 
-      if (!whatsappManager.sock) {
+      if (whatsappManager.isReady) {
+        return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
+      }
+
+      // Baileys no genera QR cuando hay auth state almacenado — intenta reconectar
+      // con credenciales previas. Si el sock está en 'connecting' sin QR, o si el
+      // sock es null pero hubo auth previo (disconnected tras intento fallido),
+      // forzar refreshQR para limpiar auth y obtener un QR fresco.
+      const hasNoQr = !whatsappManager.qrCode;
+      const isStaleConnect = whatsappManager.sock
+        && whatsappManager.connectionState === 'connecting' && hasNoQr;
+      const isStaleDisconnect = !whatsappManager.sock
+        && whatsappManager.connectionState === 'disconnected'
+        && whatsappManager.authState && hasNoQr;
+
+      if (isStaleConnect || isStaleDisconnect) {
+        logger.info({ userId, state: whatsappManager.connectionState, hasSock: !!whatsappManager.sock },
+          'Auth previo sin QR, forzando refreshQR para generar QR limpio');
+        await whatsappManager.refreshQR();
+      } else if (!whatsappManager.sock) {
         const initialized = await sessionManager.initializeSession(userId);
         if (!initialized) {
           return res.status(500).json({
@@ -703,12 +722,9 @@ function buildRoutes() {
         }
       }
 
-      if (whatsappManager.isReady) {
-        return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
-      }
-
-      // Esperar hasta 15 segundos a que el QR esté disponible (Baileys tarda 3-10s)
-      const maxWaitMs = 15000;
+      // Esperar hasta 20 segundos a que el QR esté disponible
+      // (refreshQR tiene un delay interno de 2s + Baileys tarda 3-10s)
+      const maxWaitMs = 20000;
       const pollIntervalMs = 500;
       const deadline = Date.now() + maxWaitMs;
 
