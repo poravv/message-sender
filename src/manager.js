@@ -484,13 +484,16 @@ class WhatsAppManager {
    * fresco sin credenciales. Baileys generará QR obligatoriamente.
    */
   async cleanInitialize() {
-    // 1. Matar socket actual si existe (sin logout, solo cerrar WS)
+    // 1. Matar socket actual: REMOVER listeners ANTES de cerrar.
+    //    Si no, el evento 'close' del socket viejo dispara el handler que
+    //    hace this.sock = null, destruyendo el socket nuevo que creamos después.
     if (this.sock) {
+      const oldSock = this.sock;
+      this.sock = null; // desreferenciar ANTES de cerrar
       try {
-        this.sock.ws?.close();
-        this.sock.end?.();
+        oldSock.ev.removeAllListeners();
+        oldSock.ws?.close();
       } catch { /* noop */ }
-      this.sock = null;
     }
 
     // 2. Reset completo de estado
@@ -507,14 +510,16 @@ class WhatsAppManager {
     if (store === 'redis') {
       await this._clearRedisAuth();
     } else {
-      // File store: borrar archivos
       try { await this._deleteSessionFilesCompletely(); } catch {}
     }
     this.authState = null;
     this.saveCreds = null;
     this._clearAuth = null;
 
-    // 4. Inicializar con auth limpio → Baileys generará QR
+    // 4. Pequeña pausa para que el event loop procese el cierre del socket viejo
+    await this._delay(500);
+
+    // 5. Inicializar con auth limpio → Baileys generará QR
     logger.info({ userId: this._getScopedUserId() }, 'cleanInitialize: creando socket con auth fresco');
     await this.safeInitialize();
   }

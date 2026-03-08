@@ -13,6 +13,8 @@ const sessionManager = require('./sessionManager');
 
 // Map para rastrear operaciones de refresh-qr en progreso por usuario
 const qrRefreshInProgress = new Map();
+// Map separado para cooldown de cleanInitialize en /qr (no bloquea /refresh-qr)
+const qrCleanInitCooldown = new Map();
 
 // Middleware condicional para desarrollo
 const conditionalAuth = (req, res, next) => {
@@ -702,9 +704,9 @@ function buildRoutes() {
       if (quickServe) return;
 
       // 2. No hay QR. Hacer cleanInitialize (limpia auth stale + crea socket fresco).
-      //    Solo si no hay otro refresh en progreso para este usuario.
-      if (!qrRefreshInProgress.has(userId)) {
-        qrRefreshInProgress.set(userId, Date.now());
+      //    Cooldown separado de /refresh-qr para no bloquearlo.
+      if (!qrCleanInitCooldown.has(userId)) {
+        qrCleanInitCooldown.set(userId, Date.now());
         try {
           logger.info({ userId, state: whatsappManager.connectionState },
             '/qr: ejecutando cleanInitialize');
@@ -712,8 +714,8 @@ function buildRoutes() {
         } catch (e) {
           logger.error({ err: e?.message, userId }, 'Error en cleanInitialize');
         }
-        // Mantener flag 30s para evitar que polls del frontend re-disparen
-        setTimeout(() => qrRefreshInProgress.delete(userId), 30000);
+        // Cooldown 60s para evitar que polls del frontend re-disparen
+        setTimeout(() => qrCleanInitCooldown.delete(userId), 60000);
       }
 
       // 3. Esperar hasta 15s a que Baileys genere el QR
