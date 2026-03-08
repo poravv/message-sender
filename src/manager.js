@@ -608,8 +608,15 @@ class WhatsAppManager {
       logger.info('Eliminando estado de sesión...');
       const store = (process.env.SESSION_STORE || 'file').toLowerCase();
 
-      if (store === 'redis' && this._clearAuth) {
-        await this._clearAuth();
+      if (store === 'redis') {
+        if (this._clearAuth) {
+          await this._clearAuth();
+        } else {
+          // _clearAuth no está seteado (sesión nunca inicializada en este pod).
+          // Usar _clearRedisAuth como fallback para limpiar auth stale de Redis.
+          logger.info('_clearAuth no disponible, usando _clearRedisAuth como fallback');
+          await this._clearRedisAuth();
+        }
         this.authState = null;
         this.saveCreds = null;
         logger.info('Estado de sesión en Redis eliminado');
