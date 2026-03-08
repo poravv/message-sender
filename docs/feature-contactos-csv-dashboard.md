@@ -207,6 +207,7 @@ Aceptacion:
 
 1. Crear endpoints CRUD de contactos:
    - `POST /contacts` (alta manual),
+   - `GET /contacts/:contactId` (detalle para edicion),
    - `PUT /contacts/:contactId` (edicion),
    - `GET /contacts?search=&group=&page=&pageSize=` (listado filtrado),
    - `DELETE /contacts/:contactId` (baja logica o fisica, segun decision).
@@ -325,6 +326,7 @@ Respuesta sugerida:
 Agregar API de contactos manuales:
 
 - `POST /contacts`
+- `GET /contacts/:contactId`
 - `PUT /contacts/:contactId`
 - `GET /contacts`
 - `DELETE /contacts/:contactId`

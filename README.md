@@ -160,6 +160,9 @@ open http://localhost:3000
 - ✅ **Real-time Updates**: Polling cada 15 segundos para estado
 - ✅ **Progress Bar**: Visualización del progreso de envío en tiempo real
 - ✅ **Dashboard**: Línea de tiempo, torta por grupos y métricas mensuales
+- ✅ **Contactos escalables**: tabla scrolleable + paginación server-side
+- ✅ **Selector de destinatarios**: búsqueda y paginación por contactos en "Enviar"
+- ✅ **Edición UX**: modal de edición de contacto (sin `prompt()`)
 - ✅ **Error Handling**: Manejo elegante de errores con alertas
 - ✅ **Keycloak Integration**: Autenticación empresarial opcional
 
@@ -219,6 +222,31 @@ sequenceDiagram
   BE->>FE: Timeline, torta por grupo, mensual
 ```
 
+### Flujo de contactos (paginación + edición modal)
+```mermaid
+sequenceDiagram
+  participant U as Usuario
+  participant FE as Frontend
+  participant BE as API
+  participant DB as PostgreSQL
+
+  U->>FE: Abrir pestaña Contactos
+  FE->>BE: GET /contacts?search=&group=&page=&pageSize=
+  BE->>DB: SELECT contactos paginados
+  DB-->>BE: items + total
+  BE-->>FE: Lista paginada
+
+  U->>FE: Click en editar (lapiz)
+  FE->>BE: GET /contacts/:contactId
+  BE->>DB: SELECT contacto por id
+  BE-->>FE: Contacto
+  FE->>U: Mostrar modal de edición
+  U->>FE: Guardar cambios
+  FE->>BE: PUT /contacts/:contactId
+  BE->>DB: UPDATE contacto
+  BE-->>FE: Contacto actualizado
+```
+
 ### Ejemplo de distribución por grupo
 ```mermaid
 pie title Mensajes por grupo (ejemplo)
@@ -234,6 +262,7 @@ pie title Mensajes por grupo (ejemplo)
 
 ### Contactos
 - `POST /contacts` crear contacto manual
+- `GET /contacts/:contactId` obtener detalle de contacto
 - `PUT /contacts/:contactId` editar contacto
 - `GET /contacts` listar contactos con filtros
 - `DELETE /contacts/:contactId` eliminar contacto

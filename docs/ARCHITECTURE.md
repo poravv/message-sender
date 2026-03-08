@@ -62,8 +62,13 @@ flowchart TB
 flowchart LR
     subgraph Frontend["public/"]
         HTML[index.html]
-        CSS[styles.css]
-        JS[app.js]
+        CSS[css/app.css]
+        JS1[js/core.js]
+        JS2[js/messages.js]
+        JS3[js/contacts.js]
+        JS4[js/dashboard.js]
+        JS5[js/whatsapp.js]
+        JS6[js/main.js]
     end
     
     subgraph Features
@@ -75,7 +80,12 @@ flowchart LR
     
     HTML --> Features
     CSS --> Features
-    JS --> Features
+    JS1 --> Features
+    JS2 --> Features
+    JS3 --> Features
+    JS4 --> Features
+    JS5 --> Features
+    JS6 --> Features
 ```
 
 ### Backend (Node.js/Express)
@@ -176,6 +186,37 @@ sequenceDiagram
     FE->>API: GET /dashboard/*
     API->>DB: SELECT métricas
     API-->>FE: { timeline, groups, stats }
+```
+
+### Gestión de Contactos (Paginado + Modal)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant U as 👤 Usuario
+    participant FE as 🖥️ Frontend
+    participant API as ⚙️ Express
+    participant DB as 🐘 PostgreSQL
+
+    U->>FE: Abrir sección Contactos
+    FE->>API: GET /contacts?search=&group=&page=&pageSize=
+    API->>DB: SELECT paginado + COUNT(*)
+    DB-->>API: items + total
+    API-->>FE: { items, total, page, pageSize }
+
+    U->>FE: Click en editar (lápiz)
+    FE->>API: GET /contacts/:contactId
+    API->>DB: SELECT contacto por ID
+    DB-->>API: contacto
+    API-->>FE: contacto
+    FE->>U: Modal de edición
+
+    U->>FE: Guardar cambios
+    FE->>API: PUT /contacts/:contactId
+    API->>DB: UPDATE contacts
+    API-->>FE: { success, contact }
+
+    Note over FE,API: En "Enviar > Por contacto" se reutiliza GET /contacts con paginación server-side
 ```
 
 ### Conexión WhatsApp
