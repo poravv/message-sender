@@ -477,6 +477,48 @@ class WhatsAppManager {
     }
   }
 
+  // ========= Inicialización limpia (para /qr) =========
+
+  /**
+   * Mata cualquier socket existente, limpia auth de Redis, y crea un socket
+   * fresco sin credenciales. Baileys generará QR obligatoriamente.
+   */
+  async cleanInitialize() {
+    // 1. Matar socket actual si existe (sin logout, solo cerrar WS)
+    if (this.sock) {
+      try {
+        this.sock.ws?.close();
+        this.sock.end?.();
+      } catch { /* noop */ }
+      this.sock = null;
+    }
+
+    // 2. Reset completo de estado
+    this.isConnecting = false;
+    this.connectionPromise = null;
+    this.isReady = false;
+    this.qrCode = null;
+    this.connectionState = 'disconnected';
+    this.userInfo = null;
+    this.isInCooldown = false;
+
+    // 3. Limpiar auth de Redis directamente (no depende de _clearAuth)
+    const store = (process.env.SESSION_STORE || 'file').toLowerCase();
+    if (store === 'redis') {
+      await this._clearRedisAuth();
+    } else {
+      // File store: borrar archivos
+      try { await this._deleteSessionFilesCompletely(); } catch {}
+    }
+    this.authState = null;
+    this.saveCreds = null;
+    this._clearAuth = null;
+
+    // 4. Inicializar con auth limpio → Baileys generará QR
+    logger.info({ userId: this._getScopedUserId() }, 'cleanInitialize: creando socket con auth fresco');
+    await this.safeInitialize();
+  }
+
   // ========= QR manual =========
 
   async refreshQR() {

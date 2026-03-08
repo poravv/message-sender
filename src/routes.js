@@ -701,35 +701,37 @@ function buildRoutes() {
       const quickServe = await serveQrForUser(userId, res, whatsappManager);
       if (quickServe) return;
 
-      // 2. Si no hay socket, inicializar
-      if (!whatsappManager.sock) {
-        await sessionManager.initializeSession(userId);
+      // 2. No hay QR. Hacer cleanInitialize (limpia auth stale + crea socket fresco).
+      //    Solo si no hay otro refresh en progreso para este usuario.
+      if (!qrRefreshInProgress.has(userId)) {
+        qrRefreshInProgress.set(userId, Date.now());
+        try {
+          logger.info({ userId, state: whatsappManager.connectionState },
+            '/qr: ejecutando cleanInitialize');
+          await whatsappManager.cleanInitialize();
+        } catch (e) {
+          logger.error({ err: e?.message, userId }, 'Error en cleanInitialize');
+        }
+        // Mantener flag 30s para evitar que polls del frontend re-disparen
+        setTimeout(() => qrRefreshInProgress.delete(userId), 30000);
       }
 
-      // 3. Esperar hasta 8s para que Baileys genere QR (sesiones frescas tardan 3-5s)
-      for (let i = 0; i < 16; i++) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+      // 3. Esperar hasta 15s a que Baileys genere el QR
+      const maxWaitMs = 15000;
+      const pollIntervalMs = 500;
+      const deadline = Date.now() + maxWaitMs;
+
+      while (Date.now() < deadline) {
         if (whatsappManager.isReady) {
           return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
         }
         const served = await serveQrForUser(userId, res, whatsappManager);
         if (served) return;
-      }
-
-      // 4. Sin QR tras 8s → auth stale en Redis. Baileys intenta reconectar con
-      //    credenciales viejas en vez de generar QR. Lanzar refreshQR en background
-      //    para limpiar auth y regenerar. El frontend reintenta en 5s y lo encontrará.
-      if (!qrRefreshInProgress.has(userId)) {
-        qrRefreshInProgress.set(userId, Date.now());
-        logger.info({ userId, state: whatsappManager.connectionState, hasSock: !!whatsappManager.sock },
-          'QR no disponible tras 8s, lanzando refreshQR en background');
-        whatsappManager.refreshQR()
-          .catch(e => logger.error({ err: e?.message, userId }, 'Error en auto-refreshQR'))
-          .finally(() => qrRefreshInProgress.delete(userId));
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
       }
 
       return res.status(404).json({
-        error: 'QR no disponible. Generando nuevo QR, reintente en unos segundos.',
+        error: 'QR no disponible para este usuario. Solicita un nuevo QR.',
         userId: userId
       });
     } catch (error) {
