@@ -85,15 +85,6 @@ async function closePool() {
   }
 }
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-  await closePool();
-});
-
-process.on('SIGINT', async () => {
-  await closePool();
-});
-
 module.exports = {
   getPool,
   query,

@@ -28,32 +28,22 @@ async function getContactById(userId, contactId) {
 }
 
 async function upsertContact(userId, data, source = 'manual') {
-  const phone = String(data.phone || '').trim();
+  const phone = String(data.phone || data.numero || '').trim();
   if (!phone) throw new Error('El teléfono es obligatorio');
-
-  const existing = await getContactByPhone(userId, phone);
-
-  if (existing) {
-    const result = await pg.query(
-      `UPDATE contacts SET 
-        nombre = COALESCE($3, nombre),
-        sustantivo = COALESCE($4, sustantivo),
-        grupo = COALESCE($5, grupo),
-        last_seen_at = NOW()
-       WHERE user_id = $1 AND phone = $2
-       RETURNING *`,
-      [userId, phone, data.nombre, data.sustantivo, data.grupo]
-    );
-    return { contact: mapContact(result.rows[0]), created: false, updated: true };
-  }
 
   const result = await pg.query(
     `INSERT INTO contacts (user_id, phone, nombre, sustantivo, grupo, source)
      VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (user_id, phone) DO UPDATE SET
+       nombre = COALESCE(NULLIF(EXCLUDED.nombre, ''), contacts.nombre),
+       sustantivo = COALESCE(NULLIF(EXCLUDED.sustantivo, ''), contacts.sustantivo),
+       grupo = COALESCE(NULLIF(EXCLUDED.grupo, ''), contacts.grupo),
+       updated_at = NOW()
      RETURNING *`,
     [userId, phone, data.nombre || null, data.sustantivo || null, data.grupo || null, source]
   );
-  return { contact: mapContact(result.rows[0]), created: true, updated: false };
+
+  return { contact: mapContact(result.rows[0]), created: true };
 }
 
 async function updateContact(userId, contactId, patch) {
@@ -294,27 +284,40 @@ async function setCampaignStatus(userId, campaignId, status, extra = {}) {
 }
 
 async function initCampaignRecipients(userId, campaignId, entries = []) {
+  const validEntries = entries.filter(e => String(e?.number || '').trim());
+  if (!validEntries.length) return;
+
   const client = await pg.getClient();
   try {
     await client.query('BEGIN');
 
-    for (const entry of entries) {
-      const phone = String(entry?.number || '').trim();
-      if (!phone) continue;
+    // Batch insert in chunks of 100 to avoid PostgreSQL parameter limits
+    const chunkSize = 100;
+    for (let i = 0; i < validEntries.length; i += chunkSize) {
+      const chunk = validEntries.slice(i, i + chunkSize);
+      const values = [];
+      const params = [];
+      let paramIdx = 1;
 
-      await client.query(
-        `INSERT INTO campaign_recipients 
-         (campaign_id, contact_id, phone, nombre, sustantivo, grupo, template_index)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [
+      for (const entry of chunk) {
+        const phone = String(entry.number).trim();
+        values.push(`($${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, $${paramIdx+6})`);
+        params.push(
           campaignId,
           entry.contactId || null,
           phone,
-          entry?.variables?.nombre || entry.nombre || null,
-          entry?.variables?.sustantivo || entry.sustantivo || null,
-          entry?.variables?.grupo || entry.group || null,
-          entry.templateIndex || null
-        ]
+          entry?.variables?.nombre || null,
+          entry?.variables?.sustantivo || null,
+          entry?.variables?.grupo || null,
+          entry.templateIndex != null ? entry.templateIndex : null
+        );
+        paramIdx += 7;
+      }
+
+      await client.query(
+        `INSERT INTO campaign_recipients (campaign_id, contact_id, phone, nombre, sustantivo, grupo, template_index)
+         VALUES ${values.join(',')}`,
+        params
       );
     }
 
@@ -323,7 +326,7 @@ async function initCampaignRecipients(userId, campaignId, entries = []) {
     await addMetricEvent(userId, {
       type: 'campaign_enqueue',
       campaignId,
-      metadata: { total: entries.length }
+      metadata: { total: validEntries.length }
     });
 
   } catch (err) {
@@ -372,36 +375,40 @@ async function recordRecipientStatus(userId, campaignId, entry, status, meta = {
   const recipient = result.rows[0];
   if (!recipient) return null;
 
-  // Update campaign counters
+  // Run all independent follow-up queries in parallel
   if (status === 'sent') {
-    await pg.query(
-      'UPDATE campaigns SET sent_count = sent_count + 1 WHERE id = $1',
-      [campaignId]
-    );
-    await incrementMonthlyCounters(userId, 'sent');
-    await updateContactStats(userId, recipient, 'sent');
-    await addMetricEvent(userId, {
-      type: 'message_sent',
-      campaignId,
-      phone,
-      contactId: recipient.contact_id,
-      grupo: recipient.grupo || 'Sin grupo',
-    });
+    await Promise.all([
+      pg.query(
+        'UPDATE campaigns SET sent_count = sent_count + 1 WHERE id = $1',
+        [campaignId]
+      ),
+      incrementMonthlyCounters(userId, 'sent'),
+      updateContactStats(userId, recipient, 'sent'),
+      addMetricEvent(userId, {
+        type: 'message_sent',
+        campaignId,
+        phone,
+        contactId: recipient.contact_id,
+        grupo: recipient.grupo || 'Sin grupo',
+      }),
+    ]);
   } else if (status === 'error') {
-    await pg.query(
-      'UPDATE campaigns SET error_count = error_count + 1 WHERE id = $1',
-      [campaignId]
-    );
-    await incrementMonthlyCounters(userId, 'error');
-    await updateContactStats(userId, recipient, 'error');
-    await addMetricEvent(userId, {
-      type: 'message_error',
-      campaignId,
-      phone,
-      contactId: recipient.contact_id,
-      grupo: recipient.grupo || 'Sin grupo',
-      errorMessage: meta.errorMessage,
-    });
+    await Promise.all([
+      pg.query(
+        'UPDATE campaigns SET error_count = error_count + 1 WHERE id = $1',
+        [campaignId]
+      ),
+      incrementMonthlyCounters(userId, 'error'),
+      updateContactStats(userId, recipient, 'error'),
+      addMetricEvent(userId, {
+        type: 'message_error',
+        campaignId,
+        phone,
+        contactId: recipient.contact_id,
+        grupo: recipient.grupo || 'Sin grupo',
+        errorMessage: meta.errorMessage,
+      }),
+    ]);
   } else if (status === 'sending') {
     await addMetricEvent(userId, {
       type: 'message_sending',
@@ -607,41 +614,33 @@ async function dashboardByContact(userId, from, to, limit = 20) {
   if (!range) throw new Error('Rango de fechas inválido');
 
   const result = await pg.query(
-    `SELECT 
-       phone,
-       COUNT(*) FILTER (WHERE event_type = 'message_sent') as sent,
-       COUNT(*) FILTER (WHERE event_type = 'message_error') as errors,
-       COUNT(*) as total
-     FROM metric_events 
-     WHERE user_id = $1 
-       AND created_at BETWEEN $2 AND $3
-       AND event_type IN ('message_sent', 'message_error')
-       AND phone IS NOT NULL
-     GROUP BY phone
-     ORDER BY total DESC
-     LIMIT $4`,
+    `SELECT
+      me.phone,
+      COUNT(*) FILTER (WHERE me.event_type = 'message_sent') AS sent,
+      COUNT(*) FILTER (WHERE me.event_type = 'message_error') AS errors,
+      COUNT(*) AS total,
+      c.nombre,
+      c.grupo
+    FROM metric_events me
+    LEFT JOIN contacts c ON c.user_id = me.user_id AND c.phone = me.phone
+    WHERE me.user_id = $1
+      AND me.created_at BETWEEN $2 AND $3
+      AND me.event_type IN ('message_sent', 'message_error')
+      AND me.phone IS NOT NULL
+    GROUP BY me.phone, c.nombre, c.grupo
+    ORDER BY total DESC
+    LIMIT $4`,
     [userId, new Date(range.start), new Date(range.end), limit]
   );
 
-  const rows = result.rows.map(r => ({
-    phone: r.phone,
-    sent: parseInt(r.sent, 10),
-    errors: parseInt(r.errors, 10),
-    total: parseInt(r.total, 10),
-    nombre: null,
-    group: null
+  return result.rows.map(row => ({
+    phone: row.phone,
+    nombre: row.nombre || null,
+    grupo: row.grupo || null,
+    sent: parseInt(row.sent) || 0,
+    errors: parseInt(row.errors) || 0,
+    total: parseInt(row.total) || 0
   }));
-
-  // Enrich with contact info
-  for (const row of rows) {
-    const contact = await getContactByPhone(userId, row.phone);
-    if (contact) {
-      row.nombre = contact.nombre;
-      row.group = contact.grupo;
-    }
-  }
-
-  return rows;
 }
 
 async function dashboardCurrentMonth(userId) {
@@ -705,6 +704,20 @@ async function dashboardMonthly(userId, months = 12) {
 // REDIS CACHE MANAGEMENT
 // ========================================
 
+async function scanAndDelete(redis, pattern) {
+  let cursor = '0';
+  let deleted = 0;
+  do {
+    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+    cursor = nextCursor;
+    if (keys.length > 0) {
+      await redis.del(...keys);
+      deleted += keys.length;
+    }
+  } while (cursor !== '0');
+  return deleted;
+}
+
 async function clearUserCache(userId) {
   const redis = getRedis();
   const patterns = [
@@ -718,11 +731,7 @@ async function clearUserCache(userId) {
 
   let deleted = 0;
   for (const pattern of patterns) {
-    const keys = await redis.keys(pattern);
-    if (keys.length > 0) {
-      await redis.del(...keys);
-      deleted += keys.length;
-    }
+    deleted += await scanAndDelete(redis, pattern);
   }
 
   logger.info({ userId, deleted }, 'User Redis cache cleared');

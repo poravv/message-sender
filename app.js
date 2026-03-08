@@ -7,6 +7,12 @@ if (!process.env.NODE_ENV) {
   logger.info('NODE_ENV configurado como development');
 }
 
+const VALID_ENVS = ['development', 'production'];
+if (!VALID_ENVS.includes(process.env.NODE_ENV)) {
+  logger.error({ NODE_ENV: process.env.NODE_ENV }, 'NODE_ENV inválido. Debe ser "development" o "production"');
+  process.exit(1);
+}
+
 const express = require('express');
 const path = require('path');
 
@@ -70,7 +76,7 @@ app.get('/ready', async (_req, res) => {
 app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
 
 // Start
-app.listen(port, host, async () => {
+const server = app.listen(port, host, async () => {
   logger.info({ url: `http://${host}:${port}` }, 'Servidor multi-sesión escuchando');
   logger.info({ retentionHours }, 'Configuración de retención');
 
@@ -108,13 +114,51 @@ process.on('uncaughtException', (err) => {
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-  logger.info('Recibido SIGTERM, cerrando servidor...');
-  setTimeout(() => process.exit(0), 500);
-});
-process.on('SIGINT', () => {
-  logger.info('Recibido SIGINT, cerrando servidor...');
-  setTimeout(() => process.exit(0), 500);
-});
+let isShuttingDown = false;
+
+async function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  logger.info({ signal }, 'Iniciando graceful shutdown...');
+
+  // 1. Stop accepting new HTTP requests
+  if (server) {
+    server.close(() => logger.info('Servidor HTTP cerrado'));
+  }
+
+  // 2. Close BullMQ worker (waits for active job to finish)
+  try {
+    const { closeWorker } = require('./src/queueRedis');
+    if (closeWorker) await closeWorker();
+    logger.info('Worker BullMQ cerrado');
+  } catch (e) {
+    logger.error({ err: e?.message }, 'Error cerrando worker BullMQ');
+  }
+
+  // 3. Close PostgreSQL pool
+  try {
+    const { closePool } = require('./src/postgresClient');
+    if (closePool) await closePool();
+    logger.info('Pool PostgreSQL cerrado');
+  } catch (e) {
+    logger.error({ err: e?.message }, 'Error cerrando pool PostgreSQL');
+  }
+
+  // 4. Close Redis
+  try {
+    const { getRedis } = require('./src/redisClient');
+    const redis = getRedis();
+    if (redis && redis.status !== 'end') await redis.quit();
+    logger.info('Redis cerrado');
+  } catch (e) {
+    logger.error({ err: e?.message }, 'Error cerrando Redis');
+  }
+
+  logger.info('Shutdown completo');
+  process.exit(0);
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 

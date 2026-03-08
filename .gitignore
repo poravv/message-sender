@@ -60,9 +60,20 @@ build/
 tmp/
 temp/
 
+# Claude Code
+.claude/
+
+# QR images (generated at runtime, contain sensitive auth data)
+public/qr-*.png
+
+# Uploads and temp files (runtime)
+uploads/
+temp/
+
 # Other
 *.swp
 *.bak
 *.tmp
 *.old
 *.orig
+*.backup

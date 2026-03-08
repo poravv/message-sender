@@ -12,7 +12,7 @@ spec:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
-      maxUnavailable: 1
+      maxUnavailable: 0
   selector:
     matchLabels:
       app: sender-backend
@@ -64,7 +64,7 @@ spec:
           failureThreshold: 3
         readinessProbe:
           httpGet:
-            path: /health
+            path: /ready
             port: 3010
           initialDelaySeconds: 15       # Reducido para startup más rápido
           periodSeconds: 10

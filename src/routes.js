@@ -16,10 +16,7 @@ const qrRefreshInProgress = new Map();
 
 // Middleware condicional para desarrollo
 const conditionalAuth = (req, res, next) => {
-  const isDevelopment = process.env.NODE_ENV !== 'production';
-
-  if (isDevelopment) {
-    // En desarrollo, simular usuario autenticado
+  if (process.env.NODE_ENV === 'development') {
     req.auth = {
       sub: 'dev-user-001',
       name: 'Usuario Desarrollo',
@@ -30,15 +27,12 @@ const conditionalAuth = (req, res, next) => {
     return next();
   }
 
-  // En producción, usar autenticación real
   return checkJwt(req, res, next);
 };
 
 const conditionalRole = (role) => (req, res, next) => {
-  const isDevelopment = process.env.NODE_ENV !== 'production';
-
-  if (isDevelopment) {
-    return next(); // En desarrollo, omitir verificación de roles
+  if (process.env.NODE_ENV === 'development') {
+    return next();
   }
 
   // En producción, verificar múltiples roles posibles
@@ -707,16 +701,27 @@ function buildRoutes() {
             userId: userId
           });
         }
-        await new Promise(resolve => setTimeout(resolve, 2000));
       }
 
       if (whatsappManager.isReady) {
         return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
       }
 
-      const served = await serveQrForUser(userId, res, whatsappManager);
-      if (served) {
-        return;
+      // Esperar hasta 15 segundos a que el QR esté disponible (Baileys tarda 3-10s)
+      const maxWaitMs = 15000;
+      const pollIntervalMs = 500;
+      const deadline = Date.now() + maxWaitMs;
+
+      while (Date.now() < deadline) {
+        const served = await serveQrForUser(userId, res, whatsappManager);
+        if (served) {
+          return;
+        }
+        // Si el usuario se conectó mientras esperábamos
+        if (whatsappManager.isReady) {
+          return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
+        }
+        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
       }
 
       return res.status(404).json({

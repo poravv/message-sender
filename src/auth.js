@@ -103,7 +103,7 @@ async function checkJwt(req, res, next) {
       return res.status(401).json({ error: 'Missing Bearer token' });
     }
 
-    logger.info('Verificando JWT token', {
+    logger.debug('Verificando JWT token', {
       url: req.url,
       tokenLength: token.length,
       issuer: ISSUER,
@@ -120,7 +120,7 @@ async function checkJwt(req, res, next) {
       clockTolerance: 10, // segundos de tolerancia de reloj
     });
 
-    logger.info('JWT verification successful', {
+    logger.debug('JWT verification successful', {
       userId: payload.sub,
       userName: payload.name || payload.preferred_username,
       email: payload.email,
@@ -159,7 +159,7 @@ function requireRole(role, opts = {}) {
         (where === 'either' && all.includes(role));
 
       if (!has) {
-        logger.info({ sub: req.auth?.sub, role, where, realmRoles, clientRoles }, 'Forbidden: missing role');
+        logger.warn({ sub: req.auth?.sub, role, where, realmRoles, clientRoles }, 'Forbidden: missing role');
         return res.status(403).json({ error: 'Forbidden: missing role' });
       }
       return next();

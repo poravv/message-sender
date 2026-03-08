@@ -106,7 +106,6 @@ jobs:
     - name: Create/Update application secrets from GitHub Secrets
       run: |
         echo "🔐 Creating application secrets from GitHub Secrets..."
-        kubectl delete secret backend-env-secrets -n ${{ env.NAMESPACE }} --ignore-not-found=true
         kubectl create secret generic backend-env-secrets \
           --namespace=${{ env.NAMESPACE }} \
           --from-literal=PORT="3010" \
@@ -140,17 +139,18 @@ jobs:
           --from-literal=MINIO_SECURE="${{ secrets.MINIO_SECURE }}" \
           --from-literal=MINIO_BUCKET="${{ secrets.MINIO_BUCKET }}" \
           --from-literal=MINIO_FORCE_PATH_STYLE="${{ secrets.MINIO_FORCE_PATH_STYLE }}" \
-          --from-literal=MINIO_DELETE_AFTER_SEND="${{ secrets.MINIO_DELETE_AFTER_SEND }}"
+          --from-literal=MINIO_DELETE_AFTER_SEND="${{ secrets.MINIO_DELETE_AFTER_SEND }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
 
     - name: Create PostgreSQL secrets
       run: |
         echo "🔐 Creating PostgreSQL secrets from GitHub Secrets..."
-        kubectl delete secret postgres-secrets -n ${{ env.NAMESPACE }} --ignore-not-found=true
         kubectl create secret generic postgres-secrets \
           --namespace=${{ env.NAMESPACE }} \
           --from-literal=POSTGRES_USER="${{ secrets.POSTGRES_USER }}" \
           --from-literal=POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
-          --from-literal=POSTGRES_DB="${{ secrets.POSTGRES_DB }}"
+          --from-literal=POSTGRES_DB="${{ secrets.POSTGRES_DB }}" \
+          --dry-run=client -o yaml | kubectl apply -f -
 
     - name: Deploy PostgreSQL
       run: |

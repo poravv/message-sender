@@ -44,10 +44,15 @@ async function resetStatus(userId, total) {
   });
 }
 
-async function incField(userId, field, by = 1) {
+async function incField(userId, field, amount = 1) {
   const r = getRedis();
-  await r.hincrby(statusKey(userId), field, by);
-  await r.hset(statusKey(userId), 'updatedAt', String(Date.now()));
+  if (!r || r.status === 'end') return;
+  try {
+    await r.pipeline()
+      .hincrby(statusKey(userId), field, amount)
+      .hset(statusKey(userId), 'updatedAt', String(Date.now()))
+      .exec();
+  } catch { }
 }
 
 async function markCompleted(userId) {
@@ -112,14 +117,20 @@ function validateNumbersArray(numbers) {
 // Eventos (lista circular por usuario) para poblar el frontend
 async function addEvent(userId, type, data = {}) {
   const r = getRedis();
+  if (!r || r.status === 'end') return;
   try {
     const max = Math.max(10, Number(process.env.EVENTS_MAX || 200));
-    const ttl = Math.max(600, Number(process.env.EVENTS_TTL_SECONDS || 3600)); // 1 hora por defecto
-    const ev = { type, ...data, timestamp: Date.now() };
-    await r.lpush(eventsKey(userId), JSON.stringify(ev));
-    await r.ltrim(eventsKey(userId), 0, max - 1);
-    await r.expire(eventsKey(userId), ttl); // Establecer TTL cada vez que se agrega un evento
-    await r.hset(statusKey(userId), { updatedAt: String(Date.now()) });
+    const ttl = Math.max(600, Number(process.env.EVENTS_TTL_SECONDS || 3600));
+    const ev = JSON.stringify({ type, ...data, timestamp: Date.now() });
+    const key = eventsKey(userId);
+    const statusK = statusKey(userId);
+
+    await r.pipeline()
+      .lpush(key, ev)
+      .ltrim(key, 0, max - 1)
+      .expire(key, ttl)
+      .hset(statusK, 'updatedAt', String(Date.now()))
+      .exec();
   } catch { }
 }
 
@@ -855,6 +866,10 @@ worker.on('failed', async (job, err) => {
   }
 });
 
+async function closeWorker() {
+  await worker.close();
+}
+
 module.exports = {
   enqueueCampaign,
   getStatus,
@@ -865,6 +880,7 @@ module.exports = {
   cleanupUserData,
   removeUserJobs,
   touchHeartbeat,
+  closeWorker,
   // Admin helpers (expuestos por rutas si se requiere)
   async cleanQueue(type = 'completed', graceSec = 3600, limit = 1000) {
     try {
