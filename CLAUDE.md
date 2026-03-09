@@ -68,6 +68,14 @@ PostgreSQL tables: `contacts` (unique per user+phone), `campaigns`, `campaign_re
 - **WhatsApp**: Handle `DisconnectReason` properly. Respect 15 msgs/min rate limit. Auth state persists in Redis.
 - **File handling**: User-scoped file names (include userId). Auto-cleanup based on retention hours.
 
+## Baileys Known Issues & Workarounds
+
+- **Version**: `@whiskeysockets/baileys@7.0.0-rc.9`. Uses CommonJS require (not ESM).
+- **405 Connection Failure (active ~Feb 2026)**: WhatsApp rejects `Platform.WEB`. Workaround: pass `version: [2, 3000, 1033893291]` in `makeWASocket()` config. Pending fix: Baileys PR #2365 (use `Platform.MACOS`).
+- **QR not generated with stale auth**: Baileys never generates QR when stored credentials exist — it tries to reconnect. Method `cleanInitialize()` in `WhatsAppManager` clears Redis auth via `_clearRedisAuth()` and creates a fresh socket. Used by `/qr` endpoint when no socket exists.
+- **Socket close event race condition**: When destroying old socket, MUST call `ev.removeAllListeners()` BEFORE closing, otherwise the close handler destroys the new socket.
+- **`_deleteSessionFilesCompletely` fallback**: Uses `_clearRedisAuth()` when `_clearAuth` is null (session never initialized on current pod).
+
 ## Key Environment Variables
 
 Core: `PORT`, `NODE_ENV`. Auth: `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_AUDIENCE`. Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (or `REDIS_URL`). PostgreSQL: `POSTGRES_HOST/PORT/USER/PASSWORD/DB`. S3/MinIO: `MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY/BUCKET`. See `.env.example` for full list.

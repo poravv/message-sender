@@ -699,26 +699,23 @@ function buildRoutes() {
         return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
       }
 
-      // 1. Si ya hay QR disponible, servirlo inmediatamente
-      const quickServe = await serveQrForUser(userId, res, whatsappManager);
-      if (quickServe) return;
-
-      // 2. No hay QR. Hacer cleanInitialize (limpia auth stale + crea socket fresco).
-      //    Cooldown separado de /refresh-qr para no bloquearlo.
-      if (!qrCleanInitCooldown.has(userId)) {
-        qrCleanInitCooldown.set(userId, Date.now());
-        try {
-          logger.info({ userId, state: whatsappManager.connectionState },
-            '/qr: ejecutando cleanInitialize');
-          await whatsappManager.cleanInitialize();
-        } catch (e) {
-          logger.error({ err: e?.message, userId }, 'Error en cleanInitialize');
+      // Si no hay socket, inicializar con cleanInitialize (limpia auth stale)
+      if (!whatsappManager.sock) {
+        if (!qrCleanInitCooldown.has(userId)) {
+          qrCleanInitCooldown.set(userId, Date.now());
+          try {
+            await whatsappManager.cleanInitialize();
+          } catch (e) {
+            logger.error({ err: e?.message, userId }, 'Error en cleanInitialize');
+          }
+          setTimeout(() => qrCleanInitCooldown.delete(userId), 60000);
+        } else {
+          // Cooldown activo, intentar init normal
+          await sessionManager.initializeSession(userId);
         }
-        // Cooldown 60s para evitar que polls del frontend re-disparen
-        setTimeout(() => qrCleanInitCooldown.delete(userId), 60000);
       }
 
-      // 3. Esperar hasta 15s a que Baileys genere el QR
+      // Esperar hasta 15s a que Baileys genere el QR
       const maxWaitMs = 15000;
       const pollIntervalMs = 500;
       const deadline = Date.now() + maxWaitMs;

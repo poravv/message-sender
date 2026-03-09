@@ -234,7 +234,10 @@ class WhatsAppManager {
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: ['Chrome (Linux)', 'Chrome', '120.0.0'],
+        browser: ['Chrome (Linux)', 'Chrome', '145.0.0'],
+        // Workaround: WhatsApp rechaza Platform.WEB (405) desde ~Feb 2026.
+        // Este version bypass fuerza compatibilidad hasta que Baileys mergee PR #2365.
+        version: [2, 3000, 1033893291],
         syncFullHistory: false,
         connectTimeoutMs: Math.max(20000, Number(process.env.WA_CONNECT_TIMEOUT_MS || 30000)),
         defaultQueryTimeoutMs: Math.max(30000, Number(process.env.WA_QUERY_TIMEOUT_MS || 60000)),
