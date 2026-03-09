@@ -699,7 +699,11 @@ function buildRoutes() {
         return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
       }
 
-      // Si no hay socket, inicializar con cleanInitialize (limpia auth stale)
+      // 1. Si ya hay QR disponible, servirlo inmediatamente (respuesta rápida)
+      const quickServe = await serveQrForUser(userId, res, whatsappManager);
+      if (quickServe) return;
+
+      // 2. Si no hay socket, inicializar UNA vez (con cooldown de 60s)
       if (!whatsappManager.sock) {
         if (!qrCleanInitCooldown.has(userId)) {
           qrCleanInitCooldown.set(userId, Date.now());
@@ -710,23 +714,19 @@ function buildRoutes() {
           }
           setTimeout(() => qrCleanInitCooldown.delete(userId), 60000);
         } else {
-          // Cooldown activo, intentar init normal
           await sessionManager.initializeSession(userId);
         }
       }
 
-      // Esperar hasta 15s a que Baileys genere el QR
-      const maxWaitMs = 15000;
-      const pollIntervalMs = 500;
-      const deadline = Date.now() + maxWaitMs;
-
-      while (Date.now() < deadline) {
+      // 3. Esperar máximo 10s a que Baileys genere el primer QR
+      //    (solo se espera en la primera llamada; las siguientes sirven rápido)
+      for (let i = 0; i < 20; i++) {
+        await new Promise(resolve => setTimeout(resolve, 500));
         if (whatsappManager.isReady) {
           return res.status(400).json({ error: 'Ya estás conectado a WhatsApp' });
         }
         const served = await serveQrForUser(userId, res, whatsappManager);
         if (served) return;
-        await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
       }
 
       return res.status(404).json({

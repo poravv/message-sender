@@ -4,6 +4,7 @@
 
 let statusPollingInterval = null;
 let isConnected = false;
+let hasQRDisplayed = false; // Evita refrescar QR mientras el usuario lo escanea
 
 // Check WhatsApp status
 async function checkWhatsAppStatus() {
@@ -32,7 +33,17 @@ function updateConnectionStatus(data) {
   const sendTab = document.querySelector('[data-tab="send"]');
   
   const status = data?.status || 'disconnected';
+  const wasConnected = isConnected;
   isConnected = status === 'connected' || status === 'authenticated';
+
+  // Si pasó de conectado a desconectado, resetear QR para cargar uno nuevo
+  if (wasConnected && !isConnected) {
+    hasQRDisplayed = false;
+  }
+  // Si se conectó, ya no necesitamos el QR
+  if (isConnected) {
+    hasQRDisplayed = false;
+  }
   
   // Update status badge
   if (statusEl) {
@@ -91,37 +102,44 @@ function updateConnectionStatus(data) {
 async function loadQR() {
   const qrImage = document.getElementById('qrImage');
   if (!qrImage) return;
-  
+
+  // Si ya hay un QR visible, no refrescar — el usuario podría estar escaneándolo.
+  // Solo se refresca manualmente con el botón "Refrescar código".
+  if (hasQRDisplayed) return;
+
   try {
     const res = await authFetch('/qr');
     if (!res.ok) {
       if (res.status === 204 || res.status === 400) {
         // Already authenticated
+        hasQRDisplayed = false;
         checkWhatsAppStatus();
         return;
       }
       throw new Error('QR fetch failed');
     }
-    
+
     // Backend returns image/png directly
     const contentType = res.headers.get('content-type');
     if (contentType && contentType.includes('image/')) {
       const blob = await res.blob();
       const imageUrl = URL.createObjectURL(blob);
-      
+
       // Cleanup old blob URL
       if (qrImage.src && qrImage.src.startsWith('blob:')) {
         URL.revokeObjectURL(qrImage.src);
       }
-      
+
       qrImage.src = imageUrl;
       qrImage.style.display = 'block';
+      hasQRDisplayed = true;
     } else {
       // Fallback for JSON response
       const data = await res.json();
       if (data.qr) {
         qrImage.src = data.qr;
         qrImage.style.display = 'block';
+        hasQRDisplayed = true;
       }
     }
   } catch (error) {
@@ -129,16 +147,17 @@ async function loadQR() {
   }
 }
 
-// Refresh QR
+// Refresh QR (botón manual — resetea flag para forzar nueva carga)
 async function refreshQR() {
   const btn = document.getElementById('refreshQrBtn');
   if (btn) {
     btn.disabled = true;
     btn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i> Cargando...';
   }
-  
+
+  hasQRDisplayed = false; // Permitir nueva carga
   await loadQR();
-  
+
   if (btn) {
     btn.disabled = false;
     btn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refrescar código';
@@ -151,6 +170,7 @@ async function clearRedisSession() {
     const res = await authFetch('/refresh-qr', { method: 'POST' });
     if (res.ok) {
       showAlert('QR refrescado. Puede escanear nuevamente.', 'success');
+      hasQRDisplayed = false;
       setTimeout(loadQR, 1000);
     } else {
       showAlert('Error al refrescar QR', 'warning');
