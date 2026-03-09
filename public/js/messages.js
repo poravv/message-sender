@@ -97,37 +97,46 @@ function setupTemplates() {
   const countSelect = document.getElementById('templateCount');
   const container = document.getElementById('templatesContainer');
   if (!countSelect || !container) return;
-  
+
   function renderTemplates(count) {
     container.innerHTML = '';
-    
+    // Close any open emoji pickers
+    document.querySelectorAll('.emoji-picker-float').forEach(el => el.remove());
+
     for (let i = 1; i <= count; i++) {
+      const badgeClass = `template-badge-${i}`;
       const template = document.createElement('div');
       template.className = 'template-item';
       template.innerHTML = `
         <div class="template-header">
-          <span class="template-number">Template ${i}</span>
-          <div class="template-tools">
+          <span class="template-badge ${badgeClass}">Parte ${i}</span>
+          <div class="template-toolbar">
+            <button type="button" class="variable-chip" data-template="${i}" data-variable="{nombre}" title="Insertar nombre">
+              {nombre}
+            </button>
+            <button type="button" class="variable-chip" data-template="${i}" data-variable="{sustantivo}" title="Insertar tratamiento">
+              {sustantivo}
+            </button>
+            <button type="button" class="variable-chip" data-template="${i}" data-variable="{grupo}" title="Insertar grupo">
+              {grupo}
+            </button>
             <button type="button" class="btn-emoji" data-template="${i}" title="Emojis">
               <i class="bi bi-emoji-smile"></i>
             </button>
-            <button type="button" class="btn-variables" data-template="${i}" title="Variables">
-              <i class="bi bi-braces"></i>
-            </button>
           </div>
         </div>
-        <textarea 
-          class="form-control message-textarea" 
-          id="message${i}" 
-          name="message${i}" 
-          rows="4" 
-          placeholder="Escribe tu mensaje aquí..."
+        <textarea
+          class="form-control message-textarea"
+          id="message${i}"
+          name="message${i}"
+          rows="4"
+          placeholder="Escribe tu mensaje aqui... Usa {nombre} para personalizar"
           ${i === 1 ? 'required' : ''}
         ></textarea>
         <div class="char-count"><span id="charCount${i}">0</span> caracteres</div>
       `;
       container.appendChild(template);
-      
+
       // Char counter
       const textarea = template.querySelector(`#message${i}`);
       const counter = template.querySelector(`#charCount${i}`);
@@ -135,126 +144,119 @@ function setupTemplates() {
         counter.textContent = textarea.value.length;
       });
     }
-    
-    // Show variables helper
-    const helper = document.getElementById('variablesHelper');
-    if (helper) helper.classList.remove('d-none');
   }
-  
+
   renderTemplates(1);
   countSelect.addEventListener('change', () => renderTemplates(parseInt(countSelect.value)));
 }
 
-// Setup emoji picker
+// Setup emoji picker (floating per-template)
 function setupEmojiPicker() {
-  const picker = document.getElementById('emojiPicker');
-  const grid = document.getElementById('emojiGrid');
-  if (!picker || !grid) return;
-  
-  let currentTextarea = null;
-  
-  // Track last focused textarea
-  document.addEventListener('focusin', (e) => {
-    if (e.target.classList.contains('message-textarea')) {
-      currentTextarea = e.target;
-    }
-  });
-  
-  function renderEmojis(category) {
-    grid.innerHTML = '';
-    const emojis = emojiCategories[category] || emojiCategories.smileys;
-    emojis.forEach(emoji => {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'emoji-btn';
-      btn.textContent = emoji;
-      btn.addEventListener('click', () => {
-        if (currentTextarea) {
-          const pos = currentTextarea.selectionStart;
-          const text = currentTextarea.value;
-          currentTextarea.value = text.slice(0, pos) + emoji + text.slice(pos);
-          currentTextarea.focus();
-          currentTextarea.selectionStart = currentTextarea.selectionEnd = pos + emoji.length;
-          currentTextarea.dispatchEvent(new Event('input'));
-        }
+  let activePickerTemplate = null;
+
+  function createFloatingPicker(templateNum) {
+    // Remove any existing floating picker
+    document.querySelectorAll('.emoji-picker-float').forEach(el => el.remove());
+
+    const header = document.querySelector(`.btn-emoji[data-template="${templateNum}"]`)?.closest('.template-header');
+    if (!header) return;
+
+    const picker = document.createElement('div');
+    picker.className = 'emoji-picker-float';
+    picker.innerHTML = `
+      <div class="emoji-categories">
+        ${Object.keys(emojiCategories).map((cat, idx) => {
+          const icons = { smileys: '😀', people: '👤', nature: '🌱', food: '🍎', activities: '⚽', travel: '🚗', objects: '💡', symbols: '❤️', flags: '🏁' };
+          return `<button type="button" class="emoji-category${idx === 0 ? ' active' : ''}" data-category="${cat}">${icons[cat] || '😀'}</button>`;
+        }).join('')}
+      </div>
+      <div class="emoji-grid"></div>
+    `;
+    header.appendChild(picker);
+    activePickerTemplate = templateNum;
+
+    const grid = picker.querySelector('.emoji-grid');
+
+    function renderEmojis(category) {
+      grid.innerHTML = '';
+      const emojis = emojiCategories[category] || emojiCategories.smileys;
+      emojis.forEach(emoji => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'emoji-btn';
+        btn.textContent = emoji;
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const textarea = document.getElementById(`message${templateNum}`);
+          if (textarea) {
+            const pos = textarea.selectionStart;
+            const text = textarea.value;
+            textarea.value = text.slice(0, pos) + emoji + text.slice(pos);
+            textarea.focus();
+            textarea.selectionStart = textarea.selectionEnd = pos + emoji.length;
+            textarea.dispatchEvent(new Event('input'));
+          }
+        });
+        grid.appendChild(btn);
       });
-      grid.appendChild(btn);
+    }
+
+    renderEmojis('smileys');
+
+    picker.querySelectorAll('.emoji-category').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        picker.querySelectorAll('.emoji-category').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        renderEmojis(btn.dataset.category);
+      });
     });
+
+    // Prevent picker clicks from bubbling
+    picker.addEventListener('click', (e) => e.stopPropagation());
   }
-  
-  // Category buttons
-  picker.querySelectorAll('.emoji-category').forEach(btn => {
-    btn.addEventListener('click', () => {
-      picker.querySelectorAll('.emoji-category').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      renderEmojis(btn.dataset.category);
-    });
-  });
-  
-  // Open picker
+
+  // Toggle emoji picker on emoji button click
   document.addEventListener('click', (e) => {
     const emojiBtn = e.target.closest('.btn-emoji');
     if (emojiBtn) {
-      const templateNum = emojiBtn.dataset.template;
-      const textarea = document.getElementById(`message${templateNum}`);
-      if (textarea) currentTextarea = textarea;
-      picker.classList.toggle('d-none');
-      if (!picker.classList.contains('d-none')) {
-        renderEmojis('smileys');
-        picker.querySelector('.emoji-category').classList.add('active');
-      }
       e.stopPropagation();
+      const templateNum = emojiBtn.dataset.template;
+      if (activePickerTemplate === templateNum) {
+        // Close if clicking same button
+        document.querySelectorAll('.emoji-picker-float').forEach(el => el.remove());
+        activePickerTemplate = null;
+      } else {
+        createFloatingPicker(templateNum);
+      }
+      return;
     }
-  });
-  
-  // Close picker on outside click
-  document.addEventListener('click', (e) => {
-    if (!picker.contains(e.target) && !e.target.closest('.btn-emoji')) {
-      picker.classList.add('d-none');
+
+    // Close picker on outside click
+    if (!e.target.closest('.emoji-picker-float')) {
+      document.querySelectorAll('.emoji-picker-float').forEach(el => el.remove());
+      activePickerTemplate = null;
     }
   });
 }
 
-// Track last active textarea for variables
-let lastActiveTextarea = null;
-
-// Setup variables helper
+// Setup inline variable chips (per-template)
 function setupVariables() {
-  const helper = document.getElementById('variablesHelper');
-  if (!helper) return;
-  
-  // Track focus on message textareas
-  document.addEventListener('focusin', (e) => {
-    if (e.target.classList.contains('message-textarea')) {
-      lastActiveTextarea = e.target;
-    }
-  });
-  
-  helper.querySelectorAll('.variable-btn').forEach(btn => {
-    btn.addEventListener('mousedown', (e) => {
-      // Prevent losing focus from textarea
-      e.preventDefault();
-    });
-    
-    btn.addEventListener('click', () => {
-      const variable = btn.dataset.variable;
-      if (lastActiveTextarea) {
-        const pos = lastActiveTextarea.selectionStart;
-        const text = lastActiveTextarea.value;
-        lastActiveTextarea.value = text.slice(0, pos) + variable + text.slice(pos);
-        lastActiveTextarea.focus();
-        lastActiveTextarea.selectionStart = lastActiveTextarea.selectionEnd = pos + variable.length;
-        lastActiveTextarea.dispatchEvent(new Event('input'));
-      } else {
-        // If no textarea was focused, use the first one
-        const firstTextarea = document.querySelector('.message-textarea');
-        if (firstTextarea) {
-          firstTextarea.value += variable;
-          firstTextarea.focus();
-          firstTextarea.dispatchEvent(new Event('input'));
-        }
-      }
-    });
+  document.addEventListener('click', (e) => {
+    const chip = e.target.closest('.variable-chip');
+    if (!chip) return;
+
+    const templateNum = chip.dataset.template;
+    const variable = chip.dataset.variable;
+    const textarea = document.getElementById(`message${templateNum}`);
+    if (!textarea) return;
+
+    const pos = textarea.selectionStart;
+    const text = textarea.value;
+    textarea.value = text.slice(0, pos) + variable + text.slice(pos);
+    textarea.focus();
+    textarea.selectionStart = textarea.selectionEnd = pos + variable.length;
+    textarea.dispatchEvent(new Event('input'));
   });
 }
 

@@ -50,13 +50,37 @@
   
   --text-primary: #1a1f26;
   --text-secondary: #5c6975;
-  --text-muted: #8b98a5;
+  --text-muted: #6b7280;
   
   --border-color: #e1e5e9;
   --border-light: #d1d5da;
 }
 
-/* Dark theme text colors override */
+/* ========== Theme Overrides ========== */
+/* Light mode: ensure form elements use theme variables */
+[data-theme="light"] .form-control,
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  color: var(--text-primary);
+  background: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="light"] .form-control::placeholder,
+[data-theme="light"] input::placeholder,
+[data-theme="light"] textarea::placeholder {
+  color: var(--text-muted);
+}
+
+[data-theme="light"] .form-control:focus,
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  background: var(--bg-primary);
+}
+
+/* Dark mode: override Bootstrap's default white backgrounds */
 [data-theme="dark"] .form-control,
 [data-theme="dark"] input,
 [data-theme="dark"] select,
@@ -66,176 +90,22 @@
 }
 
 [data-theme="dark"] .form-control::placeholder,
-[data-theme="dark"] input::placeholder {
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
   color: var(--text-muted) !important;
 }
 
-[data-theme="dark"] .badge,
-[data-theme="dark"] .btn-secondary,
-[data-theme="dark"] th,
-[data-theme="dark"] td,
-[data-theme="dark"] label,
-[data-theme="dark"] p,
-[data-theme="dark"] span,
-[data-theme="dark"] small,
-[data-theme="dark"] h1, 
-[data-theme="dark"] h2, 
-[data-theme="dark"] h3, 
-[data-theme="dark"] h4,
-[data-theme="dark"] .card,
-[data-theme="dark"] .csv-upload-area,
-[data-theme="dark"] .csv-upload-area p,
-[data-theme="dark"] .csv-upload-area small,
-[data-theme="dark"] .upload-content p,
-[data-theme="dark"] .upload-content small,
-[data-theme="dark"] .section-divider span {
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .text-muted,
-[data-theme="dark"] .stat-label,
-[data-theme="dark"] .section-header p,
-[data-theme="dark"] .helper-label,
-[data-theme="dark"] .csv-upload-area small,
-[data-theme="dark"] .upload-content small {
+[data-theme="dark"] table th {
   color: var(--text-secondary) !important;
+  background: var(--bg-tertiary) !important;
 }
 
-[data-theme="dark"] .data-table th {
-  color: var(--text-secondary) !important;
-}
-
-[data-theme="dark"] .data-table td {
+[data-theme="dark"] table td {
   color: var(--text-primary) !important;
 }
 
 [data-theme="dark"] code {
   color: var(--accent) !important;
-}
-
-[data-theme="dark"] .empty-state p,
-[data-theme="dark"] .empty-state span {
-  color: var(--text-secondary) !important;
-}
-
-[data-theme="dark"] .btn-link {
-  color: var(--accent) !important;
-}
-
-[data-theme="dark"] .section-divider {
-  color: var(--text-muted) !important;
-}
-
-/* Dark mode form elements */
-[data-theme="dark"] .form-group label {
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .add-contact-form input::placeholder {
-  color: var(--text-muted) !important;
-}
-
-/* Dark mode table headers */
-[data-theme="dark"] table th,
-[data-theme="dark"] .data-table thead th {
-  color: var(--text-secondary) !important;
-  background: var(--bg-tertiary) !important;
-}
-
-/* Dark mode table cells */
-[data-theme="dark"] table td,
-[data-theme="dark"] .data-table tbody td {
-  color: var(--text-primary) !important;
-}
-
-/* Dark mode search boxes */
-[data-theme="dark"] .search-box input,
-[data-theme="dark"] .filter-box input {
-  color: var(--text-primary) !important;
-  background: var(--bg-tertiary) !important;
-}
-
-[data-theme="dark"] .search-box input::placeholder,
-[data-theme="dark"] .filter-box input::placeholder {
-  color: var(--text-muted) !important;
-}
-
-/* Dark mode labels and form groups */
-[data-theme="dark"] .form-group label,
-[data-theme="dark"] form label {
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .template-number,
-[data-theme="dark"] .template-item {
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .char-count {
-  color: var(--text-muted) !important;
-}
-
-/* Dark mode emoji picker */
-[data-theme="dark"] .emoji-picker {
-  background: var(--bg-card) !important;
-}
-
-[data-theme="dark"] .emoji-category {
-  background: var(--bg-tertiary) !important;
-}
-
-[data-theme="dark"] .emoji-btn {
-  background: transparent !important;
-}
-
-[data-theme="dark"] .emoji-btn:hover {
-  background: var(--bg-tertiary) !important;
-}
-
-/* Dark mode variables helper */
-[data-theme="dark"] .variables-helper {
-  background: var(--bg-tertiary) !important;
-}
-
-[data-theme="dark"] .variable-btn {
-  background: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .variable-btn code {
-  color: var(--accent) !important;
-}
-
-/* Dark mode template tools */
-[data-theme="dark"] .btn-emoji,
-[data-theme="dark"] .btn-variables {
-  background: var(--bg-tertiary) !important;
-  border-color: var(--border-color) !important;
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .btn-emoji i,
-[data-theme="dark"] .btn-variables i {
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .btn-emoji:hover,
-[data-theme="dark"] .btn-variables:hover {
-  border-color: var(--accent) !important;
-}
-
-[data-theme="dark"] .template-item {
-  background: var(--bg-tertiary) !important;
-}
-
-[data-theme="dark"] .message-textarea {
-  background: var(--bg-secondary) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-color) !important;
-}
-
-[data-theme="dark"] .message-textarea::placeholder {
-  color: var(--text-muted) !important;
 }
 
 /* ========== Base ========== */
@@ -963,32 +833,9 @@ body {
   color: var(--text-muted);
 }
 
-/* Dark mode file upload */
-[data-theme="dark"] .file-upload-label {
-  background: var(--bg-tertiary);
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .file-upload-label span {
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .file-upload-label small {
-  color: var(--text-secondary) !important;
-}
-
-[data-theme="dark"] .help-text,
-[data-theme="dark"] .help-text strong {
-  color: var(--text-secondary) !important;
-}
-
-[data-theme="dark"] .type-option .option-content {
-  background: var(--bg-tertiary);
-  color: var(--text-primary) !important;
-}
-
-[data-theme="dark"] .type-option .option-content span {
-  color: var(--text-primary) !important;
+/* Light mode file upload */
+[data-theme="light"] .file-upload-label {
+  background: var(--bg-secondary);
 }
 
 .file-info {
@@ -1126,6 +973,96 @@ body {
   font-size: 0.75rem;
   color: var(--text-muted);
   margin-top: var(--space-xs);
+}
+
+/* Template inline toolbar */
+.template-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+.template-toolbar .variable-chip {
+  padding: 2px 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--transition);
+  white-space: nowrap;
+}
+
+.template-toolbar .variable-chip:hover {
+  border-color: var(--accent);
+  background: rgba(37, 211, 102, 0.1);
+}
+
+.template-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: white;
+}
+
+.template-badge-1 { background: #25D366; }
+.template-badge-2 { background: #60a5fa; }
+.template-badge-3 { background: #fbbf24; color: #1a1f26; }
+.template-badge-4 { background: #f87171; }
+.template-badge-5 { background: #a78bfa; }
+
+/* Emoji picker floating */
+.emoji-picker-float {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 50;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  width: 320px;
+  max-height: 280px;
+}
+
+.emoji-picker-float .emoji-categories {
+  display: flex;
+  gap: 2px;
+  margin-bottom: var(--space-sm);
+  padding-bottom: var(--space-sm);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.emoji-picker-float .emoji-category {
+  width: 30px;
+  height: 30px;
+  font-size: 1rem;
+}
+
+.emoji-picker-float .emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.emoji-picker-float .emoji-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 1.1rem;
+}
+
+.template-header {
+  position: relative;
 }
 
 /* ========== Variables Helper ========== */
