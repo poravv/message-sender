@@ -114,6 +114,12 @@ const ensureChatbotTables = (() => {
   };
 })();
 
+// ─── Accent-insensitive normalization ────────────────────────────────────────
+function normalizeText(str) {
+  if (!str) return '';
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+}
+
 // ─── Deactivation keywords ───────────────────────────────────────────────────
 const DEACTIVATION_KEYWORDS = ['salir', 'hablar con persona', 'agente', 'humano', 'operador'];
 
@@ -281,12 +287,31 @@ async function getOrCreateConversation(userId, contactPhone) {
     'SELECT * FROM chatbot_conversations WHERE user_id = $1 AND contact_phone = $2 LIMIT 1',
     [userId, contactPhone]
   );
-  if (result.rows[0]) return result.rows[0];
+  if (result.rows[0]) {
+    const conv = result.rows[0];
+
+    // Reset responses_today if last_response_at is from a previous day
+    if (conv.last_response_at) {
+      const lastDate = new Date(conv.last_response_at).toDateString();
+      const today = new Date().toDateString();
+      if (lastDate !== today && conv.responses_today > 0) {
+        await pg.query(
+          'UPDATE chatbot_conversations SET responses_today = 0, updated_at = NOW() WHERE id = $1',
+          [conv.id]
+        );
+        conv.responses_today = 0;
+      }
+    }
+
+    return conv;
+  }
 
   const insert = await pg.query(
     `INSERT INTO chatbot_conversations (user_id, contact_phone, is_active)
      VALUES ($1, $2, true)
-     ON CONFLICT (user_id, contact_phone) DO UPDATE SET updated_at = NOW()
+     ON CONFLICT (user_id, contact_phone) DO UPDATE
+       SET is_active = true, current_node_id = NULL, context = '{}',
+           responses_today = 0, updated_at = NOW()
      RETURNING *`,
     [userId, contactPhone]
   );
@@ -468,26 +493,32 @@ async function executeNode(node, messageText, config, contactData, conversationC
       const menuText = replaceVariables(content.text || '', contactData);
       const options = content.options || [];
 
+      // Build the menu display text
+      let menuDisplay = menuText + '\n';
+      options.forEach((opt, idx) => {
+        menuDisplay += `\n${idx + 1}. ${opt.label}`;
+      });
+
       if (messageText) {
-        // Try to match user input to a menu option
-        const input = messageText.trim().toLowerCase();
+        // Try to match user input to a menu option by number or label (accent-insensitive)
+        const input = normalizeText(messageText);
         const match = options.find((opt, idx) => {
           const optNum = String(idx + 1);
-          const optLabel = (opt.label || '').toLowerCase();
+          const optLabel = normalizeText(opt.label || '');
           return input === optNum || input === optLabel || optLabel.includes(input);
         });
 
         if (match) {
           return { text: null, nextNodeId: match.trigger || match.next || null };
         }
+
+        // No match found — send fallback + re-display menu, stay on same node
+        const fallback = config.fallback_message || 'No entendí tu respuesta.';
+        return { text: fallback + '\n\n' + menuDisplay, nextNodeId: null, stayOnNode: true };
       }
 
-      // Show menu
-      let text = menuText + '\n';
-      options.forEach((opt, idx) => {
-        text += `\n${idx + 1}. ${opt.label}`;
-      });
-      return { text, nextNodeId: null, stayOnNode: true };
+      // No user input — just show the menu (first time display)
+      return { text: menuDisplay, nextNodeId: null, stayOnNode: true };
     }
 
     case 'media': {

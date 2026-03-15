@@ -2640,13 +2640,14 @@ function buildRoutes() {
       await chatbotEngine.ensureChatbotTables();
 
       // Delete messages
-      const msgResult = await pool.query(
+      const pg = require('./postgresClient');
+      const msgResult = await pg.query(
         'DELETE FROM incoming_messages WHERE user_id = $1 AND contact_phone = $2',
         [userId, phone]
       );
 
       // Delete conversation state
-      await pool.query(
+      await pg.query(
         'DELETE FROM chatbot_conversations WHERE user_id = $1 AND contact_phone = $2',
         [userId, phone]
       );
