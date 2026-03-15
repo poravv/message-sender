@@ -465,8 +465,19 @@ function showTab(tabId) {
     loadPlans();
   } else if (tabId === 'api' && typeof loadApi === 'function') {
     loadApi();
+  } else if (tabId === 'inbox' && typeof loadInbox === 'function') {
+    loadInbox();
+  } else if (tabId === 'campaigns' && typeof loadCampaigns === 'function') {
+    loadCampaigns();
+  } else if (tabId === 'chatbot' && typeof loadChatbot === 'function') {
+    loadChatbot();
   } else if (tabId === 'admin' && typeof loadAdmin === 'function') {
     loadAdmin();
+  }
+
+  // Stop inbox polling when leaving inbox tab
+  if (tabId !== 'inbox' && typeof stopInboxPolling === 'function') {
+    stopInboxPolling();
   }
 }
 

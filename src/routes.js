@@ -787,6 +787,24 @@ function buildRoutes() {
     }
   });
 
+  // GET /campaigns — paginated list with stats
+  router.get('/campaigns', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.uid || 'default';
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const pageSize = Math.min(50, Math.max(1, parseInt(req.query.pageSize) || 20));
+      const search = req.query.search || '';
+      const dateFrom = req.query.dateFrom || null;
+      const dateTo = req.query.dateTo || null;
+
+      const result = await metricsStore.listCampaigns(userId, { page, pageSize, search, dateFrom, dateTo });
+      return res.json(result);
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /campaigns');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
   router.get('/campaigns/:id', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
@@ -795,6 +813,55 @@ function buildRoutes() {
       return res.json(detail);
     } catch (error) {
       logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /campaigns/:id');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /campaigns/:id/responses — incoming messages from campaign contacts after campaign date
+  router.get('/campaigns/:id/responses', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+      const chatbotEngine = require('./chatbotEngine');
+      await chatbotEngine.ensureChatbotTables();
+
+      // Get campaign info
+      const campaignResult = await pgClient.query(
+        'SELECT id, created_at FROM campaigns WHERE id = $1 AND user_id = $2',
+        [req.params.id, userId]
+      );
+      if (!campaignResult.rows[0]) {
+        return res.status(404).json({ error: 'Campaña no encontrada' });
+      }
+      const campaign = campaignResult.rows[0];
+
+      // Get phones from campaign recipients
+      const recipientResult = await pgClient.query(
+        'SELECT DISTINCT phone FROM campaign_recipients WHERE campaign_id = $1',
+        [campaign.id]
+      );
+      const phones = recipientResult.rows.map(r => r.phone);
+
+      if (phones.length === 0) {
+        return res.json({ responses: [], count: 0 });
+      }
+
+      // Get incoming messages from those phones after campaign creation date
+      const messagesResult = await pgClient.query(
+        `SELECT * FROM incoming_messages
+         WHERE user_id = $1 AND contact_phone = ANY($2) AND is_from_contact = true
+           AND created_at >= $3
+         ORDER BY created_at DESC
+         LIMIT 500`,
+        [userId, phones, campaign.created_at]
+      );
+
+      return res.json({
+        responses: messagesResult.rows,
+        count: messagesResult.rows.length
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /campaigns/:id/responses');
       return res.status(500).json({ error: error.message });
     }
   });
@@ -2060,6 +2127,493 @@ function buildRoutes() {
       return res.json({ success: true });
     } catch (error) {
       logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en DELETE /templates/:id');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════
+  // CHATBOT CONFIGURATION & FLOW
+  // ══════════════════════════════════════════════════════
+
+  const chatbotEngine = require('./chatbotEngine');
+
+  // GET /chatbot/config — get user's chatbot config
+  router.get('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+
+      const result = await pgClient.query(
+        'SELECT * FROM chatbot_configs WHERE user_id = $1 LIMIT 1',
+        [userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.json({ config: null });
+      }
+
+      // Strip encrypted key from response
+      const config = { ...result.rows[0] };
+      config.ai_api_key_set = !!config.ai_api_key_encrypted;
+      delete config.ai_api_key_encrypted;
+
+      return res.json({ config });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /chatbot/config');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /chatbot/config — create initial config
+  router.post('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+
+      // Check if config already exists
+      const existing = await pgClient.query(
+        'SELECT id FROM chatbot_configs WHERE user_id = $1 LIMIT 1',
+        [userId]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ error: 'Config already exists. Use PUT to update.' });
+      }
+
+      const {
+        name, enabled, active_hours_start, active_hours_end, active_days,
+        cooldown_minutes, only_known_contacts, max_responses_per_contact,
+        ai_enabled, ai_provider, ai_api_key, ai_model, ai_system_prompt,
+        welcome_message, fallback_message
+      } = req.body || {};
+
+      const encryptedKey = ai_api_key ? chatbotEngine.encrypt(ai_api_key) : null;
+
+      const result = await pgClient.query(
+        `INSERT INTO chatbot_configs
+         (user_id, name, enabled, active_hours_start, active_hours_end, active_days,
+          cooldown_minutes, only_known_contacts, max_responses_per_contact,
+          ai_enabled, ai_provider, ai_api_key_encrypted, ai_model, ai_system_prompt,
+          welcome_message, fallback_message)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+         RETURNING *`,
+        [
+          userId,
+          name || 'Mi Bot',
+          enabled || false,
+          active_hours_start || '08:00',
+          active_hours_end || '22:00',
+          active_days || [1,2,3,4,5],
+          cooldown_minutes || 30,
+          only_known_contacts !== undefined ? only_known_contacts : true,
+          max_responses_per_contact || 5,
+          ai_enabled || false,
+          ai_provider || null,
+          encryptedKey,
+          ai_model || null,
+          ai_system_prompt || null,
+          welcome_message || null,
+          fallback_message || 'No entendí tu mensaje. Escribí "menu" para ver las opciones.',
+        ]
+      );
+
+      chatbotEngine.invalidateConfigCache(userId);
+      const config = { ...result.rows[0] };
+      config.ai_api_key_set = !!config.ai_api_key_encrypted;
+      delete config.ai_api_key_encrypted;
+
+      return res.json({ success: true, config });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en POST /chatbot/config');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // PUT /chatbot/config — update config
+  router.put('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+
+      const {
+        name, enabled, active_hours_start, active_hours_end, active_days,
+        cooldown_minutes, only_known_contacts, max_responses_per_contact,
+        ai_enabled, ai_provider, ai_api_key, ai_model, ai_system_prompt,
+        welcome_message, fallback_message
+      } = req.body || {};
+
+      // Build dynamic SET clause
+      const sets = [];
+      const params = [];
+      let idx = 1;
+
+      function addField(col, val) {
+        if (val !== undefined) {
+          sets.push(`${col} = $${idx}`);
+          params.push(val);
+          idx++;
+        }
+      }
+
+      addField('name', name);
+      addField('enabled', enabled);
+      addField('active_hours_start', active_hours_start);
+      addField('active_hours_end', active_hours_end);
+      addField('active_days', active_days);
+      addField('cooldown_minutes', cooldown_minutes);
+      addField('only_known_contacts', only_known_contacts);
+      addField('max_responses_per_contact', max_responses_per_contact);
+      addField('ai_enabled', ai_enabled);
+      addField('ai_provider', ai_provider);
+      addField('ai_model', ai_model);
+      addField('ai_system_prompt', ai_system_prompt);
+      addField('welcome_message', welcome_message);
+      addField('fallback_message', fallback_message);
+
+      // Handle API key specially (encrypt)
+      if (ai_api_key !== undefined) {
+        const encrypted = ai_api_key ? chatbotEngine.encrypt(ai_api_key) : null;
+        sets.push(`ai_api_key_encrypted = $${idx}`);
+        params.push(encrypted);
+        idx++;
+      }
+
+      if (sets.length === 0) {
+        return res.status(400).json({ error: 'No fields to update' });
+      }
+
+      params.push(userId);
+      const result = await pgClient.query(
+        `UPDATE chatbot_configs SET ${sets.join(', ')} WHERE user_id = $${idx} RETURNING *`,
+        params
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Config not found. Use POST to create.' });
+      }
+
+      chatbotEngine.invalidateConfigCache(userId);
+      const config = { ...result.rows[0] };
+      config.ai_api_key_set = !!config.ai_api_key_encrypted;
+      delete config.ai_api_key_encrypted;
+
+      return res.json({ success: true, config });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en PUT /chatbot/config');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ── Flow nodes ──
+
+  // GET /chatbot/nodes — get all nodes for user's chatbot
+  router.get('/chatbot/nodes', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+
+      const configResult = await pgClient.query(
+        'SELECT id FROM chatbot_configs WHERE user_id = $1 LIMIT 1',
+        [userId]
+      );
+      if (configResult.rows.length === 0) {
+        return res.json({ nodes: [] });
+      }
+
+      const configId = configResult.rows[0].id;
+      const result = await pgClient.query(
+        'SELECT * FROM chatbot_nodes WHERE config_id = $1 ORDER BY created_at',
+        [configId]
+      );
+
+      return res.json({ nodes: result.rows, config_id: configId });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /chatbot/nodes');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /chatbot/nodes — create/update nodes (batch — send entire flow)
+  router.post('/chatbot/nodes', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+
+      const configResult = await pgClient.query(
+        'SELECT id FROM chatbot_configs WHERE user_id = $1 LIMIT 1',
+        [userId]
+      );
+      if (configResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Chatbot config not found. Create config first.' });
+      }
+
+      const configId = configResult.rows[0].id;
+      const { nodes } = req.body || {};
+
+      if (!Array.isArray(nodes)) {
+        return res.status(400).json({ error: 'nodes must be an array' });
+      }
+
+      // Use transaction: delete old nodes, insert new ones
+      const result = await pgClient.transaction(async (client) => {
+        await client.query('DELETE FROM chatbot_nodes WHERE config_id = $1', [configId]);
+
+        const inserted = [];
+        for (const node of nodes) {
+          const r = await client.query(
+            `INSERT INTO chatbot_nodes (config_id, node_id, type, content, position_x, position_y)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING *`,
+            [
+              configId,
+              node.node_id,
+              node.type,
+              JSON.stringify(node.content || {}),
+              node.position_x || 0,
+              node.position_y || 0,
+            ]
+          );
+          inserted.push(r.rows[0]);
+        }
+        return inserted;
+      });
+
+      chatbotEngine.invalidateNodesCache(configId);
+      return res.json({ success: true, nodes: result });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en POST /chatbot/nodes');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // DELETE /chatbot/nodes/:nodeId — delete a single node
+  router.delete('/chatbot/nodes/:nodeId', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+      const { nodeId } = req.params;
+
+      const configResult = await pgClient.query(
+        'SELECT id FROM chatbot_configs WHERE user_id = $1 LIMIT 1',
+        [userId]
+      );
+      if (configResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Chatbot config not found' });
+      }
+
+      const configId = configResult.rows[0].id;
+      const result = await pgClient.query(
+        'DELETE FROM chatbot_nodes WHERE id = $1 AND config_id = $2 RETURNING id',
+        [nodeId, configId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Node not found' });
+      }
+
+      chatbotEngine.invalidateNodesCache(configId);
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en DELETE /chatbot/nodes/:nodeId');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ── Conversations ──
+
+  // GET /chatbot/conversations — list active conversations
+  router.get('/chatbot/conversations', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+
+      const result = await pgClient.query(
+        `SELECT * FROM chatbot_conversations
+         WHERE user_id = $1
+         ORDER BY updated_at DESC
+         LIMIT 100`,
+        [userId]
+      );
+
+      return res.json({ conversations: result.rows });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /chatbot/conversations');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // PUT /chatbot/conversations/:phone/deactivate — manually deactivate bot for a contact
+  router.put('/chatbot/conversations/:phone/deactivate', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const { phone } = req.params;
+
+      await chatbotEngine.deactivateConversation(userId, phone);
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en PUT /chatbot/conversations/:phone/deactivate');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // DELETE /chatbot/conversations/:phone — reset conversation
+  router.delete('/chatbot/conversations/:phone', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const { phone } = req.params;
+
+      await chatbotEngine.resetConversation(userId, phone);
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en DELETE /chatbot/conversations/:phone');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════
+  // INBOX — Incoming messages
+  // ══════════════════════════════════════════════════════
+
+  // GET /messages/inbox — paginated conversations grouped by contact
+  router.get('/messages/inbox', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 20));
+      const offset = (page - 1) * limit;
+
+      const result = await pgClient.query(
+        `SELECT
+           contact_phone,
+           MAX(contact_name) AS contact_name,
+           MAX(created_at) AS last_message_at,
+           COUNT(*) AS message_count,
+           COUNT(*) FILTER (WHERE read = false AND is_from_contact = true) AS unread_count,
+           (array_agg(message_text ORDER BY created_at DESC))[1] AS last_message
+         FROM incoming_messages
+         WHERE user_id = $1
+         GROUP BY contact_phone
+         ORDER BY MAX(created_at) DESC
+         LIMIT $2 OFFSET $3`,
+        [userId, limit, offset]
+      );
+
+      const countResult = await pgClient.query(
+        `SELECT COUNT(DISTINCT contact_phone) AS total
+         FROM incoming_messages WHERE user_id = $1`,
+        [userId]
+      );
+
+      return res.json({
+        conversations: result.rows,
+        pagination: {
+          page,
+          limit,
+          total: parseInt(countResult.rows[0]?.total || 0),
+        },
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /messages/inbox');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /messages/inbox/unread — count of unread conversations
+  router.get('/messages/inbox/unread', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+
+      const result = await pgClient.query(
+        `SELECT COUNT(DISTINCT contact_phone) AS unread_conversations,
+                COUNT(*) AS unread_messages
+         FROM incoming_messages
+         WHERE user_id = $1 AND read = false AND is_from_contact = true`,
+        [userId]
+      );
+
+      return res.json({
+        unread_conversations: parseInt(result.rows[0]?.unread_conversations || 0),
+        unread_messages: parseInt(result.rows[0]?.unread_messages || 0),
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /messages/inbox/unread');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /messages/inbox/:phone — messages with a specific contact
+  router.get('/messages/inbox/:phone', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const pgClient = require('./postgresClient');
+      const { phone } = req.params;
+      const page = Math.max(1, parseInt(req.query.page) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit) || 50));
+      const offset = (page - 1) * limit;
+
+      // Mark messages as read
+      await pgClient.query(
+        `UPDATE incoming_messages SET read = true
+         WHERE user_id = $1 AND contact_phone = $2 AND read = false AND is_from_contact = true`,
+        [userId, phone]
+      );
+
+      const result = await pgClient.query(
+        `SELECT * FROM incoming_messages
+         WHERE user_id = $1 AND contact_phone = $2
+         ORDER BY created_at DESC
+         LIMIT $3 OFFSET $4`,
+        [userId, phone, limit, offset]
+      );
+
+      return res.json({ messages: result.rows });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /messages/inbox/:phone');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /messages/inbox/:phone/reply — send reply (marks as human intervention)
+  router.post('/messages/inbox/:phone/reply', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await chatbotEngine.ensureChatbotTables();
+      const userId = req.auth?.uid || 'default';
+      const { phone } = req.params;
+      const { message } = req.body || {};
+
+      if (!message || !message.trim()) {
+        return res.status(400).json({ error: 'Message is required' });
+      }
+
+      // Get WhatsApp session
+      const manager = await sessionManager.getSession(userId);
+      if (!manager || !manager.isReady || !manager.sock) {
+        return res.status(503).json({ error: 'WhatsApp not connected' });
+      }
+
+      // Send via WhatsApp
+      const jid = `${phone}@s.whatsapp.net`;
+      await manager.sock.sendMessage(jid, { text: message.trim() });
+
+      // Record as human intervention (deactivates bot for 30min for this contact)
+      await chatbotEngine.recordOutgoingMessage(userId, phone, message.trim());
+
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en POST /messages/inbox/:phone/reply');
       return res.status(500).json({ error: error.message });
     }
   });

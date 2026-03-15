@@ -562,6 +562,62 @@ class WhatsAppManager {
         }
       });
 
+      // ── Chatbot: listen for incoming messages ──
+      this.sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
+        if (type !== 'notify') return;
+        for (const msg of msgs) {
+          try {
+            // Skip messages from self, status broadcasts, and protocol messages
+            if (msg.key.fromMe) continue;
+            if (msg.key.remoteJid === 'status@broadcast') continue;
+            if (!msg.message) continue;
+
+            // Only handle individual chats (not groups)
+            if (msg.key.remoteJid.endsWith('@g.us')) continue;
+
+            // Extract phone from JID
+            const contactPhone = msg.key.remoteJid.split('@')[0];
+            if (!contactPhone) continue;
+
+            // Extract message content
+            const messageContent = msg.message;
+            let text = messageContent.conversation
+              || messageContent.extendedTextMessage?.text
+              || messageContent.imageMessage?.caption
+              || messageContent.videoMessage?.caption
+              || '';
+            let messageType = 'text';
+            let mediaUrl = null;
+
+            if (messageContent.imageMessage) messageType = 'image';
+            else if (messageContent.videoMessage) messageType = 'video';
+            else if (messageContent.audioMessage) messageType = 'audio';
+            else if (messageContent.documentMessage) messageType = 'document';
+
+            const contactName = msg.pushName || '';
+            const userId = this._getScopedUserId();
+
+            // Lazy-load chatbot engine to avoid circular deps
+            const chatbotEngine = require('./chatbotEngine');
+            const sock = this.sock;
+            if (!sock) continue;
+
+            // Fire-and-forget: don't block message processing
+            chatbotEngine.handleIncomingMessage(
+              userId,
+              { text, type: messageType, mediaUrl },
+              contactPhone,
+              contactName,
+              (jid, content) => sock.sendMessage(jid, content)
+            ).catch(err => {
+              logger.error({ err: err?.message, userId, contactPhone }, 'Chatbot handleIncomingMessage error');
+            });
+          } catch (err) {
+            logger.error({ err: err?.message }, 'Error in messages.upsert chatbot handler');
+          }
+        }
+      });
+
       // Cola de mensajes por usuario
       this.messageQueue = new MessageQueue(this.sock, this.userId);
       return true;

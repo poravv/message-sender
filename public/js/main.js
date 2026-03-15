@@ -42,6 +42,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     var adminTabBtn = document.getElementById('admin-tab-btn');
     if (adminTabBtn) adminTabBtn.classList.remove('d-none');
   }
+  if (typeof initInbox === 'function') initInbox();
+  if (typeof initCampaigns === 'function') initCampaigns();
+  if (typeof initChatbot === 'function') initChatbot();
   if (typeof initAdmin === 'function') initAdmin();
 
   // Setup logout
@@ -52,7 +55,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Initial tab from hash or default to dashboard
   const hash = window.location.hash.substring(1);
-  const validTabs = ['dashboard', 'whatsapp', 'send', 'templates', 'contacts', 'plans', 'api', 'admin'];
+  const validTabs = ['dashboard', 'whatsapp', 'send', 'templates', 'contacts', 'campaigns', 'inbox', 'plans', 'chatbot', 'api', 'admin'];
   const initialTab = validTabs.includes(hash) ? hash : 'dashboard';
   showTab(initialTab);
   

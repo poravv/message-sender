@@ -85,9 +85,22 @@
           <i class="bi bi-people"></i>
           <span>Contactos</span>
         </button>
+        <button class="tab-btn" data-tab="campaigns">
+          <i class="bi bi-megaphone"></i>
+          <span>Campanas</span>
+        </button>
+        <button class="tab-btn" data-tab="inbox">
+          <i class="bi bi-chat-dots"></i>
+          <span>Bandeja</span>
+          <span class="inbox-tab-badge d-none" id="inbox-unread-badge">0</span>
+        </button>
         <button class="tab-btn" data-tab="plans">
           <i class="bi bi-credit-card"></i>
           <span>Planes</span>
+        </button>
+        <button class="tab-btn" data-tab="chatbot">
+          <i class="bi bi-robot"></i>
+          <span>Chatbot</span>
         </button>
         <button class="tab-btn" data-tab="api">
           <i class="bi bi-code-slash"></i>
@@ -888,6 +901,32 @@
             </a>
           </div>
 
+          <!-- Plan Premium -->
+          <div class="pricing-card pricing-card-premium">
+            <div class="pricing-premium-badge">Nuevo</div>
+            <div class="pricing-card-header">
+              <span class="pricing-plan-name">Premium</span>
+              <p class="pricing-target">Empresas que necesitan engagement completo</p>
+            </div>
+            <div class="pricing-price">
+              <span class="pricing-currency">Gs.</span>
+              <span class="pricing-amount">899.000</span>
+              <span class="pricing-period">/mes</span>
+            </div>
+            <ul class="pricing-features">
+              <li><i class="bi bi-check-circle-fill"></i> Todo lo del plan Profesional +</li>
+              <li class="pricing-feature-highlight"><i class="bi bi-stars"></i> Chatbot/Auto-responder inteligente</li>
+              <li class="pricing-feature-highlight"><i class="bi bi-stars"></i> Bandeja de entrada (recibir y responder mensajes)</li>
+              <li class="pricing-feature-highlight"><i class="bi bi-stars"></i> Integracion con IA (OpenAI, Anthropic, Groq)</li>
+              <li><i class="bi bi-check-circle-fill"></i> Historial completo de campanas con analytics</li>
+              <li><i class="bi bi-check-circle-fill"></i> Respuestas de clientes vinculadas a campanas</li>
+              <li><i class="bi bi-check-circle-fill"></i> Soporte prioritario 24/7</li>
+            </ul>
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Premium%20%28Gs.%20899.000%2Fmes%29" target="_blank" class="pricing-cta pricing-cta-premium">
+              <i class="bi bi-whatsapp"></i> Solicitar Plan
+            </a>
+          </div>
+
           <!-- Plan Enterprise -->
           <div class="pricing-card">
             <div class="pricing-card-header">
@@ -1038,6 +1077,164 @@
           </div>
         </div>
       </section>
+      <!-- Tab: Chatbot -->
+      <section id="chatbot" class="tab-pane">
+        <header class="section-header">
+          <h1><i class="bi bi-robot"></i> Chatbot WhatsApp</h1>
+          <p>Configura tu asistente automatico</p>
+        </header>
+
+        <!-- Enable/Disable Toggle -->
+        <div class="card cb-toggle-card">
+          <div class="cb-toggle-row">
+            <label class="cb-switch">
+              <input type="checkbox" id="cb-enabled-toggle" onchange="toggleBot(this.checked)">
+              <span class="cb-switch-slider"></span>
+            </label>
+            <span id="cb-enabled-label" class="cb-toggle-label">Deshabilitado</span>
+          </div>
+        </div>
+
+        <!-- General Config -->
+        <div class="card">
+          <h3 class="cb-section-title"><i class="bi bi-gear"></i> Configuracion General</h3>
+
+          <div class="cb-form-grid">
+            <div class="cb-form-group">
+              <label>Nombre del bot</label>
+              <input class="form-control" type="text" id="cb-name" placeholder="Mi Asistente">
+            </div>
+            <div class="cb-form-group">
+              <label>Horario activo</label>
+              <div class="cb-time-range">
+                <input class="form-control" type="time" id="cb-hours-start" value="08:00">
+                <span>a</span>
+                <input class="form-control" type="time" id="cb-hours-end" value="22:00">
+              </div>
+            </div>
+            <div class="cb-form-group">
+              <label>Cooldown (minutos)</label>
+              <input class="form-control" type="number" id="cb-cooldown" min="0" max="1440" value="30">
+            </div>
+            <div class="cb-form-group">
+              <label>Max respuestas/dia</label>
+              <input class="form-control" type="number" id="cb-max-responses" min="1" max="100" value="5">
+            </div>
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label>Dias activos</label>
+            <div class="cb-day-pills">
+              <button class="cb-day-pill active" id="cb-day-1" onclick="toggleDay(1)">L</button>
+              <button class="cb-day-pill active" id="cb-day-2" onclick="toggleDay(2)">M</button>
+              <button class="cb-day-pill active" id="cb-day-3" onclick="toggleDay(3)">Mi</button>
+              <button class="cb-day-pill active" id="cb-day-4" onclick="toggleDay(4)">J</button>
+              <button class="cb-day-pill active" id="cb-day-5" onclick="toggleDay(5)">V</button>
+              <button class="cb-day-pill" id="cb-day-6" onclick="toggleDay(6)">S</button>
+              <button class="cb-day-pill" id="cb-day-7" onclick="toggleDay(7)">D</button>
+            </div>
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label class="cb-checkbox-label">
+              <input type="checkbox" id="cb-only-known" checked>
+              Solo contactos conocidos
+            </label>
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label>Mensaje de bienvenida</label>
+            <textarea class="form-control" id="cb-welcome" rows="3" placeholder="Hola {nombre}! Soy el asistente de..."></textarea>
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label>Mensaje fallback</label>
+            <textarea class="form-control" id="cb-fallback" rows="2" placeholder="No entendi. Escribi &quot;menu&quot; para..."></textarea>
+          </div>
+
+          <button class="btn-primary" onclick="saveChatbotConfig()" style="margin-top: var(--space-lg);">
+            <i class="bi bi-floppy"></i> Guardar configuracion
+          </button>
+        </div>
+
+        <!-- Flow Builder -->
+        <div class="card">
+          <div class="cb-flow-header">
+            <h3 class="cb-section-title"><i class="bi bi-diagram-3"></i> Flujo de Conversacion</h3>
+            <div class="cb-flow-actions">
+              <button class="btn-secondary" onclick="addNode()">
+                <i class="bi bi-plus-circle"></i> Agregar nodo
+              </button>
+              <button class="btn-primary" onclick="saveAllNodes()">
+                <i class="bi bi-floppy"></i> Guardar flujo
+              </button>
+            </div>
+          </div>
+
+          <!-- Flow Preview -->
+          <div id="cb-flow-preview" class="cb-flow-preview-container"></div>
+
+          <!-- Node Cards -->
+          <div id="cb-nodes-list" class="cb-nodes-list"></div>
+        </div>
+
+        <!-- AI Config -->
+        <div class="card">
+          <h3 class="cb-section-title"><i class="bi bi-stars"></i> Integracion IA (Opcional)</h3>
+
+          <div class="cb-form-group">
+            <label class="cb-checkbox-label">
+              <input type="checkbox" id="cb-ai-enabled">
+              Habilitar respuestas con IA
+            </label>
+          </div>
+
+          <div class="cb-form-grid" style="margin-top: var(--space-md);">
+            <div class="cb-form-group">
+              <label>Proveedor</label>
+              <select class="form-control" id="cb-ai-provider">
+                <option value="openai">OpenAI</option>
+                <option value="groq">Groq</option>
+                <option value="anthropic">Anthropic</option>
+              </select>
+            </div>
+            <div class="cb-form-group">
+              <label>Modelo</label>
+              <select class="form-control" id="cb-ai-model">
+                <option value="gpt-4o-mini">gpt-4o-mini</option>
+                <option value="gpt-4o">gpt-4o</option>
+                <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                <option value="llama-3.3-70b-versatile">llama-3.3-70b (Groq)</option>
+                <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label>API Key</label>
+            <input class="form-control" type="password" id="cb-ai-key" placeholder="sk-... o anthropic key">
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label>Prompt del sistema</label>
+            <textarea class="form-control" id="cb-ai-prompt" rows="4" placeholder="Eres un asistente de atencion al cliente..."></textarea>
+          </div>
+
+          <button class="btn-primary" onclick="saveAiConfig()" style="margin-top: var(--space-lg);">
+            <i class="bi bi-floppy"></i> Guardar IA
+          </button>
+        </div>
+
+        <!-- Active Conversations -->
+        <div class="card">
+          <h3 class="cb-section-title"><i class="bi bi-chat-left-text"></i> Conversaciones Activas</h3>
+          <div id="cb-conversations-list" class="cb-conversations-list">
+            <div class="text-muted" style="padding: var(--space-md);">Cargando...</div>
+          </div>
+        </div>
+      </section>
+
       <!-- Tab: API -->
       <section id="api" class="tab-pane">
         <header class="section-header">
@@ -1216,6 +1413,100 @@
         </div>
       </section>
 
+      <!-- Tab: Inbox -->
+      <section id="inbox" class="tab-pane">
+        <header class="section-header">
+          <h1><i class="bi bi-chat-dots"></i> Bandeja de Entrada</h1>
+          <p>Mensajes recibidos y respuestas</p>
+        </header>
+
+        <div class="inbox-container">
+          <!-- Left panel: conversations -->
+          <div class="inbox-panel inbox-list-panel" id="inbox-list-panel">
+            <div class="inbox-search-bar">
+              <i class="bi bi-search inbox-search-icon"></i>
+              <input type="text" class="form-control inbox-search-input" placeholder="Buscar conversacion..." oninput="handleInboxSearch(this.value)">
+            </div>
+            <div class="inbox-conv-list" id="inbox-conv-list">
+              <div class="inbox-empty">
+                <i class="bi bi-chat-dots"></i>
+                <p>Carga la bandeja para ver conversaciones</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right panel: chat -->
+          <div class="inbox-panel inbox-chat-panel inbox-panel-hidden" id="inbox-chat-panel">
+            <div class="inbox-chat-header">
+              <button class="btn-icon inbox-back-btn" onclick="closeChat()">
+                <i class="bi bi-arrow-left"></i>
+              </button>
+              <div class="inbox-chat-avatar"><i class="bi bi-person-circle"></i></div>
+              <span class="inbox-chat-name" id="inbox-chat-name">Selecciona una conversacion</span>
+            </div>
+            <div class="inbox-messages" id="inbox-messages">
+              <div class="inbox-empty">
+                <i class="bi bi-chat-dots"></i>
+                <p>Selecciona una conversacion para ver los mensajes</p>
+              </div>
+            </div>
+            <div class="inbox-reply-bar" id="inbox-reply-bar">
+              <textarea class="form-control inbox-reply-input" id="inbox-reply-input" placeholder="Escribe tu respuesta..." rows="1" onkeydown="handleReplyKeypress(event)"></textarea>
+              <button class="btn-primary inbox-send-btn" id="inbox-send-btn" onclick="handleSendClick()">
+                <i class="bi bi-send-fill"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Campaigns -->
+      <section id="campaigns" class="tab-pane">
+        <header class="section-header">
+          <h1><i class="bi bi-megaphone"></i> Historial de Campanas</h1>
+          <p>Revisa el rendimiento de tus envios masivos</p>
+        </header>
+
+        <!-- Filters -->
+        <div class="camp-filters">
+          <div class="camp-search-wrap">
+            <i class="bi bi-search camp-search-icon"></i>
+            <input type="text" id="campaign-search" class="form-control camp-search-input" placeholder="Buscar campana...">
+          </div>
+          <input type="date" id="campaign-date-from" class="form-control camp-date-input" title="Desde">
+          <input type="date" id="campaign-date-to" class="form-control camp-date-input" title="Hasta">
+          <button class="btn-primary btn-sm" onclick="handleCampaignSearch()">
+            <i class="bi bi-search"></i> Buscar
+          </button>
+        </div>
+
+        <!-- Campaign list -->
+        <div id="campaigns-list" class="campaigns-list">
+          <div class="campaigns-empty">
+            <div class="campaigns-empty-icon"><i class="bi bi-megaphone"></i></div>
+            <p>Cargando campanas...</p>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div id="campaigns-pagination"></div>
+      </section>
+
+      <!-- Campaign Detail Modal -->
+      <div id="campaignDetailModal" class="app-modal d-none" role="dialog" aria-modal="true">
+        <div class="app-modal-backdrop" onclick="closeCampaignModal()"></div>
+        <div class="app-modal-card app-modal-lg" role="document">
+          <div class="app-modal-header">
+            <h3>Detalle de Campana</h3>
+            <button type="button" class="btn-icon app-modal-close" onclick="closeCampaignModal()" aria-label="Cerrar">
+              <i class="bi bi-x-lg"></i>
+            </button>
+          </div>
+          <div class="app-modal-body" id="campaign-detail-body">
+          </div>
+        </div>
+      </div>
+
       <!-- Tab: Admin -->
       <section id="admin" class="tab-pane">
         <header class="section-header admin-header">
@@ -1374,6 +1665,9 @@
   <script src="/js/templates.js"></script>
   <script src="/js/plans.js"></script>
   <script src="/js/api.js"></script>
+  <script src="/js/inbox.js"></script>
+  <script src="/js/campaigns.js"></script>
+  <script src="/js/chatbot.js"></script>
   <script src="/js/admin.js"></script>
   <script src="/js/main.js"></script>
 </body>

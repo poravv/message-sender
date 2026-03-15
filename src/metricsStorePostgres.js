@@ -444,17 +444,42 @@ async function listCampaigns(userId, opts = {}) {
   const pageSize = Math.max(1, Math.min(50, Number(opts.pageSize) || 20));
   const offset = (page - 1) * pageSize;
 
+  // Build WHERE clauses
+  const conditions = ['user_id = $1'];
+  const params = [userId];
+  let paramIdx = 2;
+
+  if (opts.search) {
+    conditions.push(`name ILIKE $${paramIdx}`);
+    params.push(`%${opts.search}%`);
+    paramIdx++;
+  }
+
+  if (opts.dateFrom) {
+    conditions.push(`created_at >= $${paramIdx}`);
+    params.push(opts.dateFrom);
+    paramIdx++;
+  }
+
+  if (opts.dateTo) {
+    conditions.push(`created_at <= $${paramIdx}::date + interval '1 day'`);
+    params.push(opts.dateTo);
+    paramIdx++;
+  }
+
+  const whereClause = conditions.join(' AND ');
+
   const countResult = await pg.query(
-    'SELECT COUNT(*) as total FROM campaigns WHERE user_id = $1',
-    [userId]
+    `SELECT COUNT(*) as total FROM campaigns WHERE ${whereClause}`,
+    params
   );
   const total = parseInt(countResult.rows[0].total, 10);
 
   const result = await pg.query(
-    `SELECT * FROM campaigns WHERE user_id = $1 
-     ORDER BY created_at DESC 
-     LIMIT $2 OFFSET $3`,
-    [userId, pageSize, offset]
+    `SELECT * FROM campaigns WHERE ${whereClause}
+     ORDER BY created_at DESC
+     LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+    [...params, pageSize, offset]
   );
 
   return {
