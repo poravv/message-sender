@@ -572,12 +572,14 @@ class WhatsAppManager {
             if (msg.key.remoteJid === 'status@broadcast') continue;
             if (!msg.message) continue;
 
-            // Only handle individual chats (not groups)
+            // Only handle individual chats on s.whatsapp.net (not groups, not LIDs)
             if (msg.key.remoteJid.endsWith('@g.us')) continue;
+            if (msg.key.remoteJid.endsWith('@lid')) continue; // Skip Linked IDs (internal WhatsApp identifiers, not real phone numbers)
+            if (!msg.key.remoteJid.endsWith('@s.whatsapp.net')) continue; // Only process real phone JIDs
 
             // Extract phone from JID
-            const contactPhone = msg.key.remoteJid.split('@')[0];
-            if (!contactPhone) continue;
+            const contactPhone = msg.key.remoteJid.split('@')[0].split(':')[0]; // Remove device suffix if present
+            if (!contactPhone || contactPhone.length < 8) continue;
 
             // Extract message content — unwrap common Baileys containers
             let messageContent = msg.message;
