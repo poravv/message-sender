@@ -113,14 +113,29 @@ function renderConfigForm(config) {
     }
   });
 
-  // AI
+  // AI — populate both full-mode and flow-mode fields from same config
   setVal('cb-ai-provider', c.ai_provider || 'openai');
   setVal('cb-ai-key', ''); // never prefill key
   setVal('cb-ai-model', c.ai_model || 'gpt-4o-mini');
   setVal('cb-ai-prompt', c.ai_system_prompt || '');
 
+  setVal('cb-ai-provider-flow', c.ai_provider || 'openai');
+  setVal('cb-ai-key-flow', ''); // never prefill key
+  setVal('cb-ai-model-flow', c.ai_model || 'gpt-4o-mini');
+  setVal('cb-ai-prompt-flow', c.ai_system_prompt || '');
+
   var aiToggle = document.getElementById('cb-ai-enabled');
   if (aiToggle) aiToggle.checked = !!c.ai_enabled;
+  var aiToggleFlow = document.getElementById('cb-ai-enabled-flow');
+  if (aiToggleFlow) aiToggleFlow.checked = !!c.ai_enabled;
+
+  // Bot mode
+  var botMode = c.bot_mode || 'flow';
+  var flowRadio = document.getElementById('cb-mode-flow');
+  var aiRadio = document.getElementById('cb-mode-ai');
+  if (flowRadio) flowRadio.checked = botMode === 'flow';
+  if (aiRadio) aiRadio.checked = botMode === 'ai';
+  updateBotModeUI(botMode);
 
   updateToggleStatus();
 }
@@ -142,6 +157,29 @@ function updateToggleStatus() {
     label.textContent = toggle.checked ? 'Habilitado' : 'Deshabilitado';
     label.style.color = toggle.checked ? 'var(--accent)' : 'var(--text-secondary)';
   }
+}
+
+function updateBotModeUI(mode) {
+  var flowSection = document.getElementById('cb-flow-section');
+  var aiFullSection = document.getElementById('cb-ai-full-section');
+  var aiNodeSection = document.getElementById('cb-ai-node-section');
+  var startNodeGroup = document.getElementById('cb-start-node-group');
+
+  if (mode === 'ai') {
+    if (flowSection) flowSection.style.display = 'none';
+    if (aiFullSection) aiFullSection.style.display = 'block';
+    if (aiNodeSection) aiNodeSection.style.display = 'none';
+    if (startNodeGroup) startNodeGroup.style.display = 'none';
+  } else {
+    if (flowSection) flowSection.style.display = 'block';
+    if (aiFullSection) aiFullSection.style.display = 'none';
+    if (aiNodeSection) aiNodeSection.style.display = 'block';
+    if (startNodeGroup) startNodeGroup.style.display = 'block';
+  }
+}
+
+function switchBotMode(mode) {
+  updateBotModeUI(mode);
 }
 
 async function toggleBot(enabled) {
@@ -175,6 +213,8 @@ async function saveChatbotConfig() {
     }
   });
 
+  var currentMode = document.getElementById('cb-mode-ai') && document.getElementById('cb-mode-ai').checked ? 'ai' : 'flow';
+
   var payload = {
     name: getVal('cb-name'),
     enabled: document.getElementById('cb-enabled-toggle').checked,
@@ -190,7 +230,8 @@ async function saveChatbotConfig() {
     deactivation_message: getVal('cb-deactivation-message'),
     start_node_id: getVal('cb-start-node') || null,
     activation_keywords: getVal('cb-activation-keywords') ? getVal('cb-activation-keywords').split(',').map(function(s) { return s.trim(); }).filter(Boolean) : null,
-    deactivation_keywords: getVal('cb-deactivation-keywords') ? getVal('cb-deactivation-keywords').split(',').map(function(s) { return s.trim(); }).filter(Boolean) : null
+    deactivation_keywords: getVal('cb-deactivation-keywords') ? getVal('cb-deactivation-keywords').split(',').map(function(s) { return s.trim(); }).filter(Boolean) : null,
+    bot_mode: currentMode
   };
 
   try {
@@ -210,11 +251,13 @@ async function saveChatbotConfig() {
 }
 
 async function saveAiConfig() {
+  var currentMode = document.getElementById('cb-mode-ai') && document.getElementById('cb-mode-ai').checked ? 'ai' : 'flow';
   var payload = {
     ai_enabled: document.getElementById('cb-ai-enabled').checked,
     ai_provider: getVal('cb-ai-provider'),
     ai_model: getVal('cb-ai-model'),
-    ai_system_prompt: getVal('cb-ai-prompt')
+    ai_system_prompt: getVal('cb-ai-prompt'),
+    bot_mode: currentMode
   };
   var key = getVal('cb-ai-key');
   if (key.trim()) {
@@ -233,6 +276,34 @@ async function saveAiConfig() {
     showAlert('Configuracion de IA guardada', 'success');
   } catch (err) {
     console.error('saveAiConfig error:', err);
+    showAlert('Error guardando configuracion de IA', 'danger');
+  }
+}
+
+async function saveAiConfigFlow() {
+  var payload = {
+    ai_enabled: document.getElementById('cb-ai-enabled-flow').checked,
+    ai_provider: getVal('cb-ai-provider-flow'),
+    ai_model: getVal('cb-ai-model-flow'),
+    ai_system_prompt: getVal('cb-ai-prompt-flow')
+  };
+  var key = getVal('cb-ai-key-flow');
+  if (key.trim()) {
+    payload.ai_api_key = key;
+  }
+
+  try {
+    var method = chatbotConfig ? 'PUT' : 'POST';
+    var res = await authFetch('/chatbot/config', {
+      method: method,
+      body: JSON.stringify(payload)
+    });
+    if (!res || !res.ok) throw new Error('Error guardando IA');
+    var data = await res.json();
+    chatbotConfig = data.config;
+    showAlert('Configuracion de IA guardada', 'success');
+  } catch (err) {
+    console.error('saveAiConfigFlow error:', err);
     showAlert('Error guardando configuracion de IA', 'danger');
   }
 }
@@ -1070,3 +1141,5 @@ window.saveAiConfig = saveAiConfig;
 window.saveAllNodes = saveAllNodes;
 window.addNode = addNode;
 window.toggleDay = toggleDay;
+window.switchBotMode = switchBotMode;
+window.saveAiConfigFlow = saveAiConfigFlow;

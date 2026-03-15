@@ -1145,6 +1145,29 @@
           </div>
         </div>
 
+        <!-- Bot Mode Selector -->
+        <div class="card">
+          <h3 class="cb-section-title"><i class="bi bi-toggles"></i> Modo del Bot</h3>
+          <div class="cb-mode-selector">
+            <label class="cb-mode-option">
+              <input type="radio" name="cb-bot-mode" id="cb-mode-flow" value="flow" checked onchange="switchBotMode('flow')">
+              <span class="cb-mode-label">
+                <i class="bi bi-diagram-3"></i>
+                <strong>Flujo Manual</strong>
+                <small>Construye menus y nodos paso a paso</small>
+              </span>
+            </label>
+            <label class="cb-mode-option">
+              <input type="radio" name="cb-bot-mode" id="cb-mode-ai" value="ai" onchange="switchBotMode('ai')">
+              <span class="cb-mode-label">
+                <i class="bi bi-stars"></i>
+                <strong>Inteligencia Artificial</strong>
+                <small>La IA genera todas las respuestas automaticamente</small>
+              </span>
+            </label>
+          </div>
+        </div>
+
         <!-- General Config -->
         <div class="card">
           <h3 class="cb-section-title"><i class="bi bi-gear"></i> Configuracion General</h3>
@@ -1192,24 +1215,24 @@
             </label>
           </div>
 
-          <div class="cb-form-group" style="margin-top: var(--space-md);">
-            <label>Nodo inicial (primer menú al escribir "hola")</label>
+          <div class="cb-form-group" id="cb-start-node-group" style="margin-top: var(--space-md);">
+            <label>Nodo inicial (primer menu al escribir "hola")</label>
             <select class="form-control" id="cb-start-node">
-              <option value="">Automático (primer menú encontrado)</option>
+              <option value="">Automatico (primer menu encontrado)</option>
             </select>
-            <small class="text-muted">Selecciona qué nodo se muestra primero cuando un contacto inicia conversación</small>
+            <small class="text-muted">Selecciona que nodo se muestra primero cuando un contacto inicia conversacion</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Palabras que activan el bot</label>
             <input class="form-control" id="cb-activation-keywords" type="text" placeholder="hola, menu, ayuda, buenas, hi, hello, info, inicio">
-            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna de estas, el bot se activa. Si está vacío usa las predeterminadas.</small>
+            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna de estas, el bot se activa. Si esta vacio usa las predeterminadas.</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Palabras que desactivan el bot</label>
             <input class="form-control" id="cb-deactivation-keywords" type="text" placeholder="agente, humano, persona real, quiero hablar">
-            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna fuera del menú, el bot se desactiva. "Salir" dentro del menú siempre funciona.</small>
+            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna fuera del menu, el bot se desactiva. "Salir" dentro del menu siempre funciona.</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
@@ -1218,21 +1241,21 @@
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
-            <label>Mensaje cuando no reconoce la opción</label>
-            <textarea class="form-control" id="cb-fallback" rows="2" placeholder="No reconozco esa opción. Por favor elige un número del menú:"></textarea>
-            <small class="text-muted">Se muestra cuando el contacto escribe algo que no coincide con las opciones del menú</small>
+            <label>Mensaje cuando no reconoce la opcion / fallo de IA</label>
+            <textarea class="form-control" id="cb-fallback" rows="2" placeholder="No reconozco esa opcion. Por favor elige un numero del menu:"></textarea>
+            <small class="text-muted">En modo Flujo: cuando no coincide con opciones del menu. En modo IA: cuando falla la API de IA.</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
-            <label>Mensaje al salir del menú</label>
-            <textarea class="form-control" id="cb-exit-message" rows="2" placeholder="Has salido del menú. Escribe *menu* cuando quieras volver a empezar."></textarea>
-            <small class="text-muted">Se muestra cuando el contacto elige "Salir" dentro del menú (salida amigable, puede volver)</small>
+            <label>Mensaje al salir del menu</label>
+            <textarea class="form-control" id="cb-exit-message" rows="2" placeholder="Has salido del menu. Escribe *menu* cuando quieras volver a empezar."></textarea>
+            <small class="text-muted">Se muestra cuando el contacto elige "Salir" dentro del menu (salida amigable, puede volver)</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Mensaje al desactivar el bot</label>
-            <textarea class="form-control" id="cb-deactivation-message" rows="2" placeholder="Un agente te atenderá pronto. Gracias por tu paciencia."></textarea>
-            <small class="text-muted">Se muestra cuando el contacto escribe "agente", "humano", etc. fuera del menú (desactiva el bot hasta que escriba "hola" de nuevo)</small>
+            <textarea class="form-control" id="cb-deactivation-message" rows="2" placeholder="Un agente te atendera pronto. Gracias por tu paciencia."></textarea>
+            <small class="text-muted">Se muestra cuando el contacto escribe "agente", "humano", etc. fuera del menu (desactiva el bot hasta que escriba "hola" de nuevo)</small>
           </div>
 
           <button class="btn-primary" onclick="saveChatbotConfig()" style="margin-top: var(--space-lg);">
@@ -1240,30 +1263,10 @@
           </button>
         </div>
 
-        <!-- Flow Builder -->
-        <div class="card">
-          <div class="cb-flow-header">
-            <h3 class="cb-section-title"><i class="bi bi-diagram-3"></i> Flujo de Conversacion</h3>
-            <div class="cb-flow-actions">
-              <button class="btn-secondary" onclick="addNode()">
-                <i class="bi bi-plus-circle"></i> Agregar nodo
-              </button>
-              <button class="btn-primary" onclick="saveAllNodes()">
-                <i class="bi bi-floppy"></i> Guardar flujo
-              </button>
-            </div>
-          </div>
-
-          <!-- Flow Preview -->
-          <div id="cb-flow-preview" class="cb-flow-preview-container"></div>
-
-          <!-- Node Cards -->
-          <div id="cb-nodes-list" class="cb-nodes-list"></div>
-        </div>
-
-        <!-- AI Config -->
-        <div class="card">
-          <h3 class="cb-section-title"><i class="bi bi-stars"></i> Integracion IA (Opcional)</h3>
+        <!-- AI Full Mode Config (shown when mode=ai) -->
+        <div class="card" id="cb-ai-full-section" style="display: none;">
+          <h3 class="cb-section-title"><i class="bi bi-stars"></i> Configuracion de Inteligencia Artificial</h3>
+          <p class="text-muted" style="margin-bottom: var(--space-md);">La IA generara todas las respuestas usando el prompt del sistema como base de conocimiento.</p>
 
           <div class="cb-form-group">
             <label class="cb-checkbox-label">
@@ -1300,13 +1303,102 @@
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
-            <label>Prompt del sistema</label>
-            <textarea class="form-control" id="cb-ai-prompt" rows="4" placeholder="Eres un asistente de atencion al cliente..."></textarea>
+            <label>Prompt del sistema (entrenamiento del bot)</label>
+            <textarea class="form-control" id="cb-ai-prompt" rows="10" placeholder="Eres el asistente virtual de [Tu Empresa].
+
+INFORMACION DEL NEGOCIO:
+- Nombre: [Tu Empresa]
+- Horario: Lunes a Viernes de 8:00 a 18:00
+- Direccion: [Tu direccion]
+- Telefono: [Tu telefono]
+
+PRODUCTOS/SERVICIOS:
+- Servicio 1: Descripcion y precio
+- Servicio 2: Descripcion y precio
+
+REGLAS:
+- Responde de forma amable y profesional
+- Si no sabes la respuesta, di que un agente se pondra en contacto
+- No inventes informacion que no este aqui
+- Respuestas cortas y claras (maximo 3-4 lineas)"></textarea>
+            <small class="text-muted">Aqui describes tu negocio, productos, precios, horarios, reglas de atencion, etc. La IA usara esto como base para todas las respuestas.</small>
           </div>
 
           <button class="btn-primary" onclick="saveAiConfig()" style="margin-top: var(--space-lg);">
-            <i class="bi bi-floppy"></i> Guardar IA
+            <i class="bi bi-floppy"></i> Guardar configuracion IA
           </button>
+        </div>
+
+        <!-- Flow Builder (shown when mode=flow) -->
+        <div id="cb-flow-section">
+          <div class="card">
+            <div class="cb-flow-header">
+              <h3 class="cb-section-title"><i class="bi bi-diagram-3"></i> Flujo de Conversacion</h3>
+              <div class="cb-flow-actions">
+                <button class="btn-secondary" onclick="addNode()">
+                  <i class="bi bi-plus-circle"></i> Agregar nodo
+                </button>
+                <button class="btn-primary" onclick="saveAllNodes()">
+                  <i class="bi bi-floppy"></i> Guardar flujo
+                </button>
+              </div>
+            </div>
+
+            <!-- Flow Preview -->
+            <div id="cb-flow-preview" class="cb-flow-preview-container"></div>
+
+            <!-- Node Cards -->
+            <div id="cb-nodes-list" class="cb-nodes-list"></div>
+          </div>
+
+          <!-- AI Node Config (for flow mode — optional per-node AI) -->
+          <div class="card" id="cb-ai-node-section">
+            <h3 class="cb-section-title"><i class="bi bi-stars"></i> Integracion IA para Nodos (Opcional)</h3>
+            <p class="text-muted" style="margin-bottom: var(--space-md);">Configura la IA para usar en nodos de tipo "IA" dentro del flujo manual.</p>
+
+            <div class="cb-form-group">
+              <label class="cb-checkbox-label">
+                <input type="checkbox" id="cb-ai-enabled-flow">
+                Habilitar nodos IA en el flujo
+              </label>
+            </div>
+
+            <div class="cb-form-grid" style="margin-top: var(--space-md);">
+              <div class="cb-form-group">
+                <label>Proveedor</label>
+                <select class="form-control" id="cb-ai-provider-flow">
+                  <option value="openai">OpenAI</option>
+                  <option value="groq">Groq</option>
+                  <option value="anthropic">Anthropic</option>
+                </select>
+              </div>
+              <div class="cb-form-group">
+                <label>Modelo</label>
+                <select class="form-control" id="cb-ai-model-flow">
+                  <option value="gpt-4o-mini">gpt-4o-mini</option>
+                  <option value="gpt-4o">gpt-4o</option>
+                  <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+                  <option value="llama-3.3-70b-versatile">llama-3.3-70b (Groq)</option>
+                  <option value="claude-3-haiku-20240307">Claude 3 Haiku</option>
+                  <option value="claude-sonnet-4-20250514">Claude Sonnet 4</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="cb-form-group" style="margin-top: var(--space-md);">
+              <label>API Key</label>
+              <input class="form-control" type="password" id="cb-ai-key-flow" placeholder="sk-... o anthropic key">
+            </div>
+
+            <div class="cb-form-group" style="margin-top: var(--space-md);">
+              <label>Prompt del sistema (por defecto para nodos IA)</label>
+              <textarea class="form-control" id="cb-ai-prompt-flow" rows="4" placeholder="Eres un asistente de atencion al cliente..."></textarea>
+            </div>
+
+            <button class="btn-primary" onclick="saveAiConfigFlow()" style="margin-top: var(--space-lg);">
+              <i class="bi bi-floppy"></i> Guardar IA
+            </button>
+          </div>
         </div>
 
         <!-- Active Conversations -->

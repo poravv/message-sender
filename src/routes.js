@@ -2193,7 +2193,7 @@ function buildRoutes() {
         name, enabled, active_hours_start, active_hours_end, active_days,
         cooldown_minutes, only_known_contacts, max_responses_per_contact,
         ai_enabled, ai_provider, ai_api_key, ai_model, ai_system_prompt,
-        welcome_message, fallback_message
+        welcome_message, fallback_message, bot_mode
       } = req.body || {};
 
       const encryptedKey = ai_api_key ? chatbotEngine.encrypt(ai_api_key) : null;
@@ -2203,8 +2203,8 @@ function buildRoutes() {
          (user_id, name, enabled, active_hours_start, active_hours_end, active_days,
           cooldown_minutes, only_known_contacts, max_responses_per_contact,
           ai_enabled, ai_provider, ai_api_key_encrypted, ai_model, ai_system_prompt,
-          welcome_message, fallback_message)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          welcome_message, fallback_message, bot_mode)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
          RETURNING *`,
         [
           userId,
@@ -2223,6 +2223,7 @@ function buildRoutes() {
           ai_system_prompt || null,
           welcome_message || null,
           fallback_message || 'No entendí tu mensaje. Escribí "menu" para ver las opciones.',
+          bot_mode || 'flow',
         ]
       );
 
@@ -2249,7 +2250,8 @@ function buildRoutes() {
         name, enabled, active_hours_start, active_hours_end, active_days,
         cooldown_minutes, only_known_contacts, max_responses_per_contact,
         ai_enabled, ai_provider, ai_api_key, ai_model, ai_system_prompt,
-        welcome_message, fallback_message
+        welcome_message, fallback_message, exit_message, deactivation_message,
+        start_node_id, activation_keywords, deactivation_keywords, bot_mode
       } = req.body || {};
 
       // Build dynamic SET clause
@@ -2279,6 +2281,12 @@ function buildRoutes() {
       addField('ai_system_prompt', ai_system_prompt);
       addField('welcome_message', welcome_message);
       addField('fallback_message', fallback_message);
+      addField('exit_message', exit_message);
+      addField('deactivation_message', deactivation_message);
+      addField('start_node_id', start_node_id);
+      addField('activation_keywords', activation_keywords);
+      addField('deactivation_keywords', deactivation_keywords);
+      addField('bot_mode', bot_mode);
 
       // Handle API key specially (encrypt)
       if (ai_api_key !== undefined) {

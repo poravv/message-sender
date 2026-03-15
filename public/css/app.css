@@ -6619,6 +6619,65 @@ a.btn-link:hover {
   color: var(--info);
 }
 
+/* ── Bot Mode Selector ── */
+.cb-mode-selector {
+  display: flex;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.cb-mode-option {
+  flex: 1;
+  min-width: 200px;
+  cursor: pointer;
+}
+
+.cb-mode-option input[type="radio"] {
+  display: none;
+}
+
+.cb-mode-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-lg);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-md);
+  text-align: center;
+  transition: all var(--transition);
+  background: var(--bg-secondary);
+}
+
+.cb-mode-label i {
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  transition: color var(--transition);
+}
+
+.cb-mode-label strong {
+  color: var(--text-primary);
+  font-size: 0.95rem;
+}
+
+.cb-mode-label small {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.cb-mode-option input[type="radio"]:checked + .cb-mode-label {
+  border-color: var(--accent);
+  background: rgba(37, 211, 102, 0.05);
+}
+
+.cb-mode-option input[type="radio"]:checked + .cb-mode-label i {
+  color: var(--accent);
+}
+
+.cb-mode-label:hover {
+  border-color: var(--accent);
+}
+
 /* ── Chatbot Mobile ── */
 @media (max-width: 768px) {
   .cb-form-grid {
