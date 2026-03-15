@@ -634,29 +634,31 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
     let shouldReset = false;
 
     if (!currentNodeId) {
-      // First interaction — send welcome message
-      if (config.welcome_message) {
-        responseText = replaceVariables(config.welcome_message, contactData);
-      }
+      // First interaction — send welcome message + first node (e.g. menu)
+      const welcomeText = config.welcome_message ? replaceVariables(config.welcome_message, contactData) : null;
+
       // Find first node (look for 'welcome' or 'start' or first menu node)
       const firstNode = findNode(nodes, 'welcome') || findNode(nodes, 'start') || nodes.find(n => n.type === 'menu');
-      if (firstNode) {
-        nextNodeId = firstNode.node_id;
 
-        // If there's a welcome message, send it first then navigate to first node
-        if (!responseText) {
-          const result = await executeNode(firstNode, null, config, contactData, conversation.context);
-          responseText = result.text;
-          if (!result.stayOnNode) {
-            nextNodeId = result.nextNodeId || firstNode.node_id;
-          }
-          mediaPayload = result.mediaPayload;
-          shouldDeactivate = result.deactivate;
-          shouldReset = result.resetConversation;
+      if (firstNode) {
+        // Execute the first node to get its content (e.g. the menu text)
+        const result = await executeNode(firstNode, null, config, contactData, conversation.context);
+
+        if (welcomeText && result.text) {
+          // Combine welcome + first node text (e.g. greeting + menu)
+          responseText = welcomeText + '\n\n' + result.text;
+        } else {
+          responseText = welcomeText || result.text;
         }
-      } else if (!responseText) {
-        // No nodes and no welcome message → use fallback
-        responseText = config.fallback_message;
+
+        // Stay on the first node so the user can respond to it (e.g. pick menu option)
+        nextNodeId = firstNode.node_id;
+        mediaPayload = result.mediaPayload;
+        shouldDeactivate = result.deactivate;
+        shouldReset = result.resetConversation;
+      } else {
+        // No nodes — just send welcome or fallback
+        responseText = welcomeText || config.fallback_message;
       }
     } else {
       // Continuing conversation — find current node and process input
@@ -718,7 +720,13 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
         }
       }
     } else if (responseText) {
-      await sendFn(jid, { text: responseText });
+      logger.info({ userId, contactPhone, jid, responseText: responseText?.substring(0, 80) }, 'Chatbot sending text reply');
+      try {
+        await sendFn(jid, { text: responseText });
+        logger.info({ userId, contactPhone }, 'Chatbot reply sent successfully');
+      } catch (sendErr) {
+        logger.error({ err: sendErr?.message, userId, contactPhone, jid }, 'Chatbot failed to send reply via WhatsApp');
+      }
     }
 
     // 14. Log bot reply
