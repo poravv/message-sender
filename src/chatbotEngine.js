@@ -60,8 +60,8 @@ const ensureChatbotTables = (() => {
         exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.',
         deactivation_message TEXT DEFAULT 'Un agente te atenderá pronto. Gracias por tu paciencia.',
         start_node_id VARCHAR(100),
-        activation_keywords TEXT[],
-        deactivation_keywords TEXT[],
+        activation_keywords TEXT[] DEFAULT '{hola,hi,hello,hey,buenos dias,buenas tardes,buenas noches,buen dia,buenas,ola,hla,holaa,menu,menú,inicio,info,informacion,información,ayuda,help,start}',
+        deactivation_keywords TEXT[] DEFAULT '{agente,humano,operador,persona real,quiero hablar,no entiendo,basta,stop,parar,chau,adios,bye}',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -120,8 +120,10 @@ const ensureChatbotTables = (() => {
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.';
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS deactivation_message TEXT DEFAULT 'Un agente te atenderá pronto. Gracias por tu paciencia.';
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS start_node_id VARCHAR(100);
-      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS activation_keywords TEXT[];
-      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS deactivation_keywords TEXT[];
+      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS activation_keywords TEXT[] DEFAULT '{hola,hi,hello,hey,buenos dias,buenas tardes,buenas noches,buen dia,buenas,ola,hla,holaa,menu,menú,inicio,info,informacion,información,ayuda,help,start}';
+      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS deactivation_keywords TEXT[] DEFAULT '{agente,humano,operador,persona real,quiero hablar,no entiendo,basta,stop,parar,chau,adios,bye}';
+      UPDATE chatbot_configs SET activation_keywords = '{hola,hi,hello,hey,buenos dias,buenas tardes,buenas noches,buen dia,buenas,ola,hla,holaa,menu,menú,inicio,info,informacion,información,ayuda,help,start}' WHERE activation_keywords IS NULL;
+      UPDATE chatbot_configs SET deactivation_keywords = '{agente,humano,operador,persona real,quiero hablar,no entiendo,basta,stop,parar,chau,adios,bye}' WHERE deactivation_keywords IS NULL;
     `);
     created = true;
     logger.info('Chatbot tables ensured');

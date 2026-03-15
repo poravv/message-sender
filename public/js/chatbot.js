@@ -96,8 +96,10 @@ function renderConfigForm(config) {
   chatbotConfig._pendingStartNode = c.start_node_id || '';
 
   // Keywords
-  setVal('cb-activation-keywords', (c.activation_keywords || []).join(', '));
-  setVal('cb-deactivation-keywords', (c.deactivation_keywords || []).join(', '));
+  var defaultActivation = 'hola, hi, hello, hey, buenos dias, buenas tardes, buenas noches, buen dia, buenas, ola, hla, holaa, menu, menú, inicio, info, informacion, información, ayuda, help, start';
+  var defaultDeactivation = 'agente, humano, operador, persona real, quiero hablar, no entiendo, basta, stop, parar, chau, adios, bye';
+  setVal('cb-activation-keywords', (c.activation_keywords && c.activation_keywords.length > 0) ? c.activation_keywords.join(', ') : defaultActivation);
+  setVal('cb-deactivation-keywords', (c.deactivation_keywords && c.deactivation_keywords.length > 0) ? c.deactivation_keywords.join(', ') : defaultDeactivation);
 
   var onlyKnown = document.getElementById('cb-only-known');
   if (onlyKnown) onlyKnown.checked = c.only_known_contacts !== false;
