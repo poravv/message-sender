@@ -253,7 +253,7 @@ async function saveChatbotConfig() {
 async function saveAiConfig() {
   var currentMode = document.getElementById('cb-mode-ai') && document.getElementById('cb-mode-ai').checked ? 'ai' : 'flow';
   var payload = {
-    ai_enabled: document.getElementById('cb-ai-enabled').checked,
+    ai_enabled: true, // Always enable AI when saving AI config
     ai_provider: getVal('cb-ai-provider'),
     ai_model: getVal('cb-ai-model'),
     ai_system_prompt: getVal('cb-ai-prompt'),
