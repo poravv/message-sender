@@ -64,62 +64,60 @@
   <main class="main">
     <div class="container">
       <!-- Tab Navigation -->
-      <div class="tabs-nav-wrapper">
-        <nav class="tabs-nav">
-          <!-- Main -->
-          <button class="tab-btn active" data-tab="dashboard" title="Dashboard">
-            <i class="bi bi-speedometer2"></i>
-            <span class="tab-label">Dashboard</span>
+      <nav class="tabs-nav">
+        <!-- Primary tabs -->
+        <button class="tab-btn active" data-tab="dashboard" title="Dashboard">
+          <i class="bi bi-speedometer2"></i>
+          <span class="tab-label">Dashboard</span>
+        </button>
+        <button class="tab-btn" data-tab="whatsapp" title="WhatsApp">
+          <i class="bi bi-whatsapp"></i>
+          <span class="tab-label">WhatsApp</span>
+        </button>
+        <button class="tab-btn" data-tab="send" title="Enviar">
+          <i class="bi bi-send"></i>
+          <span class="tab-label">Enviar</span>
+        </button>
+        <button class="tab-btn" data-tab="contacts" title="Contactos">
+          <i class="bi bi-people"></i>
+          <span class="tab-label">Contactos</span>
+        </button>
+        <button class="tab-btn" data-tab="inbox" title="Bandeja">
+          <i class="bi bi-chat-dots"></i>
+          <span class="tab-label">Bandeja</span>
+          <span class="inbox-tab-badge d-none" id="inbox-unread-badge">0</span>
+        </button>
+        <button class="tab-btn" data-tab="chatbot" title="Chatbot">
+          <i class="bi bi-robot"></i>
+          <span class="tab-label">Chatbot</span>
+        </button>
+
+        <!-- More dropdown -->
+        <div class="tab-more-wrapper">
+          <button class="tab-btn tab-more-trigger" id="moreTabsBtn" title="Mas opciones">
+            <i class="bi bi-grid-3x3-gap"></i>
+            <span class="tab-label">Mas</span>
+            <i class="bi bi-chevron-down tab-more-chevron"></i>
           </button>
-          <button class="tab-btn" data-tab="whatsapp" title="Conectar">
-            <i class="bi bi-qr-code"></i>
-            <span class="tab-label">Conectar</span>
-          </button>
-          <span class="tab-divider"></span>
-          <!-- Messaging -->
-          <button class="tab-btn" data-tab="send" title="Enviar">
-            <i class="bi bi-send"></i>
-            <span class="tab-label">Enviar</span>
-          </button>
-          <button class="tab-btn" data-tab="templates" title="Plantillas">
-            <i class="bi bi-chat-square-text"></i>
-            <span class="tab-label">Plantillas</span>
-          </button>
-          <button class="tab-btn" data-tab="contacts" title="Contactos">
-            <i class="bi bi-people"></i>
-            <span class="tab-label">Contactos</span>
-          </button>
-          <span class="tab-divider"></span>
-          <!-- Engagement -->
-          <button class="tab-btn" data-tab="inbox" title="Bandeja">
-            <i class="bi bi-chat-dots"></i>
-            <span class="tab-label">Bandeja</span>
-            <span class="inbox-tab-badge d-none" id="inbox-unread-badge">0</span>
-          </button>
-          <button class="tab-btn" data-tab="campaigns" title="Campanas">
-            <i class="bi bi-megaphone"></i>
-            <span class="tab-label">Campanas</span>
-          </button>
-          <button class="tab-btn" data-tab="chatbot" title="Chatbot">
-            <i class="bi bi-robot"></i>
-            <span class="tab-label">Chatbot</span>
-          </button>
-          <span class="tab-divider"></span>
-          <!-- Settings -->
-          <button class="tab-btn" data-tab="plans" title="Planes">
-            <i class="bi bi-credit-card"></i>
-            <span class="tab-label">Planes</span>
-          </button>
-          <button class="tab-btn" data-tab="api" title="API">
-            <i class="bi bi-code-slash"></i>
-            <span class="tab-label">API</span>
-          </button>
-          <button class="tab-btn d-none" data-tab="admin" id="admin-tab-btn" title="Admin">
-            <i class="bi bi-shield-lock"></i>
-            <span class="tab-label">Admin</span>
-          </button>
-        </nav>
-      </div>
+          <div class="tab-more-menu" id="moreTabsMenu">
+            <button class="tab-more-item" data-tab="templates">
+              <i class="bi bi-chat-square-text"></i> Plantillas
+            </button>
+            <button class="tab-more-item" data-tab="campaigns">
+              <i class="bi bi-megaphone"></i> Campanas
+            </button>
+            <button class="tab-more-item" data-tab="plans">
+              <i class="bi bi-credit-card"></i> Planes
+            </button>
+            <button class="tab-more-item" data-tab="api">
+              <i class="bi bi-code-slash"></i> API
+            </button>
+            <button class="tab-more-item d-none" data-tab="admin" id="admin-tab-btn">
+              <i class="bi bi-shield-lock"></i> Admin
+            </button>
+          </div>
+        </div>
+      </nav>
 
       <!-- Tab: Dashboard -->
       <section id="dashboard" class="tab-pane active">

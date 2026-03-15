@@ -439,46 +439,73 @@ function setupThemeToggle() {
   });
 }
 
-// Tab scroll indicators
-function setupTabsScroll() {
-  var nav = document.querySelector('.tabs-nav');
-  var wrapper = document.querySelector('.tabs-nav-wrapper');
-  if (!nav || !wrapper) return;
+// More menu dropdown
+function setupMoreMenu() {
+  var wrapper = document.querySelector('.tab-more-wrapper');
+  var trigger = document.getElementById('moreTabsBtn');
+  var menu = document.getElementById('moreTabsMenu');
+  if (!wrapper || !trigger || !menu) return;
 
-  function updateScrollIndicators() {
-    var scrollLeft = nav.scrollLeft;
-    var maxScroll = nav.scrollWidth - nav.clientWidth;
+  // Toggle dropdown on click
+  trigger.addEventListener('click', function(e) {
+    e.stopPropagation();
+    wrapper.classList.toggle('open');
+  });
 
-    wrapper.classList.toggle('can-scroll-left', scrollLeft > 4);
-    wrapper.classList.toggle('can-scroll-right', scrollLeft < maxScroll - 4);
-  }
+  // Close on click outside
+  document.addEventListener('click', function(e) {
+    if (!wrapper.contains(e.target)) {
+      wrapper.classList.remove('open');
+    }
+  });
 
-  nav.addEventListener('scroll', updateScrollIndicators, { passive: true });
-  window.addEventListener('resize', updateScrollIndicators);
+  // Handle dropdown item clicks
+  menu.querySelectorAll('.tab-more-item').forEach(function(item) {
+    item.addEventListener('click', function() {
+      var tab = item.dataset.tab;
+      wrapper.classList.remove('open');
 
-  // Initial check
-  setTimeout(updateScrollIndicators, 100);
+      // Check if send tab requires connection
+      if (tab === 'send' && !window.isWhatsAppConnected?.()) {
+        showAlert('Primero conecta WhatsApp', 'warning');
+        showTab('whatsapp');
+        return;
+      }
+
+      showTab(tab);
+    });
+  });
 }
 
 // Tab Navigation
 function showTab(tabId) {
-  // Update buttons
-  var activeBtn = null;
-  document.querySelectorAll('.tab-btn').forEach(function(btn) {
-    var isActive = btn.dataset.tab === tabId;
-    btn.classList.toggle('active', isActive);
-    if (isActive) activeBtn = btn;
+  // Determine if tab is in the dropdown
+  var isDropdownTab = false;
+  var dropdownItem = document.querySelector('.tab-more-item[data-tab="' + tabId + '"]');
+  if (dropdownItem) {
+    isDropdownTab = true;
+  }
+
+  // Update primary tab buttons
+  document.querySelectorAll('.tabs-nav > .tab-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.tab === tabId);
   });
+
+  // Update dropdown items
+  document.querySelectorAll('.tab-more-item').forEach(function(item) {
+    item.classList.toggle('active', item.dataset.tab === tabId);
+  });
+
+  // Highlight the "Mas" trigger when a dropdown tab is active
+  var moreTrigger = document.getElementById('moreTabsBtn');
+  if (moreTrigger) {
+    moreTrigger.classList.toggle('active', isDropdownTab);
+  }
 
   // Update panes
   document.querySelectorAll('.tab-pane').forEach(function(pane) {
     pane.classList.toggle('active', pane.id === tabId);
   });
-
-  // Auto-scroll active tab into view
-  if (activeBtn) {
-    activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-  }
 
   // Update hash
   history.replaceState(null, '', '#' + tabId);
@@ -646,7 +673,7 @@ function showAccountBlockedModal(type, message) {
 window.authFetch = authFetch;
 window.showAlert = showAlert;
 window.showTab = showTab;
-window.setupTabsScroll = setupTabsScroll;
+window.setupMoreMenu = setupMoreMenu;
 window.buildQuery = buildQuery;
 window.getChartTextColor = getChartTextColor;
 window.logout = logout;

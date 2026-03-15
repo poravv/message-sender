@@ -26,8 +26,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Setup theme
   setupThemeToggle();
 
-  // Setup scrollable tabs
-  setupTabsScroll();
+  // Setup more dropdown menu
+  setupMoreMenu();
 
   // Setup tab navigation
   setupTabNavigation();
@@ -65,19 +65,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('🎉 Aplicación iniciada correctamente');
 });
 
-// Setup tab navigation
+// Setup tab navigation (primary tabs only — dropdown items handled by setupMoreMenu)
 function setupTabNavigation() {
-  document.querySelectorAll('.tab-btn').forEach(btn => {
+  document.querySelectorAll('.tabs-nav > .tab-btn').forEach(btn => {
+    // Skip the "Mas" trigger — it's handled by setupMoreMenu
+    if (btn.classList.contains('tab-more-trigger')) return;
+
     btn.addEventListener('click', () => {
       const tab = btn.dataset.tab;
-      
+
       // Check if send tab requires connection
       if (tab === 'send' && !window.isWhatsAppConnected?.()) {
         showAlert('Primero conecta WhatsApp', 'warning');
         showTab('whatsapp');
         return;
       }
-      
+
       showTab(tab);
     });
   });
