@@ -6,18 +6,14 @@ let statusPollingInterval = null;
 let isConnected = false;
 let hasQRDisplayed = false; // Evita refrescar QR mientras el usuario lo escanea
 
-// Format phone number for display: "595992756462" → "+595 992 756 462"
+// Format phone number for display using country-aware formatter from core.js
 function formatPhoneDisplay(phone) {
-  if (!phone) return '';
-  const digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('595') && digits.length >= 12) {
-    const cc = digits.slice(0, 3);
-    const rest = digits.slice(3);
-    // Split rest into groups of 3
-    const parts = rest.match(/.{1,3}/g) || [];
-    return '+' + cc + ' ' + parts.join(' ');
+  if (typeof formatPhoneForDisplay === 'function') {
+    return formatPhoneForDisplay(phone);
   }
-  return '+' + digits;
+  // Fallback: just prefix with +
+  if (!phone) return '';
+  return '+' + String(phone).replace(/\D/g, '');
 }
 
 // Check WhatsApp status

@@ -355,12 +355,11 @@ function escapeHtml(str) {
 }
 
 function formatPhoneDisplay(phone) {
-  if (!phone) return '';
-  // Format 595XXXXXXXXX as +595 XXX XXX XXX
-  if (phone.length === 12 && phone.startsWith('595')) {
-    return '+' + phone.slice(0, 3) + ' ' + phone.slice(3, 6) + ' ' + phone.slice(6, 9) + ' ' + phone.slice(9);
+  if (typeof formatPhoneForDisplay === 'function') {
+    return formatPhoneForDisplay(phone);
   }
-  return phone;
+  if (!phone) return '';
+  return '+' + String(phone).replace(/\D/g, '');
 }
 
 function handleInboxSearch(value) {

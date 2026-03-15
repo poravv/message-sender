@@ -3,7 +3,7 @@ const path = require('path');
 const express = require('express');
 const { upload } = require('./media');
 const qrcode = require('qrcode');
-const { cleanupOldFiles, loadNumbersFromCSV, normalizeParaguayanNumber } = require('./utils');
+const { cleanupOldFiles, loadNumbersFromCSV } = require('./utils');
 const { normalizeNumber, getCountryConfigs } = require('./phoneValidator');
 const redisQueue = require('./queueRedis');
 const metricsStore = require('./metricsStore');
@@ -402,7 +402,7 @@ function buildRoutes() {
             error: 'Se detectaron filas inválidas en el CSV. Envío cancelado.',
             invalidCount,
             duplicates,
-            details: 'Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX'
+            details: 'Verifique que los números estén en formato válido para su país (con o sin código de país)'
           });
         }
         

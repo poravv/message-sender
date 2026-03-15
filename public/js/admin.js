@@ -330,12 +330,10 @@ function getCountryFlag(country) {
 
 function formatPhone(phone) {
   if (!phone) return '-';
-  // Format as +595 XXX XXX XXX
-  var p = String(phone).replace(/\D/g, '');
-  if (p.length === 12 && p.indexOf('595') === 0) {
-    return '+' + p.substr(0, 3) + ' ' + p.substr(3, 3) + ' ' + p.substr(6, 3) + ' ' + p.substr(9);
+  if (typeof formatPhoneForDisplay === 'function') {
+    return formatPhoneForDisplay(phone) || '-';
   }
-  return '+' + p;
+  return '+' + String(phone).replace(/\D/g, '');
 }
 
 function getStatusBadge(status) {

@@ -23,8 +23,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load user profile (trial status, role, etc.)
   await loadUserProfile();
 
+  // Load country configs (for phone formatting/placeholders)
+  await getCountryConfigs().catch(function() {});
+
   // Check country selection (blocking modal on first login)
   await checkCountrySelection();
+
+  // Update phone placeholders with user's country code
+  updatePhonePlaceholders();
 
   // Setup country indicator click handler
   var countryIndicator = document.getElementById('country-indicator');

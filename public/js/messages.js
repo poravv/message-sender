@@ -913,13 +913,11 @@ async function loadContactsForSelector(page) {
 }
 
 function formatPhoneDisplay(phone) {
-  if (!phone) return '';
-  var s = String(phone).replace(/\D/g, '');
-  // Format 595XXXXXXXXX as +595 XXX XXX XXX
-  if (s.length === 12 && s.startsWith('595')) {
-    return '+' + s.slice(0, 3) + ' ' + s.slice(3, 6) + ' ' + s.slice(6, 9) + ' ' + s.slice(9);
+  if (typeof formatPhoneForDisplay === 'function') {
+    return formatPhoneForDisplay(phone);
   }
-  return phone;
+  if (!phone) return '';
+  return '+' + String(phone).replace(/\D/g, '');
 }
 
 function renderContactsCheckList(contacts) {

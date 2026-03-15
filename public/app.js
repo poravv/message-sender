@@ -2555,7 +2555,7 @@ async function handleContactsTableClick(event) {
     const currentTratamiento = row.children[2]?.textContent?.trim() || '';
     const currentGrupo = row.children[3]?.textContent?.trim() || '';
 
-    const phone = prompt('Número (595...):', currentPhone);
+    const phone = prompt('Número de teléfono:', currentPhone);
     if (!phone) return;
     const nombre = prompt('Nombre:', currentNombre === '—' ? '' : currentNombre);
     const tratamiento = prompt('Tratamiento:', currentTratamiento === '—' ? '' : currentTratamiento);

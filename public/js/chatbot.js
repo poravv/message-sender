@@ -637,7 +637,7 @@ function renderRedirectEditor(idx, content) {
       '<div class="cb-editor-row">' +
         '<label>Telefono de redireccion:</label>' +
         '<input class="form-control cb-content-field" type="text" data-idx="' + idx + '" data-field="phone" ' +
-          'value="' + escHtml(content.phone || '') + '" placeholder="595981123456">' +
+          'value="' + escHtml(content.phone || '') + '" placeholder="' + (typeof getCountryDialCode === 'function' ? getCountryDialCode() : '') + '...">' +
       '</div>' +
       renderVariableChips(idx) +
       '<textarea class="form-control cb-content-field" data-idx="' + idx + '" data-field="message" ' +

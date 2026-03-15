@@ -788,6 +788,9 @@ function showCountrySelectorModal(onConfirm) {
           userProfile = window.userProfile;
         }
         updateCountryIndicator();
+        // Refresh country configs cache and update placeholders
+        _countryConfigsCache = null;
+        getCountryConfigs().then(function() { updatePhonePlaceholders(); }).catch(function() {});
         var m = document.getElementById('country-selector-modal');
         if (m) m.remove();
         if (typeof onConfirm === 'function') onConfirm();
@@ -896,6 +899,9 @@ function showCountryChangeModal() {
         }
         updateCountryIndicator();
         updateCountryInfoBadges();
+        // Refresh country configs cache and update placeholders
+        _countryConfigsCache = null;
+        getCountryConfigs().then(function() { updatePhonePlaceholders(); }).catch(function() {});
         var m = document.getElementById('country-change-modal');
         if (m) m.remove();
         showAlert('Pais actualizado a ' + (COUNTRY_FLAGS[selectedCode] || '') + ' ' + selectedCode, 'success');
@@ -1070,6 +1076,111 @@ function updateProfileDropdown() {
   }
 }
 
+// ========== Country Helpers ==========
+
+/**
+ * Country dial code cache (populated from /phone/countries).
+ */
+var _countryConfigsCache = null;
+
+/**
+ * Get country configs from the server (cached).
+ * @returns {Promise<Object>} Map of country code to config
+ */
+function getCountryConfigs() {
+  if (_countryConfigsCache) {
+    return Promise.resolve(_countryConfigsCache);
+  }
+  return authFetch('/phone/countries')
+    .then(function(res) { return res.json(); })
+    .then(function(countries) {
+      _countryConfigsCache = countries;
+      return countries;
+    });
+}
+
+/**
+ * Get the current user's country ISO code (e.g. 'AR', 'PY').
+ * @returns {string}
+ */
+function getUserCountry() {
+  return (window.userProfile && window.userProfile.country) || 'PY';
+}
+
+/**
+ * Get the current user's country dial code (e.g. '54' for Argentina, '595' for Paraguay).
+ * Returns from cache if available, otherwise returns a default.
+ * @returns {string}
+ */
+function getCountryDialCode() {
+  var country = getUserCountry();
+  if (_countryConfigsCache && _countryConfigsCache[country]) {
+    return _countryConfigsCache[country].code;
+  }
+  // Fallback map for common codes
+  var fallback = {
+    PY: '595', AR: '54', BR: '55', CL: '56', UY: '598',
+    CO: '57', PE: '51', EC: '593', BO: '591', VE: '58',
+    MX: '52', US: '1', ES: '34'
+  };
+  return fallback[country] || '595';
+}
+
+/**
+ * Format a phone number for display based on detected or user country.
+ * Handles any country code, not just 595.
+ * E.g. "5491112345678" → "+54 911 123 456 78"
+ * @param {string} phone - Raw or normalized phone number
+ * @returns {string} Formatted display string
+ */
+function formatPhoneForDisplay(phone) {
+  if (!phone) return '';
+  var digits = String(phone).replace(/\D/g, '');
+  if (!digits) return phone;
+
+  // Try to match against known country configs
+  var configs = _countryConfigsCache;
+  if (configs) {
+    // Sort by code length descending so longer codes match first
+    var entries = Object.keys(configs).map(function(k) { return { key: k, config: configs[k] }; });
+    entries.sort(function(a, b) { return (b.config.code || '').length - (a.config.code || '').length; });
+
+    for (var i = 0; i < entries.length; i++) {
+      var cfg = entries[i].config;
+      if (digits.indexOf(cfg.code) === 0 && digits.length === cfg.totalLength) {
+        var local = digits.substring(cfg.code.length);
+        // Split local into groups of 3 from right
+        var groups = [];
+        var remaining = local;
+        while (remaining.length > 3) {
+          groups.unshift(remaining.slice(-3));
+          remaining = remaining.slice(0, -3);
+        }
+        if (remaining.length > 0) groups.unshift(remaining);
+        return '+' + cfg.code + ' ' + groups.join(' ');
+      }
+    }
+  }
+
+  // Fallback: just prefix with +
+  return '+' + digits;
+}
+
+/**
+ * Update phone input placeholders to use the user's country code.
+ * Call this after country configs are loaded.
+ */
+function updatePhonePlaceholders() {
+  var dialCode = getCountryDialCode();
+  var placeholder = '+' + dialCode + '...';
+
+  var ids = ['contactPhone', 'editContactPhone'];
+  ids.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.placeholder = placeholder;
+  });
+}
+
 // Global exports
 window.authFetch = authFetch;
 window.showAlert = showAlert;
@@ -1092,3 +1203,8 @@ window.COUNTRY_FLAGS = COUNTRY_FLAGS;
 window.userProfile = userProfile;
 window.setupProfileMenu = setupProfileMenu;
 window.updateProfileDropdown = updateProfileDropdown;
+window.getCountryConfigs = getCountryConfigs;
+window.getUserCountry = getUserCountry;
+window.getCountryDialCode = getCountryDialCode;
+window.formatPhoneForDisplay = formatPhoneForDisplay;
+window.updatePhonePlaceholders = updatePhonePlaceholders;
