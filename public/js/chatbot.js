@@ -95,6 +95,10 @@ function renderConfigForm(config) {
   // Start node selector — populate after nodes are loaded
   chatbotConfig._pendingStartNode = c.start_node_id || '';
 
+  // Keywords
+  setVal('cb-activation-keywords', (c.activation_keywords || []).join(', '));
+  setVal('cb-deactivation-keywords', (c.deactivation_keywords || []).join(', '));
+
   var onlyKnown = document.getElementById('cb-only-known');
   if (onlyKnown) onlyKnown.checked = c.only_known_contacts !== false;
 
@@ -182,7 +186,9 @@ async function saveChatbotConfig() {
     fallback_message: getVal('cb-fallback'),
     exit_message: getVal('cb-exit-message'),
     deactivation_message: getVal('cb-deactivation-message'),
-    start_node_id: getVal('cb-start-node') || null
+    start_node_id: getVal('cb-start-node') || null,
+    activation_keywords: getVal('cb-activation-keywords') ? getVal('cb-activation-keywords').split(',').map(function(s) { return s.trim(); }).filter(Boolean) : null,
+    deactivation_keywords: getVal('cb-deactivation-keywords') ? getVal('cb-deactivation-keywords').split(',').map(function(s) { return s.trim(); }).filter(Boolean) : null
   };
 
   try {

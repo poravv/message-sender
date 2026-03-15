@@ -1201,6 +1201,18 @@
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label>Palabras que activan el bot</label>
+            <input class="form-control" id="cb-activation-keywords" type="text" placeholder="hola, menu, ayuda, buenas, hi, hello, info, inicio">
+            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna de estas, el bot se activa. Si está vacío usa las predeterminadas.</small>
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label>Palabras que desactivan el bot</label>
+            <input class="form-control" id="cb-deactivation-keywords" type="text" placeholder="agente, humano, persona real, quiero hablar">
+            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna fuera del menú, el bot se desactiva. "Salir" dentro del menú siempre funciona.</small>
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Mensaje de bienvenida</label>
             <textarea class="form-control" id="cb-welcome" rows="3" placeholder="Hola {nombre}! Soy el asistente de..."></textarea>
           </div>

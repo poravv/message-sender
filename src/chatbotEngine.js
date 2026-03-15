@@ -60,6 +60,8 @@ const ensureChatbotTables = (() => {
         exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.',
         deactivation_message TEXT DEFAULT 'Un agente te atenderá pronto. Gracias por tu paciencia.',
         start_node_id VARCHAR(100),
+        activation_keywords TEXT[],
+        deactivation_keywords TEXT[],
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -118,6 +120,8 @@ const ensureChatbotTables = (() => {
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.';
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS deactivation_message TEXT DEFAULT 'Un agente te atenderá pronto. Gracias por tu paciencia.';
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS start_node_id VARCHAR(100);
+      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS activation_keywords TEXT[];
+      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS deactivation_keywords TEXT[];
     `);
     created = true;
     logger.info('Chatbot tables ensured');
@@ -130,24 +134,45 @@ function normalizeText(str) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
-// ─── Activation keywords (triggers bot when no active flow) ─────────────────
-const ACTIVATION_KEYWORDS = [
+// ─── Default keywords (used when config doesn't have custom ones) ───────────
+const DEFAULT_ACTIVATION_KEYWORDS = [
   'hola', 'hi', 'hello', 'hey', 'buenos dias', 'buenas tardes', 'buenas noches',
   'buen dia', 'buenas', 'ola', 'hla', 'holaa', 'menu', 'menú', 'inicio',
   'info', 'informacion', 'información', 'ayuda', 'help', 'start'
 ];
 
-// ─── Deactivation keywords (stops bot anytime mid-flow) ─────────────────────
-const DEACTIVATION_KEYWORDS = [
+const DEFAULT_DEACTIVATION_KEYWORDS = [
   'salir', 'exit', 'hablar con persona', 'agente', 'humano', 'operador',
   'persona real', 'quiero hablar', 'no entiendo', 'basta', 'stop', 'parar',
   'chau', 'adios', 'bye'
 ];
 
-function isActivationMessage(text) {
+function getActivationKeywords(config) {
+  if (config && config.activation_keywords && config.activation_keywords.length > 0) {
+    return config.activation_keywords;
+  }
+  return DEFAULT_ACTIVATION_KEYWORDS;
+}
+
+function getDeactivationKeywords(config) {
+  if (config && config.deactivation_keywords && config.deactivation_keywords.length > 0) {
+    return config.deactivation_keywords;
+  }
+  return DEFAULT_DEACTIVATION_KEYWORDS;
+}
+
+function isActivationMessage(text, config) {
   if (!text) return false;
   const normalized = normalizeText(text);
-  return ACTIVATION_KEYWORDS.some(kw => normalized === normalizeText(kw) || normalized.startsWith(normalizeText(kw) + ' '));
+  const keywords = getActivationKeywords(config);
+  return keywords.some(kw => normalized === normalizeText(kw) || normalized.startsWith(normalizeText(kw) + ' '));
+}
+
+function isDeactivationMessage(text, config) {
+  if (!text) return false;
+  const normalized = normalizeText(text);
+  const keywords = getDeactivationKeywords(config);
+  return keywords.some(kw => normalized === normalizeText(kw) || normalized.includes(normalizeText(kw)));
 }
 
 // ─── Config cache (per-user, short TTL) ──────────────────────────────────────
@@ -703,8 +728,7 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
     // 6. Check deactivation keywords — ONLY when no active flow
     // When in a flow (current_node_id set), let the menu handle "salir" as a friendly exit
     if (messageInfo.text && !conversation.current_node_id) {
-      const normalizedInput = normalizeText(messageInfo.text);
-      if (DEACTIVATION_KEYWORDS.some(kw => normalizedInput === normalizeText(kw) || normalizedInput.includes(normalizeText(kw)))) {
+      if (isDeactivationMessage(messageInfo.text, config)) {
         await deactivateConversation(userId, contactPhone);
         const deactivationMsg = config.deactivation_message || 'Un agente te atenderá pronto. Gracias por tu paciencia.';
         const jid = `${contactPhone}@s.whatsapp.net`;
@@ -716,7 +740,7 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
 
     // 7. Check if conversation is active — reactivate if activation keyword
     if (!conversation.is_active) {
-      if (messageInfo.text && isActivationMessage(messageInfo.text)) {
+      if (messageInfo.text && isActivationMessage(messageInfo.text, config)) {
         // Reactivate conversation on activation keyword
         await pg.query(
           `UPDATE chatbot_conversations SET is_active = true, current_node_id = NULL,
@@ -778,7 +802,7 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
 
     if (!currentNodeId) {
       // No active flow — check if message is an activation keyword
-      if (!isActivationMessage(messageInfo.text)) {
+      if (!isActivationMessage(messageInfo.text, config)) {
         logger.info({ userId, contactPhone, text: messageInfo.text?.substring(0, 50) }, 'Message ignored — not an activation keyword');
         return { responded: false, reason: 'not_activation_keyword' };
       }
