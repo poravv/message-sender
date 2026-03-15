@@ -4,8 +4,12 @@ const multer = require('multer');
 const ffmpeg = require('fluent-ffmpeg');
 const { tempDir, uploadsDir } = require('./config');
 
-const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
-ffmpeg.setFfmpegPath(ffmpegPath);
+try {
+  const ffmpegPath = require('@ffmpeg-installer/ffmpeg').path;
+  ffmpeg.setFfmpegPath(ffmpegPath);
+} catch {
+  // Fallback to system ffmpeg (installed via apt in Docker)
+}
 
 async function convertAudioToOpus(inputPath, userId = 'default') {
   if (!fs.existsSync(inputPath)) throw new Error(`Archivo de entrada no encontrado: ${inputPath}`);
@@ -70,14 +74,14 @@ const storage = multer.diskStorage({
       const ext = path.extname(file.originalname);
       const unique = `${Date.now()}-${Math.round(Math.random()*1e9)}`;
       // Incluir userId para evitar conflictos entre usuarios
-      const userId = req.auth?.sub || req.auth?.id || 'default';
+      const userId = req.auth?.uid || 'default';
       cb(null, `audio_${userId}_${unique}${ext}`);
     } else {
       // Asegurar nombres únicos por usuario para imágenes/CSV
       const ext = path.extname(file.originalname);
       const base = path.basename(file.originalname, ext).replace(/[^\w.-]/g, '_');
       const unique = `${Date.now()}-${Math.round(Math.random()*1e9)}`;
-      const userId = req.auth?.sub || req.auth?.id || 'default';
+      const userId = req.auth?.uid || 'default';
       cb(null, `${base}_${userId}_${unique}${ext}`);
     }
   }

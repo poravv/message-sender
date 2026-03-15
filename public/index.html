@@ -33,9 +33,10 @@
       </a>
       
       <div class="navbar-end">
+        <div id="trial-badge" class="trial-badge d-none"></div>
         <div id="user-info" class="user-info d-none">
           <span id="user-name">Usuario</span>
-          <button id="logout-btn" class="btn-icon" title="Cerrar sesión">
+          <button id="logout-btn" class="btn-icon" title="Cerrar sesion">
             <i class="bi bi-box-arrow-right"></i>
           </button>
         </div>
@@ -76,49 +77,127 @@
           <i class="bi bi-send"></i>
           <span>Enviar</span>
         </button>
+        <button class="tab-btn" data-tab="templates">
+          <i class="bi bi-chat-square-text"></i>
+          <span>Plantillas</span>
+        </button>
         <button class="tab-btn" data-tab="contacts">
           <i class="bi bi-people"></i>
           <span>Contactos</span>
+        </button>
+        <button class="tab-btn" data-tab="plans">
+          <i class="bi bi-credit-card"></i>
+          <span>Planes</span>
+        </button>
+        <button class="tab-btn" data-tab="api">
+          <i class="bi bi-code-slash"></i>
+          <span>API</span>
+        </button>
+        <button class="tab-btn d-none" data-tab="admin" id="admin-tab-btn">
+          <i class="bi bi-shield-lock"></i>
+          <span>Admin</span>
         </button>
       </nav>
 
       <!-- Tab: Dashboard -->
       <section id="dashboard" class="tab-pane active">
         <header class="section-header">
-          <h1>Dashboard</h1>
-          <p>Visualiza el rendimiento de tus envíos</p>
+          <div class="section-header-row">
+            <div>
+              <h1>Dashboard</h1>
+              <p>Visualiza el rendimiento de tus envíos</p>
+            </div>
+            <div class="section-header-actions">
+              <button class="btn-refresh" id="refreshDashboardBtn" title="Actualizar datos">
+                <i class="bi bi-arrow-clockwise"></i>
+              </button>
+              <button class="btn-refresh btn-danger" id="clearCacheBtn" title="Limpiar caché Redis">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </div>
+          </div>
         </header>
 
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-          <div class="stat-card">
-            <div class="stat-icon"><i class="bi bi-send-check"></i></div>
-            <div class="stat-data">
-              <span class="stat-value" id="statTotalSent">0</span>
-              <span class="stat-label">Enviados (período)</span>
+        <!-- Connection Status Widget -->
+        <div class="dash-connection-widget" id="dashConnectionWidget">
+          <div class="dash-conn-icon" id="dashConnIcon">
+            <i class="bi bi-whatsapp"></i>
+          </div>
+          <div class="dash-conn-info">
+            <span class="dash-conn-label" id="dashConnLabel">WhatsApp</span>
+            <span class="dash-conn-status" id="dashConnStatus">Verificando...</span>
+          </div>
+          <button class="dash-conn-action" id="dashConnAction" style="display:none" onclick="document.querySelector('[data-tab=whatsapp]')?.click()">
+            Conectar <i class="bi bi-arrow-right"></i>
+          </button>
+        </div>
+
+        <!-- Stats Cards Grid -->
+        <div class="dash-stats-grid">
+          <div class="dash-stat-card dash-stat-blue">
+            <div class="dash-stat-icon"><i class="bi bi-send-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Total Enviados</span>
+              <span class="dash-stat-value" id="statTotalSent">0</span>
             </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon success"><i class="bi bi-check-circle"></i></div>
-            <div class="stat-data">
-              <span class="stat-value" id="statSuccessRate">--%</span>
-              <span class="stat-label">Tasa de éxito</span>
+          <div class="dash-stat-card dash-stat-green">
+            <div class="dash-stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Exitosos</span>
+              <span class="dash-stat-value" id="statTotalSuccess">0</span>
             </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon warning"><i class="bi bi-exclamation-triangle"></i></div>
-            <div class="stat-data">
-              <span class="stat-value" id="statTotalErrors">0</span>
-              <span class="stat-label">Errores</span>
+          <div class="dash-stat-card dash-stat-red">
+            <div class="dash-stat-icon"><i class="bi bi-x-circle-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Errores</span>
+              <span class="dash-stat-value" id="statTotalErrors">0</span>
             </div>
           </div>
-          <div class="stat-card">
-            <div class="stat-icon info"><i class="bi bi-calendar-month"></i></div>
-            <div class="stat-data">
-              <span class="stat-value" id="statMonthSent">0</span>
-              <span class="stat-label">Este mes</span>
-              <span class="stat-delta" id="statMonthDelta">+0%</span>
+          <div class="dash-stat-card dash-stat-emerald">
+            <div class="dash-stat-icon"><i class="bi bi-percent"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Tasa de Éxito</span>
+              <span class="dash-stat-value" id="statSuccessRate">--%</span>
             </div>
+          </div>
+          <div class="dash-stat-card dash-stat-purple">
+            <div class="dash-stat-icon"><i class="bi bi-megaphone-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Campañas</span>
+              <span class="dash-stat-value" id="statCampaigns">0</span>
+            </div>
+          </div>
+          <div class="dash-stat-card dash-stat-amber">
+            <div class="dash-stat-icon"><i class="bi bi-people-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Contactos</span>
+              <span class="dash-stat-value" id="statContacts">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="dash-quick-actions">
+          <h3 class="dash-section-title"><i class="bi bi-lightning-fill"></i> Acciones Rápidas</h3>
+          <div class="dash-actions-grid">
+            <button class="dash-action-btn" onclick="document.querySelector('[data-tab=send]')?.click()">
+              <i class="bi bi-send"></i>
+              <span>Enviar mensajes</span>
+            </button>
+            <button class="dash-action-btn" onclick="document.querySelector('[data-tab=contacts]')?.click()">
+              <i class="bi bi-people"></i>
+              <span>Ver contactos</span>
+            </button>
+            <button class="dash-action-btn" onclick="document.querySelector('[data-tab=templates]')?.click()">
+              <i class="bi bi-file-earmark-text"></i>
+              <span>Crear plantilla</span>
+            </button>
+            <button class="dash-action-btn dash-action-wa" id="dashQuickConnectBtn" onclick="document.querySelector('[data-tab=whatsapp]')?.click()">
+              <i class="bi bi-whatsapp"></i>
+              <span>Conectar WhatsApp</span>
+            </button>
           </div>
         </div>
 
@@ -141,36 +220,90 @@
             <button class="preset-btn" id="presetMonth">Este mes</button>
             <button class="preset-btn" id="preset90D">90 días</button>
           </div>
-          <button class="btn-refresh" id="refreshDashboardBtn" title="Actualizar datos">
-            <i class="bi bi-arrow-clockwise"></i>
-          </button>
-          <button class="btn-refresh btn-danger" id="clearCacheBtn" title="Limpiar caché Redis">
-            <i class="bi bi-trash3"></i>
-          </button>
         </div>
 
-        <!-- Charts -->
-        <div class="charts-grid">
-          <div class="chart-card large">
-            <div class="chart-header">
-              <h3>Tendencia de Envíos</h3>
-              <div class="chart-legend">
-                <span class="legend success"><i class="bi bi-circle-fill"></i> Enviados</span>
-                <span class="legend danger"><i class="bi bi-circle-fill"></i> Errores</span>
+        <!-- Charts + Recent Campaigns -->
+        <div class="dash-main-grid">
+          <!-- Charts Column -->
+          <div class="dash-charts-col">
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3>Tendencia de Envíos</h3>
+                <div class="chart-legend">
+                  <span class="legend success"><i class="bi bi-circle-fill"></i> Enviados</span>
+                  <span class="legend danger"><i class="bi bi-circle-fill"></i> Errores</span>
+                </div>
+              </div>
+              <div class="chart-body">
+                <canvas id="timelineChart"></canvas>
               </div>
             </div>
-            <div class="chart-body">
-              <canvas id="timelineChart"></canvas>
+
+            <!-- Activity Bars -->
+            <div class="dash-activity-card">
+              <div class="dash-activity-header">
+                <h3>Actividad Reciente (7 días)</h3>
+              </div>
+              <div class="dash-activity-bars" id="dashActivityBars">
+                <div class="dash-activity-empty">Sin datos de actividad</div>
+              </div>
             </div>
           </div>
-          
-          <div class="chart-card">
-            <div class="chart-header">
-              <h3>Resultado de Envíos</h3>
+
+          <!-- Sidebar Column -->
+          <div class="dash-sidebar-col">
+            <div class="chart-card">
+              <div class="chart-header">
+                <h3>Resultado de Envíos</h3>
+              </div>
+              <div class="chart-body pie">
+                <canvas id="pieChart"></canvas>
+              </div>
             </div>
-            <div class="chart-body pie">
-              <canvas id="pieChart"></canvas>
+
+            <!-- This Month Card -->
+            <div class="dash-month-card">
+              <div class="dash-month-header">
+                <i class="bi bi-calendar-month"></i>
+                <h3>Este Mes</h3>
+              </div>
+              <div class="dash-month-body">
+                <div class="dash-month-stat">
+                  <span class="dash-month-value" id="statMonthSent">0</span>
+                  <span class="dash-month-label">mensajes enviados</span>
+                </div>
+                <div class="dash-month-stat">
+                  <span class="dash-month-value" id="statMonthRate">--%</span>
+                  <span class="dash-month-label">tasa de éxito</span>
+                </div>
+                <div class="dash-month-delta" id="statMonthDelta">+0% vs mes anterior</div>
+              </div>
             </div>
+          </div>
+        </div>
+
+        <!-- Recent Campaigns -->
+        <div class="dash-campaigns-section">
+          <div class="dash-campaigns-header">
+            <h3 class="dash-section-title"><i class="bi bi-clock-history"></i> Campañas Recientes</h3>
+          </div>
+          <div class="dash-campaigns-table-wrap" id="dashCampaignsWrap">
+            <table class="dash-campaigns-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Fecha</th>
+                  <th>Destinatarios</th>
+                  <th>Éxito</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody id="dashCampaignsBody">
+                <tr>
+                  <td colspan="5" class="dash-campaigns-empty">Cargando campañas...</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
@@ -215,23 +348,64 @@
           </div>
 
           <div id="authenticated-message" class="connected-section d-none">
-            <div class="success-icon">
-              <i class="bi bi-check-circle-fill"></i>
-            </div>
-            <h2>¡Conectado!</h2>
-            <p>Tu WhatsApp está vinculado y listo para enviar</p>
-            <div class="wa-user-info">
-              <div class="info-row">
-                <span class="label">Usuario:</span>
-                <span class="value" id="wa-user-nickname">—</span>
+            <div class="wa-status-card">
+              <div class="wa-status-header">
+                <div class="wa-status-icon">
+                  <i class="bi bi-whatsapp"></i>
+                </div>
+                <div class="wa-status-title">
+                  <h2>WhatsApp Conectado</h2>
+                  <span class="wa-status-badge">
+                    <span class="wa-pulse-dot"></span>
+                    Sesion activa
+                  </span>
+                </div>
               </div>
-              <div class="info-row">
-                <span class="label">Número:</span>
-                <span class="value" id="wa-user-phone">—</span>
+
+              <div class="wa-phone-display">
+                <i class="bi bi-phone"></i>
+                <span class="wa-phone-number" id="wa-user-phone">--</span>
+              </div>
+
+              <div class="wa-info-grid">
+                <div class="wa-info-item">
+                  <span class="wa-info-label">Nombre</span>
+                  <span class="wa-info-value" id="wa-user-nickname">--</span>
+                </div>
+                <div class="wa-info-item">
+                  <span class="wa-info-label">Estado</span>
+                  <span class="wa-info-value wa-info-connected">
+                    <i class="bi bi-check-circle-fill"></i> Operativo
+                  </span>
+                </div>
+              </div>
+
+              <div class="wa-action-buttons">
+                <button class="wa-action-btn wa-action-primary" onclick="showTab('send')">
+                  <i class="bi bi-send-fill"></i>
+                  <span>Enviar mensajes</span>
+                </button>
+                <button class="wa-action-btn wa-action-secondary" onclick="showTab('contacts')">
+                  <i class="bi bi-people-fill"></i>
+                  <span>Contactos</span>
+                </button>
+                <button class="wa-action-btn wa-action-danger" id="disconnectWaBtn">
+                  <i class="bi bi-power"></i>
+                  <span>Desconectar</span>
+                </button>
               </div>
             </div>
-            <button class="btn-primary" onclick="showTab('send')">
-              <i class="bi bi-send"></i> Comenzar a enviar
+          </div>
+
+          <div id="phone-taken-message" class="phone-taken-section d-none">
+            <div class="error-icon">
+              <i class="bi bi-exclamation-triangle-fill" style="font-size:3rem;color:#e74c3c;"></i>
+            </div>
+            <h2 style="color:#e74c3c;">Número no disponible</h2>
+            <p class="phone-taken-text">Este número ya está asociado a otro usuario.</p>
+            <p>Si crees que es un error, contacta al administrador.</p>
+            <button class="btn-secondary" onclick="hasQRDisplayed=false; loadQR();">
+              <i class="bi bi-arrow-clockwise"></i> Intentar con otro número
             </button>
           </div>
         </div>
@@ -241,56 +415,35 @@
       <section id="send" class="tab-pane">
         <header class="section-header">
           <h1>Enviar Mensajes</h1>
-          <p>Configura y envía mensajes masivos</p>
+          <p>Configura y envia mensajes masivos</p>
         </header>
 
-        <div class="card">
-          <form id="messageForm" enctype="multipart/form-data">
-            <!-- Campaign Name -->
-            <div class="form-group">
-              <label for="campaignName">Nombre de campaña (opcional)</label>
-              <input type="text" id="campaignName" class="form-control" maxlength="120" placeholder="Ej: Promoción Febrero">
+        <form id="messageForm" enctype="multipart/form-data">
+
+          <!-- Step 1: Recipients -->
+          <div class="send-step">
+            <div class="send-step-header">
+              <span class="send-step-num">1</span>
+              <span class="send-step-title">Destinatarios</span>
+              <span class="send-step-badge" id="recipientCountBadge"></span>
             </div>
-
-            <!-- CSV Upload -->
-            <div class="form-group">
-              <label>Lista de destinatarios</label>
-              
-              <!-- Recipient Source Selector -->
-              <div class="recipient-source-tabs">
-                <button type="button" class="source-tab active" data-source="csv">
-                  <i class="bi bi-file-earmark-spreadsheet"></i>
-                  <span>Subir CSV</span>
+            <div class="send-step-body">
+              <!-- Compact source tabs -->
+              <div class="recipient-compact-tabs">
+                <button type="button" class="rc-tab active" data-source="contacts">
+                  <i class="bi bi-person-check"></i> Contactos
                 </button>
-                <button type="button" class="source-tab" data-source="contacts">
-                  <i class="bi bi-person-check"></i>
-                  <span>Seleccionar Contactos</span>
+                <button type="button" class="rc-tab" data-source="group">
+                  <i class="bi bi-people"></i> Grupo
                 </button>
-                <button type="button" class="source-tab" data-source="group">
-                  <i class="bi bi-people"></i>
-                  <span>Por Grupo</span>
+                <button type="button" class="rc-tab" data-source="csv">
+                  <i class="bi bi-file-earmark-spreadsheet"></i> CSV
                 </button>
               </div>
-              <input type="hidden" id="recipientSource" name="recipientSource" value="csv">
-
-              <!-- CSV Source -->
-              <div id="csvSourceSection" class="source-section">
-                <div class="file-upload">
-                  <input type="file" id="csvFile" name="csvFile" accept=".csv,.txt">
-                  <label for="csvFile" class="file-upload-label">
-                    <i class="bi bi-cloud-upload"></i>
-                    <span>Arrastra o selecciona tu archivo CSV/TXT</span>
-                    <small>Formato: 595xxxxxxxxxxx</small>
-                  </label>
-                  <div id="csvFileInfo" class="file-info"></div>
-                </div>
-                <div class="help-text">
-                  <strong>Columnas opcionales:</strong> número, sustantivo, nombre, grupo
-                </div>
-              </div>
+              <input type="hidden" id="recipientSource" name="recipientSource" value="contacts">
 
               <!-- Contacts Source -->
-              <div id="contactsSourceSection" class="source-section d-none">
+              <div id="contactsSourceSection" class="source-section">
                 <div class="contacts-selector">
                   <div class="selector-header">
                     <div class="search-box">
@@ -327,7 +480,7 @@
                       <button type="button" class="btn-secondary" id="contactSelectorPrevBtn">
                         <i class="bi bi-chevron-left"></i> Anterior
                       </button>
-                      <span class="pagination-info" id="contactSelectorPageInfo">Página 1 de 1</span>
+                      <span class="pagination-info" id="contactSelectorPageInfo">Pagina 1 de 1</span>
                       <button type="button" class="btn-secondary" id="contactSelectorNextBtn">
                         Siguiente <i class="bi bi-chevron-right"></i>
                       </button>
@@ -339,7 +492,7 @@
               <!-- Group Source -->
               <div id="groupSourceSection" class="source-section d-none">
                 <div class="group-selector">
-                  <select id="groupSelect" name="groupName">
+                  <select id="groupSelect" name="groupName" class="form-control">
                     <option value="">-- Seleccionar grupo --</option>
                   </select>
                   <div class="help-text" id="groupContactsCount">
@@ -348,104 +501,148 @@
                   </div>
                 </div>
               </div>
-            </div>
 
-            <!-- Message Type -->
-            <div class="form-group">
-              <label>Tipo de mensaje</label>
-              <div class="type-options">
-                <label class="type-option">
-                  <input type="radio" name="messageType" value="none" checked>
-                  <span class="option-content">
-                    <i class="bi bi-chat-text"></i>
-                    <span>Solo texto</span>
-                  </span>
-                </label>
-                <label class="type-option">
-                  <input type="radio" name="messageType" value="single">
-                  <span class="option-content">
-                    <i class="bi bi-image"></i>
-                    <span>Imagen + texto</span>
-                  </span>
-                </label>
-                <label class="type-option">
-                  <input type="radio" name="messageType" value="multiple">
-                  <span class="option-content">
-                    <i class="bi bi-images"></i>
-                    <span>Múltiples imágenes</span>
-                  </span>
-                </label>
-                <label class="type-option">
-                  <input type="radio" name="messageType" value="audio">
-                  <span class="option-content">
-                    <i class="bi bi-mic"></i>
-                    <span>Audio</span>
-                  </span>
-                </label>
+              <!-- CSV Source -->
+              <div id="csvSourceSection" class="source-section d-none">
+                <div class="csv-compact-upload">
+                  <input type="file" id="csvFile" name="csvFile" accept=".csv,.txt">
+                  <label for="csvFile" class="csv-compact-label">
+                    <i class="bi bi-cloud-upload"></i>
+                    <span>Arrastra o selecciona CSV/TXT</span>
+                    <small>Columnas: numero, tratamiento, nombre, grupo</small>
+                  </label>
+                  <div id="csvFileInfo" class="file-info"></div>
+                </div>
               </div>
             </div>
+          </div>
 
-            <!-- Media Sections -->
-            <div id="singleImageSection" class="media-section d-none">
-              <div class="file-upload">
-                <input type="file" id="singleImage" name="singleImage" accept="image/*">
-                <label for="singleImage" class="file-upload-label">
-                  <i class="bi bi-image"></i>
-                  <span>Seleccionar imagen</span>
-                </label>
-                <div id="singleImageInfo" class="file-info"></div>
-              </div>
+          <!-- Step 2: Message -->
+          <div class="send-step">
+            <div class="send-step-header">
+              <span class="send-step-num">2</span>
+              <span class="send-step-title">Mensaje</span>
             </div>
-
-            <div id="multipleImagesSection" class="media-section d-none">
-              <div class="file-upload">
-                <input type="file" id="images" name="images" accept="image/*" multiple>
-                <label for="images" class="file-upload-label">
-                  <i class="bi bi-images"></i>
-                  <span>Seleccionar imágenes</span>
-                </label>
-                <div id="multipleImagesInfo" class="file-info"></div>
-              </div>
-            </div>
-
-            <div id="audioSection" class="media-section d-none">
-              <div class="file-upload">
-                <input type="file" id="audioFile" name="audioFile" accept="audio/*">
-                <label for="audioFile" class="file-upload-label">
-                  <i class="bi bi-mic"></i>
-                  <span>Seleccionar audio</span>
-                </label>
-                <div id="audioFileInfo" class="file-info"></div>
-              </div>
-            </div>
-
-            <!-- Templates -->
-            <div class="form-group">
-              <label>Mensaje</label>
-              <div class="template-selector">
-                <select id="templateCount" class="form-control">
-                  <option value="1">1 template</option>
-                  <option value="2">2 templates (alternan)</option>
-                  <option value="3">3 templates</option>
-                  <option value="4">4 templates</option>
-                  <option value="5">5 templates</option>
+            <div class="send-step-body">
+              <!-- Template dropdown (loads saved templates) -->
+              <div class="template-dropdown-wrapper">
+                <select id="savedTemplateSelect" class="form-control">
+                  <option value="">-- Seleccionar template guardado --</option>
                 </select>
               </div>
-              <div id="templatesContainer" class="templates-container"></div>
-            </div>
 
-            <!-- Submit -->
-            <button type="submit" id="sendMessageBtn" class="btn-primary btn-lg">
-              <i class="bi bi-send"></i>
-              <span>Enviar mensajes</span>
-            </button>
-          </form>
-        </div>
+              <div class="send-divider">
+                <span>o escribe tu mensaje</span>
+              </div>
+
+              <!-- Main message textarea -->
+              <div id="templatesContainer" class="templates-container">
+                <!-- Rendered by JS -->
+              </div>
+
+              <!-- Advanced: multiple templates toggle -->
+              <div class="advanced-toggle-wrapper">
+                <button type="button" class="advanced-toggle" id="advancedTemplatesToggle">
+                  <i class="bi bi-plus-circle"></i>
+                  <span>Rotacion de mensajes (avanzado)</span>
+                  <i class="bi bi-chevron-down advanced-chevron"></i>
+                </button>
+                <div id="advancedTemplatesSection" class="advanced-section d-none">
+                  <div class="advanced-hint">
+                    Agrega hasta 4 mensajes adicionales. Se alternaran entre los destinatarios.
+                  </div>
+                  <div id="extraTemplatesContainer" class="templates-container"></div>
+                  <button type="button" class="btn-secondary btn-sm" id="addExtraTemplateBtn">
+                    <i class="bi bi-plus"></i> Agregar mensaje
+                  </button>
+                </div>
+              </div>
+              <!-- Hidden input for template count compatibility -->
+              <input type="hidden" id="templateCount" value="1">
+            </div>
+          </div>
+
+          <!-- Step 3: Multimedia -->
+          <div class="send-step">
+            <div class="send-step-header">
+              <span class="send-step-num">3</span>
+              <span class="send-step-title">Multimedia</span>
+              <span class="send-step-optional">(opcional)</span>
+            </div>
+            <div class="send-step-body">
+              <div class="media-chips">
+                <button type="button" class="media-chip" data-media="single">
+                  <i class="bi bi-image"></i> Imagen
+                </button>
+                <button type="button" class="media-chip" data-media="multiple">
+                  <i class="bi bi-images"></i> Multiples
+                </button>
+                <button type="button" class="media-chip" data-media="audio">
+                  <i class="bi bi-mic"></i> Audio
+                </button>
+              </div>
+              <!-- Hidden radio for backend compat -->
+              <input type="hidden" id="messageTypeHidden" name="messageType" value="none">
+
+              <div id="singleImageSection" class="media-expand d-none">
+                <div class="media-expand-inner">
+                  <input type="file" id="singleImage" name="singleImage" accept="image/*">
+                  <label for="singleImage" class="media-file-label">
+                    <i class="bi bi-image"></i> Seleccionar imagen
+                  </label>
+                  <div id="singleImageInfo" class="file-info"></div>
+                  <button type="button" class="media-clear-btn" data-clear="single"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+
+              <div id="multipleImagesSection" class="media-expand d-none">
+                <div class="media-expand-inner">
+                  <input type="file" id="images" name="images" accept="image/*" multiple>
+                  <label for="images" class="media-file-label">
+                    <i class="bi bi-images"></i> Seleccionar imagenes
+                  </label>
+                  <div id="multipleImagesInfo" class="file-info"></div>
+                  <button type="button" class="media-clear-btn" data-clear="multiple"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+
+              <div id="audioSection" class="media-expand d-none">
+                <div class="media-expand-inner">
+                  <input type="file" id="audioFile" name="audioFile" accept="audio/*">
+                  <label for="audioFile" class="media-file-label">
+                    <i class="bi bi-mic"></i> Seleccionar audio
+                  </label>
+                  <div id="audioFileInfo" class="file-info"></div>
+                  <button type="button" class="media-clear-btn" data-clear="audio"><i class="bi bi-x-lg"></i></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Campaign name + Submit -->
+          <div class="send-bottom">
+            <div class="campaign-input-row">
+              <label for="campaignName"><i class="bi bi-tag"></i> Campana</label>
+              <input type="text" id="campaignName" class="form-control" maxlength="120" placeholder="Nombre de campana (opcional)">
+            </div>
+            <div class="send-bottom-actions">
+              <button type="button" id="previewMessageBtn" class="btn-secondary btn-lg">
+                <i class="bi bi-eye"></i>
+                <span>Vista previa</span>
+              </button>
+              <button type="submit" id="sendMessageBtn" class="btn-primary btn-lg">
+                <i class="bi bi-send-fill"></i>
+                <span>Enviar Mensajes</span>
+              </button>
+            </div>
+          </div>
+
+        </form>
 
         <!-- Progress -->
         <div id="messageStatus" class="card progress-card d-none">
           <div class="progress-header">
-            <h3>Progreso del envío</h3>
+            <h3>Progreso del envio</h3>
             <div class="progress-percentage">0%</div>
           </div>
           <div class="progress-bar-wrapper">
@@ -453,7 +650,7 @@
               <div class="progress-fill"></div>
             </div>
           </div>
-          
+
           <div class="progress-stats">
             <div class="progress-stat">
               <span class="stat-num" id="totalCount">0</span>
@@ -482,7 +679,7 @@
             <table class="results-table">
               <thead>
                 <tr>
-                  <th>Número</th>
+                  <th>Numero</th>
                   <th>Estado</th>
                   <th>Hora</th>
                   <th>Respuesta</th>
@@ -490,6 +687,212 @@
               </thead>
               <tbody id="statusTableBody"></tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- WhatsApp Message Preview Modal -->
+        <div id="waPreviewModal" class="wa-preview-overlay d-none">
+          <div class="wa-preview-modal">
+            <div class="wa-preview-header">
+              <div class="wa-preview-header-left">
+                <button type="button" class="wa-preview-back" id="waPreviewClose">
+                  <i class="bi bi-arrow-left"></i>
+                </button>
+                <div class="wa-preview-avatar">
+                  <i class="bi bi-person-fill"></i>
+                </div>
+                <div class="wa-preview-contact">
+                  <span class="wa-preview-name">Vista Previa</span>
+                  <span class="wa-preview-status">en linea</span>
+                </div>
+              </div>
+              <button type="button" class="wa-preview-close-x" id="waPreviewCloseX">
+                <i class="bi bi-x-lg"></i>
+              </button>
+            </div>
+            <div class="wa-preview-chat" id="waPreviewChat">
+              <!-- Messages rendered by JS -->
+            </div>
+            <div class="wa-preview-footer">
+              <div class="wa-preview-vars" id="waPreviewVars">
+                <!-- Variable replacements shown here -->
+              </div>
+              <button type="button" class="btn-secondary" id="waPreviewCloseBtn">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Templates -->
+      <section id="templates" class="tab-pane">
+        <header class="section-header">
+          <h1>Plantillas de Mensajes</h1>
+          <p>Crea y gestiona plantillas reutilizables</p>
+        </header>
+
+        <!-- Create/Edit Template Card -->
+        <div class="card">
+          <h3 id="templateFormTitle">Nueva Plantilla</h3>
+          <input type="hidden" id="templateEditId" value="">
+          <div class="form-group">
+            <label for="templateName">Nombre</label>
+            <input type="text" id="templateName" class="form-control" placeholder="Ej: Saludo inicial, Promocion, etc.">
+          </div>
+          <div class="form-group">
+            <label for="templateCategory">Categoria (opcional)</label>
+            <input type="text" id="templateCategory" class="form-control" placeholder="Ej: Ventas, Soporte, General">
+          </div>
+          <div class="form-group">
+            <label for="templateContent">Mensaje</label>
+            <div class="variable-chips">
+              <button type="button" class="variable-chip" data-var="{nombre}"><i class="bi bi-person"></i> {nombre}</button>
+              <button type="button" class="variable-chip" data-var="{tratamiento}"><i class="bi bi-award"></i> {tratamiento}</button>
+              <button type="button" class="variable-chip" data-var="{grupo}"><i class="bi bi-people"></i> {grupo}</button>
+            </div>
+            <textarea id="templateContent" class="form-control" rows="5" placeholder="Escribe tu plantilla... Usa {nombre}, {tratamiento}, {grupo} como variables"></textarea>
+            <div class="template-char-count" id="templateCharCount">0 caracteres</div>
+          </div>
+          <div class="form-group">
+            <label>Vista previa</label>
+            <div id="templatePreview" class="template-preview">
+              <span class="template-preview-placeholder">La vista previa aparecera aqui...</span>
+            </div>
+          </div>
+          <div class="template-form-actions">
+            <button type="button" id="saveTemplateBtn" class="btn-primary">
+              <i class="bi bi-save"></i> Guardar Plantilla
+            </button>
+            <button type="button" id="cancelEditTemplateBtn" class="btn-secondary d-none">
+              <i class="bi bi-x-lg"></i> Cancelar
+            </button>
+          </div>
+        </div>
+
+        <!-- Templates List Card -->
+        <div class="card" style="margin-top: var(--space-lg);">
+          <div class="templates-list-header">
+            <h3>Mis Plantillas</h3>
+            <div class="templates-filter">
+              <select id="templateCategoryFilter" class="form-control">
+                <option value="">Todas las categorias</option>
+              </select>
+            </div>
+          </div>
+          <div id="templatesList" class="templates-grid">
+            <!-- Template cards rendered here by JS -->
+          </div>
+          <div id="templatesEmpty" class="empty-state">
+            <i class="bi bi-chat-square-text" style="font-size: 3rem; color: var(--text-muted);"></i>
+            <p>No tienes plantillas aun</p>
+            <span>Crea tu primera plantilla arriba</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Plans -->
+      <section id="plans" class="tab-pane">
+        <header class="section-header">
+          <h1>Planes y Precios</h1>
+          <p>Elige el plan que mejor se adapte a tu negocio</p>
+        </header>
+
+        <div id="plans-current-status" class="plans-current-status d-none"></div>
+
+        <div class="pricing-grid">
+          <!-- Plan Basico -->
+          <div class="pricing-card">
+            <div class="pricing-card-header">
+              <span class="pricing-plan-name">Basico</span>
+              <p class="pricing-target">Emprendedores y pequenos negocios</p>
+            </div>
+            <div class="pricing-price">
+              <span class="pricing-currency">Gs.</span>
+              <span class="pricing-amount">199.000</span>
+              <span class="pricing-period">/mes</span>
+            </div>
+            <ul class="pricing-features">
+              <li><i class="bi bi-check-circle-fill"></i> Hasta 1,000 mensajes/mes</li>
+              <li><i class="bi bi-check-circle-fill"></i> 1 linea WhatsApp</li>
+              <li><i class="bi bi-check-circle-fill"></i> Templates ilimitados</li>
+              <li><i class="bi bi-check-circle-fill"></i> Soporte por email</li>
+              <li><i class="bi bi-check-circle-fill"></i> Envio de texto + imagenes + audio</li>
+            </ul>
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20B%C3%A1sico%20%28Gs.%20199.000%2Fmes%29" target="_blank" class="pricing-cta">
+              <i class="bi bi-whatsapp"></i> Solicitar Plan
+            </a>
+          </div>
+
+          <!-- Plan Profesional -->
+          <div class="pricing-card pricing-card-popular">
+            <div class="pricing-popular-badge">Popular</div>
+            <div class="pricing-card-header">
+              <span class="pricing-plan-name">Profesional</span>
+              <p class="pricing-target">Empresas medianas con volumen frecuente</p>
+            </div>
+            <div class="pricing-price">
+              <span class="pricing-currency">Gs.</span>
+              <span class="pricing-amount">499.000</span>
+              <span class="pricing-period">/mes</span>
+            </div>
+            <ul class="pricing-features">
+              <li><i class="bi bi-check-circle-fill"></i> Hasta 10,000 mensajes/mes</li>
+              <li><i class="bi bi-check-circle-fill"></i> 1 linea WhatsApp</li>
+              <li><i class="bi bi-check-circle-fill"></i> Templates ilimitados</li>
+              <li><i class="bi bi-check-circle-fill"></i> Soporte prioritario</li>
+              <li><i class="bi bi-check-circle-fill"></i> Envio de texto + imagenes + audio</li>
+              <li class="pricing-feature-highlight"><i class="bi bi-star-fill"></i> API de autenticacion</li>
+              <li class="pricing-feature-highlight"><i class="bi bi-star-fill"></i> API de envio de WhatsApp</li>
+              <li><i class="bi bi-check-circle-fill"></i> Webhooks de estado de entrega</li>
+              <li><i class="bi bi-check-circle-fill"></i> Dashboard analytics avanzado</li>
+            </ul>
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Profesional%20%28Gs.%20499.000%2Fmes%29" target="_blank" class="pricing-cta pricing-cta-accent">
+              <i class="bi bi-whatsapp"></i> Solicitar Plan
+            </a>
+          </div>
+
+          <!-- Plan Enterprise -->
+          <div class="pricing-card">
+            <div class="pricing-card-header">
+              <span class="pricing-plan-name">Enterprise</span>
+              <p class="pricing-target">Grandes empresas con necesidades especiales</p>
+            </div>
+            <div class="pricing-price">
+              <span class="pricing-amount pricing-amount-custom">Contactar</span>
+            </div>
+            <ul class="pricing-features">
+              <li><i class="bi bi-check-circle-fill"></i> Mensajes ilimitados</li>
+              <li><i class="bi bi-check-circle-fill"></i> Multiples lineas WhatsApp</li>
+              <li><i class="bi bi-check-circle-fill"></i> API completa + webhooks</li>
+              <li><i class="bi bi-check-circle-fill"></i> SLA garantizado</li>
+              <li><i class="bi bi-check-circle-fill"></i> Soporte dedicado</li>
+              <li><i class="bi bi-check-circle-fill"></i> Personalizacion a medida</li>
+            </ul>
+            <p class="pricing-enterprise-note">Contactanos para una cotizacion personalizada</p>
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Enterprise.%20Quisiera%20una%20cotizaci%C3%B3n%20personalizada." target="_blank" class="pricing-cta">
+              <i class="bi bi-whatsapp"></i> Contactar
+            </a>
+          </div>
+        </div>
+
+        <!-- Contact Section -->
+        <div class="pricing-contact">
+          <h3>Tienes preguntas? Contactanos</h3>
+          <p>Estamos disponibles para ayudarte a elegir el plan ideal para tu negocio</p>
+          <div class="pricing-contact-links">
+            <a href="https://wa.me/595992756462" target="_blank" class="pricing-contact-link pricing-contact-whatsapp">
+              <i class="bi bi-whatsapp"></i>
+              <div>
+                <span class="pricing-contact-label">WhatsApp</span>
+                <span class="pricing-contact-value">+595 992 756 462</span>
+              </div>
+            </a>
+            <a href="mailto:andyvercha@gmail.com" class="pricing-contact-link pricing-contact-email">
+              <i class="bi bi-envelope"></i>
+              <div>
+                <span class="pricing-contact-label">Email</span>
+                <span class="pricing-contact-value">andyvercha@gmail.com</span>
+              </div>
+            </a>
           </div>
         </div>
       </section>
@@ -510,7 +913,7 @@
               <div class="upload-content" id="csvUploadContent">
                 <i class="bi bi-cloud-upload"></i>
                 <p>Arrastra tu archivo CSV aquí o <a href="#" class="btn-link" onclick="event.preventDefault(); document.getElementById('csvFileInput').click()">selecciona un archivo</a></p>
-                <small>Formato: phone, nombre, sustantivo, grupo (encabezado opcional)</small>
+                <small>Formato: phone, nombre, tratamiento, grupo (encabezado opcional)</small>
               </div>
               <div id="importProgress" class="import-progress d-none">
                 <div class="spinner-small"></div>
@@ -528,7 +931,7 @@
             <div class="form-row">
               <input type="text" id="contactPhone" class="form-control" placeholder="Número (595...)" required>
               <input type="text" id="contactNombre" class="form-control" placeholder="Nombre">
-              <input type="text" id="contactSustantivo" class="form-control" placeholder="Sr/Sra/Dr">
+              <input type="text" id="contactTratamiento" class="form-control" placeholder="Sr/Sra/Dr">
               <input type="text" id="contactGrupo" class="form-control" placeholder="Grupo">
               <button type="submit" class="btn-primary">
                 <i class="bi bi-plus"></i> Agregar
@@ -597,6 +1000,267 @@
           </div>
         </div>
       </section>
+      <!-- Tab: API -->
+      <section id="api" class="tab-pane">
+        <header class="section-header">
+          <h1>API</h1>
+          <p>Integra WhatsApp Sender Pro en tus sistemas</p>
+        </header>
+
+        <!-- Plan check banner -->
+        <div id="api-plan-gate" class="card d-none" style="text-align:center; padding: var(--space-xl);">
+          <i class="bi bi-lock-fill" style="font-size: 2.5rem; color: var(--text-muted);"></i>
+          <h3 style="margin-top: var(--space-md);">API disponible en planes Professional y Enterprise</h3>
+          <p style="color: var(--text-secondary);">Actualiza tu plan para acceder a la API de envio de mensajes, webhooks y mas.</p>
+          <button class="btn-primary" onclick="showTab('plans')" style="margin-top: var(--space-md);">
+            <i class="bi bi-arrow-up-circle"></i> Ver planes
+          </button>
+        </div>
+
+        <!-- API content (shown only for eligible plans) -->
+        <div id="api-content">
+          <!-- API Key Management -->
+          <div class="card">
+            <h3><i class="bi bi-key"></i> API Key</h3>
+            <p style="color: var(--text-secondary); margin-bottom: var(--space-md);">
+              Tu API Key es necesaria para autenticarte con la API. Guardala en un lugar seguro.
+            </p>
+            <div id="api-key-display" class="d-none" style="margin-bottom: var(--space-md);">
+              <div style="display:flex; align-items:center; gap: var(--space-sm); background: var(--bg-tertiary); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <code id="api-key-value" style="flex:1; font-size: 0.9rem; word-break: break-all; color: var(--accent);"></code>
+                <button class="btn-icon" id="copyApiKeyBtn" title="Copiar">
+                  <i class="bi bi-clipboard"></i>
+                </button>
+              </div>
+            </div>
+            <div id="api-key-empty" style="margin-bottom: var(--space-md); color: var(--text-muted);">
+              <i class="bi bi-info-circle"></i> No tienes una API Key generada.
+            </div>
+            <div style="display:flex; gap: var(--space-sm);">
+              <button class="btn-primary" id="generateApiKeyBtn">
+                <i class="bi bi-plus-circle"></i> Generar API Key
+              </button>
+              <button class="btn-outline-danger d-none" id="revokeApiKeyBtn">
+                <i class="bi bi-trash3"></i> Revocar
+              </button>
+            </div>
+          </div>
+
+          <!-- Quick Start -->
+          <div class="card" style="margin-top: var(--space-lg);">
+            <h3><i class="bi bi-lightning"></i> Inicio Rapido</h3>
+            <p style="color: var(--text-secondary); margin-bottom: var(--space-md);">
+              Sigue estos pasos para enviar tu primer mensaje via API.
+            </p>
+
+            <div style="margin-bottom: var(--space-lg);">
+              <h4 style="color: var(--text-primary); margin-bottom: var(--space-sm);">1. Obtener token de acceso</h4>
+              <pre style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/auth/token \
+  -H "Content-Type: application/json" \
+  -d '{"apiKey": "TU_API_KEY"}'</code></pre>
+            </div>
+
+            <div style="margin-bottom: var(--space-lg);">
+              <h4 style="color: var(--text-primary); margin-bottom: var(--space-sm);">2. Enviar un mensaje</h4>
+              <pre style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/messages/send \
+  -H "Authorization: Bearer TU_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "phone": "595991234567",
+    "message": "Hola desde la API!"
+  }'</code></pre>
+            </div>
+
+            <div style="margin-bottom: var(--space-lg);">
+              <h4 style="color: var(--text-primary); margin-bottom: var(--space-sm);">3. Envio masivo</h4>
+              <pre style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/messages/bulk \
+  -H "Authorization: Bearer TU_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "recipients": [
+      {"phone": "595991234567", "variables": {"nombre": "Juan"}},
+      {"phone": "595981234567", "variables": {"nombre": "Maria"}}
+    ],
+    "template": "Hola {nombre}, te informamos sobre nuestra promo.",
+    "campaignName": "Promo Marzo"
+  }'</code></pre>
+            </div>
+
+            <div>
+              <h4 style="color: var(--text-primary); margin-bottom: var(--space-sm);">4. Consultar estado</h4>
+              <pre style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X GET /api/v1/messages/status/CAMPAIGN_ID \
+  -H "Authorization: Bearer TU_TOKEN"</code></pre>
+            </div>
+          </div>
+
+          <!-- Endpoints summary -->
+          <div class="card" style="margin-top: var(--space-lg);">
+            <h3><i class="bi bi-list-ul"></i> Endpoints Disponibles</h3>
+            <div class="table-wrapper" style="margin-top: var(--space-md);">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Metodo</th>
+                    <th>Endpoint</th>
+                    <th>Descripcion</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span></td>
+                    <td><code>/api/v1/auth/token</code></td>
+                    <td>Obtener token de acceso</td>
+                  </tr>
+                  <tr>
+                    <td><span style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span></td>
+                    <td><code>/api/v1/messages/send</code></td>
+                    <td>Enviar mensaje individual</td>
+                  </tr>
+                  <tr>
+                    <td><span style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span></td>
+                    <td><code>/api/v1/messages/bulk</code></td>
+                    <td>Envio masivo de mensajes</td>
+                  </tr>
+                  <tr>
+                    <td><span style="background: var(--info); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">GET</span></td>
+                    <td><code>/api/v1/messages/status/:id</code></td>
+                    <td>Estado de campana</td>
+                  </tr>
+                  <tr>
+                    <td><span style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span></td>
+                    <td><code>/api/v1/webhooks</code></td>
+                    <td>Registrar webhook</td>
+                  </tr>
+                  <tr>
+                    <td><span style="background: var(--info); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">GET</span></td>
+                    <td><code>/api/v1/webhooks</code></td>
+                    <td>Listar webhooks</td>
+                  </tr>
+                  <tr>
+                    <td><span style="background: var(--danger); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">DELETE</span></td>
+                    <td><code>/api/v1/webhooks</code></td>
+                    <td>Eliminar webhook</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Link to Swagger -->
+          <div class="card" style="margin-top: var(--space-lg); text-align: center;">
+            <h3><i class="bi bi-book"></i> Documentacion Completa</h3>
+            <p style="color: var(--text-secondary); margin-bottom: var(--space-md);">
+              Explora la documentacion interactiva con esquemas, ejemplos y la posibilidad de probar endpoints.
+            </p>
+            <a href="/api-docs.html" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: var(--space-sm); text-decoration: none; padding: 0.6rem 1.5rem;">
+              <i class="bi bi-box-arrow-up-right"></i> Abrir Swagger UI
+            </a>
+          </div>
+
+          <!-- Rate limit info -->
+          <div class="card" style="margin-top: var(--space-lg);">
+            <h3><i class="bi bi-speedometer"></i> Limites</h3>
+            <ul style="color: var(--text-secondary); list-style: none; padding: 0;">
+              <li style="padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-color);">
+                <strong style="color: var(--text-primary);">Rate limit WhatsApp:</strong> 15 mensajes/minuto por linea conectada
+              </li>
+              <li style="padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-color);">
+                <strong style="color: var(--text-primary);">Token expiracion:</strong> 24 horas
+              </li>
+              <li style="padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-color);">
+                <strong style="color: var(--text-primary);">Bulk max:</strong> 10,000 destinatarios por solicitud
+              </li>
+              <li style="padding: var(--space-sm) 0;">
+                <strong style="color: var(--text-primary);">Webhook eventos:</strong> message.sent, message.failed, message.delivered, campaign.completed
+              </li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tab: Admin -->
+      <section id="admin" class="tab-pane">
+        <header class="section-header">
+          <h1><i class="bi bi-shield-lock"></i> Administracion</h1>
+          <p>Gestion de usuarios y configuracion del sistema</p>
+        </header>
+
+        <!-- Stats Summary -->
+        <div class="stats-grid" id="admin-stats">
+          <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-people"></i></div>
+            <div class="stat-data">
+              <div class="stat-value" id="admin-stat-total">0</div>
+              <div class="stat-label">Total usuarios</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
+            <div class="stat-data">
+              <div class="stat-value" id="admin-stat-active">0</div>
+              <div class="stat-label">Activos</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-pause-circle"></i></div>
+            <div class="stat-data">
+              <div class="stat-value" id="admin-stat-suspended">0</div>
+              <div class="stat-label">Suspendidos</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-clock"></i></div>
+            <div class="stat-data">
+              <div class="stat-value" id="admin-stat-trial">0</div>
+              <div class="stat-label">En prueba</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="bi bi-credit-card"></i></div>
+            <div class="stat-data">
+              <div class="stat-value" id="admin-stat-paid">0</div>
+              <div class="stat-label">Pagos</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="card" style="margin-top: var(--space-lg);">
+          <div style="display: flex; gap: var(--space-md); flex-wrap: wrap; align-items: center;">
+            <div style="flex: 1; min-width: 200px;">
+              <input type="text" id="admin-search" class="form-control" placeholder="Buscar por email o nombre...">
+            </div>
+            <div>
+              <select id="admin-filter-status" class="form-control" style="min-width: 150px;">
+                <option value="">Todos los estados</option>
+                <option value="active">Activos</option>
+                <option value="suspended">Suspendidos</option>
+                <option value="disabled">Deshabilitados</option>
+              </select>
+            </div>
+            <div>
+              <select id="admin-filter-plan" class="form-control" style="min-width: 150px;">
+                <option value="">Todos los planes</option>
+                <option value="trial">Trial</option>
+                <option value="active">Activo</option>
+                <option value="expired">Expirado</option>
+              </select>
+            </div>
+            <button class="btn-primary" id="admin-refresh-btn">
+              <i class="bi bi-arrow-clockwise"></i> Actualizar
+            </button>
+          </div>
+        </div>
+
+        <!-- Users List -->
+        <div id="admin-users-list" class="admin-users-grid" style="margin-top: var(--space-lg);">
+          <div class="admin-empty-state">
+            <i class="bi bi-arrow-clockwise spin" style="font-size: 1.5rem; color: var(--text-muted);"></i>
+            <p style="color: var(--text-muted);">Cargando usuarios...</p>
+          </div>
+        </div>
+      </section>
+
     </div>
   </main>
 
@@ -620,8 +1284,8 @@
           <input type="text" id="editContactNombre" class="form-control" placeholder="Nombre">
         </div>
         <div class="form-group">
-          <label for="editContactSustantivo">Tratamiento</label>
-          <input type="text" id="editContactSustantivo" class="form-control" placeholder="Sr/Sra/Dr">
+          <label for="editContactTratamiento">Tratamiento</label>
+          <input type="text" id="editContactTratamiento" class="form-control" placeholder="Sr/Sra/Dr">
         </div>
         <div class="form-group">
           <label for="editContactGrupo">Grupo</label>
@@ -646,9 +1310,13 @@
           <span>WhatsApp Sender Pro</span>
         </div>
         <div class="footer-links">
+          <a href="/terms.html" target="_blank">Terminos y Condiciones</a>
+          <span>•</span>
+          <a href="/terms.html#data-collection" target="_blank">Politica de Privacidad</a>
+          <span>•</span>
           <a href="https://mindtechpy.net" target="_blank">mindtechpy.net</a>
           <span>•</span>
-          <span>Desarrollado por Andrés Vera</span>
+          <span>Desarrollado por Andres Vera</span>
         </div>
       </div>
     </div>
@@ -657,12 +1325,17 @@
   <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/keycloak-js@latest/dist/keycloak.min.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="/js/core.js"></script>
   <script src="/js/dashboard.js"></script>
   <script src="/js/whatsapp.js"></script>
   <script src="/js/messages.js"></script>
   <script src="/js/contacts.js"></script>
+  <script src="/js/templates.js"></script>
+  <script src="/js/plans.js"></script>
+  <script src="/js/api.js"></script>
+  <script src="/js/admin.js"></script>
   <script src="/js/main.js"></script>
 </body>
 </html>

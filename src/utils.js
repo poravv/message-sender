@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { uploadsDir, tempDir } = require('./config');
 const logger = require('./logger');
+const { normalizeNumber } = require('./phoneValidator');
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -56,52 +57,24 @@ function cleanupOldFiles(maxAgeHours = 24) {
 }
 
 /**
- * Normaliza un número de teléfono paraguayo al formato 595XXXXXXXXX (12 dígitos)
- * Formatos aceptados:
- * - 595992756462 (ya normalizado)
- * - 992756462 (sin código de país)
- * - +595992756462 (con +)
- * - 0992756462 (con 0 inicial)
- * - 595 992756462 (con espacios)
+ * Normaliza un número de teléfono paraguayo al formato 595XXXXXXXXX (12 dígitos).
+ * Backwards-compatible wrapper around normalizeNumber().
+ * @param {string|number} rawNumber
+ * @returns {string|null} Normalized number or null if invalid
  */
 function normalizeParaguayanNumber(rawNumber) {
   if (!rawNumber) return null;
-  
-  // Convertir a string y limpiar espacios, guiones, paréntesis
-  let cleaned = String(rawNumber)
-    .trim()
-    .replace(/[\s\-\(\)]/g, '');
-  
-  // Remover el símbolo + si existe
-  if (cleaned.startsWith('+')) {
-    cleaned = cleaned.substring(1);
-  }
-  
-  // Si empieza con 0, quitarlo (formato local: 0992756462 → 992756462)
-  if (cleaned.startsWith('0') && cleaned.length === 10) {
-    cleaned = cleaned.substring(1);
-  }
-  
-  // Si tiene 9 dígitos, agregar prefijo 595 (formato local sin 0: 992756462 → 595992756462)
-  if (cleaned.length === 9 && /^\d{9}$/.test(cleaned)) {
-    cleaned = '595' + cleaned;
-  }
-  
-  // Validar formato final: debe ser exactamente 12 dígitos comenzando con 595
-  if (cleaned.length === 12 && /^\d{12}$/.test(cleaned) && cleaned.startsWith('595')) {
-    return cleaned;
-  }
-  
-  // Si no cumple las condiciones, retornar null (número inválido)
-  return null;
+  const result = normalizeNumber(rawNumber, 'PY');
+  return result.valid ? result.normalized : null;
 }
 
-function loadNumbersFromCSV(filePath) {
+function loadNumbersFromCSV(filePath, countryCode) {
+  const cc = countryCode || 'PY';
   const ext = path.extname(filePath).toLowerCase();
 
   const aliases = {
     number: ['numero', 'número', 'phone', 'telefono', 'tel', 'number', 'celular', 'whatsapp'],
-    sustantivo: ['sustantivo', 'tratamiento', 'titulo', 'title'],
+    tratamiento: ['tratamiento', 'sustantivo', 'titulo', 'title'],
     nombre: ['nombre', 'name', 'cliente', 'contacto'],
     grupo: ['grupo', 'segmento', 'group', 'categoria', 'categoría'],
   };
@@ -115,9 +88,9 @@ function loadNumbersFromCSV(filePath) {
   const looksLikeHeader = (values) => {
     const first = normalizeHeader(values[0] || '');
     const second = normalizeHeader(values[1] || '');
-    const hasKnown = aliases.number.includes(first) || aliases.nombre.includes(first) || aliases.sustantivo.includes(first) || aliases.grupo.includes(first);
+    const hasKnown = aliases.number.includes(first) || aliases.nombre.includes(first) || aliases.tratamiento.includes(first) || aliases.grupo.includes(first);
     const hasNonNumberWord = first && !/^\+?\d+$/.test(first);
-    return hasKnown || (hasNonNumberWord && (aliases.nombre.includes(second) || aliases.sustantivo.includes(second) || aliases.grupo.includes(second)));
+    return hasKnown || (hasNonNumberWord && (aliases.nombre.includes(second) || aliases.tratamiento.includes(second) || aliases.grupo.includes(second)));
   };
 
   const buildHeaderMap = (values) => {
@@ -126,7 +99,7 @@ function loadNumbersFromCSV(filePath) {
     normalized.forEach((name, idx) => {
       if (!name) return;
       if (aliases.number.includes(name)) map.number = idx;
-      if (aliases.sustantivo.includes(name)) map.sustantivo = idx;
+      if (aliases.tratamiento.includes(name)) map.tratamiento = idx;
       if (aliases.nombre.includes(name)) map.nombre = idx;
       if (aliases.grupo.includes(name)) map.grupo = idx;
     });
@@ -138,14 +111,14 @@ function loadNumbersFromCSV(filePath) {
     if (headerMap && Object.keys(headerMap).length > 0) {
       return {
         rawNumber: clean[headerMap.number ?? 0],
-        sustantivo: clean[headerMap.sustantivo ?? -1] || '',
+        tratamiento: clean[headerMap.tratamiento ?? -1] || '',
         nombre: clean[headerMap.nombre ?? -1] || '',
         grupo: clean[headerMap.grupo ?? -1] || '',
       };
     }
     return {
       rawNumber: clean[0] || '',
-      sustantivo: clean[1] || '',
+      tratamiento: clean[1] || '',
       nombre: clean[2] || '',
       grupo: clean[3] || '',
     };
@@ -159,9 +132,10 @@ function loadNumbersFromCSV(filePath) {
       return;
     }
 
-    const { rawNumber, sustantivo, nombre, grupo } = mapValuesToFields(values, headerCtx.hasHeader ? headerCtx.map : null);
+    const { rawNumber, tratamiento, nombre, grupo } = mapValuesToFields(values, headerCtx.hasHeader ? headerCtx.map : null);
 
-    const normalized = normalizeParaguayanNumber(rawNumber);
+    const result = normalizeNumber(rawNumber, cc);
+    const normalized = result.valid ? result.normalized : null;
     if (normalized) {
       if (seenNumbers.has(normalized)) {
         logger.warn({ line, number: rawNumber, normalized, reason: 'duplicate' }, 'Número duplicado, omitiendo');
@@ -172,7 +146,7 @@ function loadNumbersFromCSV(filePath) {
       seenNumbers.add(normalized);
 
       const entry = { number: normalized, index: line, variables: {} };
-      if (sustantivo) entry.variables.sustantivo = sustantivo;
+      if (tratamiento) entry.variables.tratamiento = tratamiento;
       if (nombre) entry.variables.nombre = nombre;
       if (grupo) entry.variables.grupo = grupo;
       if (grupo) entry.group = grupo;

@@ -62,6 +62,7 @@ temp/
 
 # Claude Code
 .claude/
+.atl/
 
 # QR images (generated at runtime, contain sensitive auth data)
 public/qr-*.png
@@ -69,6 +70,14 @@ public/qr-*.png
 # Uploads and temp files (runtime)
 uploads/
 temp/
+
+# Firebase
+*-service-account*.json
+firebase-debug.log
+firebase-debug.*.log
+.firebase/
+firestore-debug.log
+ui-debug.log
 
 # Other
 *.swp

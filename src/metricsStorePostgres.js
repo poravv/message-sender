@@ -40,7 +40,7 @@ async function upsertContact(userId, data, source = 'manual') {
        grupo = COALESCE(NULLIF(EXCLUDED.grupo, ''), contacts.grupo),
        updated_at = NOW()
      RETURNING *`,
-    [userId, phone, data.nombre || null, data.sustantivo || null, data.grupo || null, source]
+    [userId, phone, data.nombre || null, data.tratamiento || data.sustantivo || null, data.grupo || null, source]
   );
 
   return { contact: mapContact(result.rows[0]), created: true };
@@ -74,7 +74,7 @@ async function updateContact(userId, contactId, patch) {
       contactId,
       targetPhone,
       patch.nombre !== undefined ? patch.nombre : existing.nombre,
-      patch.sustantivo !== undefined ? patch.sustantivo : existing.sustantivo,
+      (patch.tratamiento !== undefined ? patch.tratamiento : (patch.sustantivo !== undefined ? patch.sustantivo : existing.sustantivo)),
       patch.grupo !== undefined ? patch.grupo : existing.grupo
     ]
   );
@@ -173,7 +173,7 @@ async function importContactsFromEntries(userId, entries, source = 'csv') {
     const contactPayload = {
       phone: number,
       nombre: vars.nombre || entry.nombre || null,
-      sustantivo: vars.sustantivo || entry.sustantivo || null,
+      tratamiento: vars.tratamiento || vars.sustantivo || entry.tratamiento || entry.sustantivo || null,
       grupo: vars.grupo || entry.grupo || null,
     };
 
@@ -191,7 +191,7 @@ async function importContactsFromEntries(userId, entries, source = 'csv') {
       variables: {
         ...vars,
         nombre: c.nombre || vars.nombre || '',
-        sustantivo: c.sustantivo || vars.sustantivo || '',
+        tratamiento: c.tratamiento || vars.tratamiento || vars.sustantivo || '',
         grupo: c.grupo || vars.grupo || '',
       },
     });
@@ -307,7 +307,7 @@ async function initCampaignRecipients(userId, campaignId, entries = []) {
           entry.contactId || null,
           phone,
           entry?.variables?.nombre || null,
-          entry?.variables?.sustantivo || null,
+          entry?.variables?.tratamiento || entry?.variables?.sustantivo || null,
           entry?.variables?.grupo || null,
           entry.templateIndex != null ? entry.templateIndex : null
         );
@@ -773,7 +773,7 @@ function mapContact(row) {
     id: row.id,
     phone: row.phone,
     nombre: row.nombre,
-    sustantivo: row.sustantivo,
+    tratamiento: row.sustantivo,
     grupo: row.grupo,
     source: row.source,
     createdAt: row.created_at ? new Date(row.created_at).getTime() : null,
@@ -809,7 +809,7 @@ function mapRecipient(row) {
     contactId: row.contact_id,
     phone: row.phone,
     nombre: row.nombre,
-    sustantivo: row.sustantivo,
+    tratamiento: row.sustantivo,
     grupo: row.grupo,
     status: row.status,
     templateIndex: row.template_index,

@@ -4,12 +4,18 @@ const express = require('express');
 const { upload } = require('./media');
 const qrcode = require('qrcode');
 const { cleanupOldFiles, loadNumbersFromCSV, normalizeParaguayanNumber } = require('./utils');
+const { normalizeNumber, getCountryConfigs } = require('./phoneValidator');
 const redisQueue = require('./queueRedis');
 const metricsStore = require('./metricsStore');
 const { publicDir, retentionHours } = require('./config');
 const logger = require('./logger');
-const { checkJwt, requireRole } = require('./auth');
+const { checkJwt } = require('./auth');
 const sessionManager = require('./sessionManager');
+const { ensureUserProfile, invalidateProfileCache } = require('./middleware/ensureUserProfile');
+const { checkTrial } = require('./middleware/checkTrial');
+const { sessionGuard, createSession, clearSession } = require('./middleware/sessionGuard');
+const { ensureEmailVerified } = require('./middleware/ensureEmailVerified');
+const { admin, db, auth } = require('./firebaseAdmin');
 
 // Map para rastrear operaciones de refresh-qr en progreso por usuario
 const qrRefreshInProgress = new Map();
@@ -17,40 +23,94 @@ const qrRefreshInProgress = new Map();
 const qrCleanInitCooldown = new Map();
 
 // Middleware condicional para desarrollo
+// Chains: checkJwt -> ensureUserProfile -> checkTrial
 const conditionalAuth = (req, res, next) => {
   if (process.env.NODE_ENV === 'development') {
     req.auth = {
-      sub: 'dev-user-001',
+      uid: 'dev-user-001',
       name: 'Usuario Desarrollo',
-      preferred_username: 'dev-user',
-      email: 'dev@test.com'
+      email: 'dev@test.com',
+      picture: null,
+      email_verified: true,
+      sign_in_provider: 'password'
     };
-    req.userRoles = { all: ['sender_api'], realmRoles: [], clientRoles: ['sender_api'] };
+    req.userProfile = {
+      uid: 'dev-user-001',
+      email: 'dev@test.com',
+      displayName: 'Usuario Desarrollo',
+      plan: 'active',
+      role: 'admin',
+      status: 'active',
+      country: 'PY',
+      trialEndsAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      whatsappPhone: null,
+      createdAt: new Date(),
+      lastLoginAt: new Date()
+    };
     return next();
   }
 
-  return checkJwt(req, res, next);
+  // Production chain: checkJwt -> ensureUserProfile -> ensureEmailVerified -> checkTrial -> sessionGuard
+  checkJwt(req, res, (err) => {
+    if (err) return; // checkJwt already sent response
+    ensureUserProfile(req, res, (err2) => {
+      if (err2) return;
+      ensureEmailVerified(req, res, (err3) => {
+        if (err3) return;
+        checkTrial(req, res, (err4) => {
+          if (err4) return;
+          sessionGuard(req, res, next);
+        });
+      });
+    });
+  });
 };
 
-const conditionalRole = (role) => (req, res, next) => {
+// Auth-only middleware (no trial check) — for endpoints expired users should access
+const conditionalAuthNoTrial = (req, res, next) => {
+  if (process.env.NODE_ENV === 'development') {
+    req.auth = {
+      uid: 'dev-user-001',
+      name: 'Usuario Desarrollo',
+      email: 'dev@test.com',
+      picture: null,
+      email_verified: true,
+      sign_in_provider: 'password'
+    };
+    req.userProfile = {
+      uid: 'dev-user-001',
+      email: 'dev@test.com',
+      displayName: 'Usuario Desarrollo',
+      plan: 'active',
+      role: 'admin',
+      status: 'active',
+      country: 'PY',
+      trialEndsAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      whatsappPhone: null,
+      createdAt: new Date(),
+      lastLoginAt: new Date()
+    };
+    return next();
+  }
+
+  // Production chain: checkJwt -> ensureUserProfile (no trial check)
+  checkJwt(req, res, (err) => {
+    if (err) return;
+    ensureUserProfile(req, res, next);
+  });
+};
+
+// conditionalRole — with Firebase Auth there are no Keycloak role arrays.
+// In production we simply check that the user is authenticated (checkJwt already ran).
+// The parameter is kept for API compatibility so call-sites don't need changes.
+const conditionalRole = (_role) => (req, res, next) => {
   if (process.env.NODE_ENV === 'development') {
     return next();
   }
 
-  // En producción, verificar múltiples roles posibles
-  const allowedRoles = ['sender_api', 'sender']; // Aceptar cualquiera de los dos
-  const { all } = req.userRoles || {};
-
-  const hasValidRole = allowedRoles.some(r => all?.includes(r));
-
-  if (!hasValidRole) {
-    logger.info({
-      sub: req.auth?.sub,
-      requestedRole: role,
-      allowedRoles,
-      userRoles: all
-    }, 'Forbidden: missing required role');
-    return res.status(403).json({ error: 'Forbidden: missing role' });
+  // Authenticated users pass — Firebase custom-claims based roles can be added later.
+  if (!req.auth) {
+    return res.status(401).json({ error: 'Unauthenticated' });
   }
 
   return next();
@@ -59,12 +119,82 @@ const conditionalRole = (role) => (req, res, next) => {
 function buildRoutes() {
   const router = express.Router();
 
+  // ── Session management (no sessionGuard — this endpoint CREATES sessions) ──
+  router.post('/auth/session', conditionalAuthNoTrial, async (req, res) => {
+    try {
+      const userId = req.auth.uid;
+      const redis = require('./redisClient').getRedis();
+      const crypto = require('crypto');
+
+      const token = crypto.randomUUID();
+      const sessionData = JSON.stringify({
+        token,
+        createdAt: new Date().toISOString(),
+        userAgent: req.headers['user-agent'] || 'unknown',
+        ip: req.ip || req.connection.remoteAddress || 'unknown'
+      });
+
+      await redis.set(`ms:session:${userId}`, sessionData, 'EX', 24 * 60 * 60);
+      logger.info({ uid: userId }, 'Session created via POST /auth/session');
+
+      res.json({ sessionToken: token });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en POST /auth/session');
+      res.status(500).json({ error: 'Failed to create session' });
+    }
+  });
+
+  // ── Session cleanup on logout ──
+  router.post('/auth/logout-session', conditionalAuthNoTrial, async (req, res) => {
+    try {
+      const userId = req.auth.uid;
+      await clearSession(userId);
+      res.json({ success: true, message: 'Session cleared' });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en POST /auth/logout-session');
+      res.status(500).json({ error: 'Failed to clear session' });
+    }
+  });
+
+  // ── Resend email verification (tracking endpoint) ──
+  router.post('/auth/resend-verification', conditionalAuthNoTrial, async (req, res) => {
+    try {
+      const uid = req.auth.uid;
+      const email = req.auth.email;
+
+      // Google users don't need email verification
+      if (req.auth.sign_in_provider === 'google.com') {
+        return res.json({ success: true, message: 'Google users are already verified' });
+      }
+
+      if (req.auth.email_verified) {
+        return res.json({ success: true, message: 'Email already verified' });
+      }
+
+      // Generate verification link via Firebase Admin SDK
+      if (auth) {
+        try {
+          const link = await auth.generateEmailVerificationLink(email);
+          logger.info({ uid, email }, 'Email verification link generated');
+        } catch (linkErr) {
+          logger.warn({ uid, email, err: linkErr.message }, 'Could not generate verification link via Admin SDK');
+        }
+      }
+
+      logger.info({ uid, email }, 'Resend verification requested');
+      res.json({ success: true, message: 'Verification email requested' });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en POST /auth/resend-verification');
+      res.status(500).json({ error: 'Failed to process verification request' });
+    }
+  });
+
   // Estado de la sesión del usuario autenticado
   router.get('/connection-status', conditionalAuth, async (req, res) => {
     try {
       logger.info('Connection status request', {
-        userId: req.auth?.sub,
-        userName: req.auth?.name || req.auth?.preferred_username,
+        userId: req.auth?.uid,
+        userName: req.auth?.name || req.auth?.email,
         userAgent: req.headers['user-agent'],
         ip: req.ip
       });
@@ -76,10 +206,11 @@ function buildRoutes() {
       const conn = s.connectionState;
       const stateText = s.isReady
         ? 'connected'
-        : (health.isInCooldown ? 'cooldown'
-          : (conn === 'qr_ready' ? 'qr_ready'
-            : (health.isConnecting || conn === 'connecting' ? 'connecting'
-              : (conn === 'unauthorized' ? 'unauthorized' : 'disconnected'))));
+        : (conn === 'phone_taken' ? 'phone_taken'
+          : (health.isInCooldown ? 'cooldown'
+            : (conn === 'qr_ready' ? 'qr_ready'
+              : (health.isConnecting || conn === 'connecting' ? 'connecting'
+                : (conn === 'unauthorized' ? 'unauthorized' : 'disconnected')))));
 
       const resp = {
         status: s.connectionState,
@@ -89,8 +220,8 @@ function buildRoutes() {
         lastActivityAgo: Math.round((Date.now() - s.lastActivity) / 1000),
         hasQR: !!s.qrCode,
         connectionState: s.connectionState,
-        userId: req.auth?.sub,
-        userName: req.auth?.name || req.auth?.preferred_username,
+        userId: req.auth?.uid,
+        userName: req.auth?.name || req.auth?.email,
         // Información de rate limiting y conflictos
         rateLimit: {
           messageCount: health.messageCount || 0,
@@ -116,8 +247,18 @@ function buildRoutes() {
         };
       }
 
+      // Task 4.4: Include linked phone from Firestore profile
+      if (req.userProfile && req.userProfile.whatsappPhone) {
+        resp.whatsappPhone = req.userProfile.whatsappPhone;
+      }
+
+      // Include phone_taken alert if present
+      if (s.securityAlert && s.securityAlert.type === 'phone_taken') {
+        resp.phoneTakenError = s.securityAlert.messages[0] || 'Este número ya está asociado a otro usuario';
+      }
+
       logger.info('Connection status response', {
-        userId: req.auth?.sub,
+        userId: req.auth?.uid,
         status: resp.status,
         isReady: resp.isReady,
         hasQR: resp.hasQR
@@ -127,7 +268,7 @@ function buildRoutes() {
     } catch (error) {
       logger.error({
         err: error?.message,
-        userId: req.auth?.sub,
+        userId: req.auth?.uid,
         stack: error?.stack
       }, 'Error en /connection-status');
       res.status(500).json({ error: error.message });
@@ -150,7 +291,7 @@ function buildRoutes() {
         });
       }
 
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { recipientSource, contactIds, groupName, templates: templatesJson, message, campaignName } = req.body;
       
       let numbers = [];
@@ -175,7 +316,7 @@ function buildRoutes() {
           contactId: c.id,
           variables: {
             nombre: c.nombre || '',
-            sustantivo: c.sustantivo || '',
+            tratamiento: c.tratamiento || '',
             grupo: c.grupo || ''
           }
         }));
@@ -190,7 +331,7 @@ function buildRoutes() {
           contactId: c.id,
           variables: {
             nombre: c.nombre || '',
-            sustantivo: c.sustantivo || '',
+            tratamiento: c.tratamiento || '',
             grupo: c.grupo || ''
           }
         }));
@@ -201,7 +342,8 @@ function buildRoutes() {
         }
         
         const csvFilePath = req.files['csvFile'][0].path;
-        const parsed = await loadNumbersFromCSV(csvFilePath);
+        const userCountry = req.userProfile?.country || 'PY';
+        const parsed = await loadNumbersFromCSV(csvFilePath, userCountry);
         invalidCount = parsed?.invalidCount || 0;
         duplicates = parsed?.duplicates || 0;
         
@@ -303,7 +445,7 @@ function buildRoutes() {
       try {
         const s3 = require('./storage/s3');
         if (s3.isEnabled()) {
-          const userId = req.auth?.sub || 'default';
+          const userId = req.auth?.uid || 'default';
           const uploaded = [];
           if (Array.isArray(images)) {
             for (const img of images) {
@@ -357,7 +499,7 @@ function buildRoutes() {
         importSummary,
         duplicatesRemoved: duplicates,
         invalidNumbers: invalidCount,
-        userId: req.auth?.sub,
+        userId: req.auth?.uid,
         initialStats: useRedisQueue ? { total: numbers.length, sent: 0, errors: 0, messages: [], completed: false } : whatsappManager.messageQueue.getStats()
       });
     } catch (error) {
@@ -370,7 +512,7 @@ function buildRoutes() {
     try {
       const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
       if (useRedisQueue) {
-        const userId = req.auth?.sub || 'default';
+        const userId = req.auth?.uid || 'default';
         if (typeof redisQueue.touchHeartbeat === 'function') {
           try { await redisQueue.touchHeartbeat(userId); } catch { }
         }
@@ -395,69 +537,72 @@ function buildRoutes() {
   // ---------------------------
   router.get('/contacts', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { search = '', group = '', page = 1, pageSize = 25 } = req.query || {};
       const data = await metricsStore.listContacts(userId, { search, group, page, pageSize });
       return res.json(data);
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /contacts');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /contacts');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.post('/contacts', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
-      const { phone, nombre, sustantivo, grupo } = req.body || {};
-      const normalized = normalizeParaguayanNumber(phone);
+      const userId = req.auth?.uid || 'default';
+      const { phone, nombre, tratamiento, sustantivo, grupo } = req.body || {};
+      const userCountry = req.userProfile?.country || 'PY';
+      const phoneResult = normalizeNumber(phone, userCountry);
+      const normalized = phoneResult.valid ? phoneResult.normalized : null;
       if (!normalized) {
-        return res.status(400).json({ error: 'Número inválido. Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX' });
+        return res.status(400).json({ error: `Número inválido para ${userCountry}. Verifica el formato e intenta de nuevo.` });
       }
 
       const result = await metricsStore.upsertContact(userId, {
         phone: normalized,
         nombre: nombre || null,
-        sustantivo: sustantivo || null,
+        tratamiento: tratamiento || sustantivo || null,
         grupo: grupo || null,
       }, 'manual');
       return res.json({ success: true, created: result.created, contact: result.contact });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en POST /contacts');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en POST /contacts');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.put('/contacts/:contactId', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { contactId } = req.params;
       const patch = { ...req.body };
       if (patch.phone !== undefined) {
-        const normalized = normalizeParaguayanNumber(patch.phone);
-        if (!normalized) {
-          return res.status(400).json({ error: 'Número inválido. Formatos aceptados: 595XXXXXXXXX, 9XXXXXXXX, +595XXXXXXXXX, 09XXXXXXXX' });
+        const userCountry = req.userProfile?.country || 'PY';
+        const phoneResult = normalizeNumber(patch.phone, userCountry);
+        if (!phoneResult.valid) {
+          return res.status(400).json({ error: `Número inválido para ${userCountry}. Verifica el formato e intenta de nuevo.` });
         }
-        patch.phone = normalized;
+        patch.phone = phoneResult.normalized;
       }
 
       const updated = await metricsStore.updateContact(userId, contactId, patch);
       if (!updated) return res.status(404).json({ error: 'Contacto no encontrado' });
       return res.json({ success: true, contact: updated });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en PUT /contacts/:contactId');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en PUT /contacts/:contactId');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.delete('/contacts/:contactId', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { contactId } = req.params;
       const deleted = await metricsStore.deleteContact(userId, contactId);
       if (!deleted) return res.status(404).json({ error: 'Contacto no encontrado' });
       return res.json({ success: true });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en DELETE /contacts/:contactId');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en DELETE /contacts/:contactId');
       return res.status(500).json({ error: error.message });
     }
   });
@@ -467,7 +612,7 @@ function buildRoutes() {
   // ---------------------------
   router.post('/contacts/import', conditionalAuth, conditionalRole('sender_api'), upload.single('csvFile'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       
       if (!req.file) {
         return res.status(400).json({ error: 'Archivo CSV no proporcionado' });
@@ -475,8 +620,8 @@ function buildRoutes() {
 
       const csvFilePath = req.file.path;
       const { loadNumbersFromCSV } = require('./utils');
-      
-      const parsed = await loadNumbersFromCSV(csvFilePath);
+      const userCountry = req.userProfile?.country || 'PY';
+      const parsed = await loadNumbersFromCSV(csvFilePath, userCountry);
       
       if (parsed.invalidRows && parsed.invalidRows.length > 0) {
         fs.unlinkSync(csvFilePath);
@@ -501,7 +646,7 @@ function buildRoutes() {
         total: result.summary.total
       });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en POST /contacts/import');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en POST /contacts/import');
       return res.status(500).json({ error: error.message });
     }
   });
@@ -511,24 +656,24 @@ function buildRoutes() {
   // ---------------------------
   router.get('/contacts/groups', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const groups = await metricsStore.getContactGroups(userId);
       return res.json({ groups });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /contacts/groups');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /contacts/groups');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.get('/contacts/:contactId', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { contactId } = req.params;
       const contact = await metricsStore.getContactById(userId, contactId);
       if (!contact) return res.status(404).json({ error: 'Contacto no encontrado' });
       return res.json(contact);
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /contacts/:contactId');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /contacts/:contactId');
       return res.status(500).json({ error: error.message });
     }
   });
@@ -538,83 +683,83 @@ function buildRoutes() {
   // ---------------------------
   router.get('/dashboard/summary', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { from, to } = req.query || {};
       const data = await metricsStore.dashboardSummary(userId, from, to);
       return res.json(data);
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/summary');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /dashboard/summary');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.get('/dashboard/timeline', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { from, to, bucket = 'day' } = req.query || {};
       const data = await metricsStore.dashboardTimeline(userId, from, to, bucket);
       return res.json({ bucket, rows: data });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/timeline');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /dashboard/timeline');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.get('/dashboard/by-group', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { from, to } = req.query || {};
       const rows = await metricsStore.dashboardByGroup(userId, from, to);
       return res.json({ rows });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/by-group');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /dashboard/by-group');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.get('/dashboard/by-contact', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { from, to, limit = 20 } = req.query || {};
       const rows = await metricsStore.dashboardByContact(userId, from, to, Number(limit));
       return res.json({ rows });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/by-contact');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /dashboard/by-contact');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.get('/dashboard/current-month', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const data = await metricsStore.dashboardCurrentMonth(userId);
       return res.json(data);
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/current-month');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /dashboard/current-month');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.get('/dashboard/monthly', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const { months = 12 } = req.query || {};
       const rows = await metricsStore.dashboardMonthly(userId, Number(months));
       return res.json({ rows });
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /dashboard/monthly');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /dashboard/monthly');
       return res.status(500).json({ error: error.message });
     }
   });
 
   router.get('/campaigns/:id', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const detail = await metricsStore.getCampaignDetail(userId, req.params.id);
       if (!detail) return res.status(404).json({ error: 'Campaña no encontrada' });
       return res.json(detail);
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error en GET /campaigns/:id');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /campaigns/:id');
       return res.status(500).json({ error: error.message });
     }
   });
@@ -626,7 +771,7 @@ function buildRoutes() {
       if (!useRedisQueue) {
         return res.status(400).json({ success: false, error: 'Cancelación soportada sólo con backend Redis' });
       }
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       const result = await redisQueue.cancelCampaign(userId);
       const status = await redisQueue.getStatus(userId);
       return res.json({ success: true, canceled: true, removedWaitingJobs: result.removed, status });
@@ -639,7 +784,7 @@ function buildRoutes() {
   // Heartbeat endpoint para mantener campaña activa
   router.post('/heartbeat', conditionalAuth, async (req, res) => {
     try {
-      const userId = req.auth?.sub || 'default';
+      const userId = req.auth?.uid || 'default';
       await redisQueue.touchHeartbeat(userId);
       logger.debug({ userId }, 'Heartbeat recibido');
       return res.json({ success: true, timestamp: Date.now() });
@@ -688,7 +833,7 @@ function buildRoutes() {
 
   router.get('/qr', conditionalAuth, async (req, res) => {
     try {
-      const userId = req.auth?.sub;
+      const userId = req.auth?.uid;
       if (!userId) {
         return res.status(401).json({ error: 'Usuario no autenticado' });
       }
@@ -742,7 +887,7 @@ function buildRoutes() {
   router.get('/qr-:userId.png', conditionalAuth, async (req, res) => {
     try {
       const requestedId = req.params.userId;
-      const authUser = req.auth?.sub;
+      const authUser = req.auth?.uid;
 
       if (!authUser) {
         return res.status(401).json({ error: 'Usuario no autenticado' });
@@ -771,7 +916,7 @@ function buildRoutes() {
 
   router.post('/refresh-qr', conditionalAuth, async (req, res) => {
     try {
-      const userId = req.auth?.sub;
+      const userId = req.auth?.uid;
       if (!userId) {
         return res.status(401).json({
           success: false,
@@ -840,7 +985,7 @@ function buildRoutes() {
       });
     } catch (e) {
       // Asegurar limpieza en caso de error
-      const userId = req.auth?.sub;
+      const userId = req.auth?.uid;
       if (userId) {
         qrRefreshInProgress.delete(userId);
       }
@@ -916,8 +1061,8 @@ function buildRoutes() {
 
       res.json({
         ...state,
-        userId: req.auth?.sub,
-        userName: req.auth?.name || req.auth?.preferred_username,
+        userId: req.auth?.uid,
+        userName: req.auth?.name || req.auth?.email,
         authPath: whatsappManager.authPath
       });
     } catch (error) {
@@ -929,7 +1074,9 @@ function buildRoutes() {
   // Endpoint para logout robusto de WhatsApp
   router.post('/logout-whatsapp', conditionalAuth, async (req, res) => {
     try {
-      const userId = req.auth.sub;
+      const userId = req.auth.uid;
+      // Clear browser session on WhatsApp logout
+      await clearSession(userId).catch(() => {});
       console.log(`🚪 [${userId}] Solicitud de logout robusto de WhatsApp recibida`);
 
       const manager = await sessionManager.getSession(userId);
@@ -992,10 +1139,10 @@ function buildRoutes() {
   // Endpoint para verificar estado de logout
   router.get('/logout-status/:userId?', conditionalAuth, async (req, res) => {
     try {
-      const userId = req.params.userId || req.auth.sub;
+      const userId = req.params.userId || req.auth.uid;
 
       // Verificar autorización si se consulta otro usuario
-      if (userId !== req.auth.sub && !req.auth.roles?.includes('admin')) {
+      if (userId !== req.auth.uid) {
         return res.status(403).json({ error: 'No autorizado para consultar otro usuario' });
       }
 
@@ -1031,7 +1178,7 @@ function buildRoutes() {
   // Endpoint temporal para resetear cooldown (útil para debugging)
   router.post('/reset-cooldown', checkJwt, async (req, res) => {
     try {
-      const userId = req.user.sub;
+      const userId = req.auth?.uid;
       console.log(`🔄 [${userId}] Solicitud de reset de cooldown recibida`);
 
       const manager = await sessionManager.getSession(userId);
@@ -1075,20 +1222,20 @@ function buildRoutes() {
     try {
       const whatsappManager = await sessionManager.getSessionByToken(req);
 
-      logger.info({ userId: req.auth?.sub }, 'Solicitud de limpieza de Redis recibida');
+      logger.info({ userId: req.auth?.uid }, 'Solicitud de limpieza de Redis recibida');
 
       // Llamar al método de limpieza
       const cleared = await whatsappManager._clearRedisAuth();
 
       if (cleared) {
-        logger.info({ userId: req.auth?.sub }, 'Redis limpiado exitosamente');
+        logger.info({ userId: req.auth?.uid }, 'Redis limpiado exitosamente');
         res.json({
           success: true,
           message: 'Sesión de Redis limpiada exitosamente. Puede reintentar la conexión.',
           timestamp: new Date().toISOString()
         });
       } else {
-        logger.warn({ userId: req.auth?.sub }, 'No se encontraron claves para limpiar');
+        logger.warn({ userId: req.auth?.uid }, 'No se encontraron claves para limpiar');
         res.json({
           success: true,
           message: 'No se encontraron datos antiguos en Redis',
@@ -1097,7 +1244,7 @@ function buildRoutes() {
       }
 
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error limpiando Redis');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error limpiando Redis');
       res.status(500).json({
         success: false,
         error: 'Error limpiando sesión de Redis',
@@ -1110,7 +1257,7 @@ function buildRoutes() {
   // Limpiar caché de métricas y contactos del usuario en Redis
   router.delete('/cache/user', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
-      const userId = req.auth?.sub;
+      const userId = req.auth?.uid;
       logger.info({ userId }, 'Solicitud de limpieza de caché de usuario');
 
       const result = await metricsStore.clearUserCache(userId);
@@ -1124,13 +1271,761 @@ function buildRoutes() {
       });
 
     } catch (error) {
-      logger.error({ err: error?.message, userId: req.auth?.sub }, 'Error limpiando caché de usuario');
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error limpiando caché de usuario');
       res.status(500).json({
         success: false,
         error: 'Error limpiando caché',
         details: error?.message,
         timestamp: new Date().toISOString()
       });
+    }
+  });
+
+  // ---------------------------
+  // User profile (accessible even with expired trial)
+  // ---------------------------
+  router.get('/user/profile', conditionalAuthNoTrial, async (req, res) => {
+    try {
+      const profile = req.userProfile;
+      if (!profile) {
+        return res.status(404).json({ error: 'Profile not found' });
+      }
+
+      // Calculate trialDaysLeft
+      let trialDaysLeft = 0;
+      if (profile.trialEndsAt) {
+        const trialEnd = profile.trialEndsAt instanceof Date
+          ? profile.trialEndsAt
+          : (profile.trialEndsAt && profile.trialEndsAt.toDate
+            ? profile.trialEndsAt.toDate()
+            : new Date(profile.trialEndsAt));
+        const msLeft = trialEnd.getTime() - Date.now();
+        trialDaysLeft = Math.max(0, Math.ceil(msLeft / (24 * 60 * 60 * 1000)));
+      }
+
+      return res.json({
+        uid: profile.uid,
+        email: profile.email,
+        displayName: profile.displayName,
+        plan: profile.plan,
+        role: profile.role,
+        status: profile.status || 'active',
+        trialDaysLeft,
+        whatsappPhone: profile.whatsappPhone,
+        country: profile.country || 'PY',
+        createdAt: profile.createdAt
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en GET /user/profile');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // User: API Key management (Professional/Enterprise only)
+  // ---------------------------
+  router.post('/user/api-key', conditionalAuth, async (req, res) => {
+    try {
+      const uid = req.auth?.uid;
+      if (!uid) return res.status(401).json({ error: 'Unauthenticated' });
+
+      const profile = req.userProfile;
+      // Only active plans or admins can generate API keys
+      if (profile && profile.role !== 'admin' && profile.plan !== 'active') {
+        return res.status(403).json({ error: 'API key generation requires Professional or Enterprise plan' });
+      }
+
+      const crypto = require('crypto');
+      const apiKey = crypto.randomUUID();
+
+      if (db) {
+        const userRef = db.collection('users').doc(uid);
+        await userRef.update({ apiKey });
+        invalidateProfileCache(uid);
+      }
+
+      logger.info({ uid }, 'API key generated');
+      return res.json({ success: true, apiKey });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en POST /user/api-key');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.delete('/user/api-key', conditionalAuth, async (req, res) => {
+    try {
+      const uid = req.auth?.uid;
+      if (!uid) return res.status(401).json({ error: 'Unauthenticated' });
+
+      if (db) {
+        const userRef = db.collection('users').doc(uid);
+        await userRef.update({ apiKey: null });
+        invalidateProfileCache(uid);
+      }
+
+      logger.info({ uid }, 'API key revoked');
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en DELETE /user/api-key');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  router.get('/user/api-key', conditionalAuth, async (req, res) => {
+    try {
+      const uid = req.auth?.uid;
+      if (!uid) return res.status(401).json({ error: 'Unauthenticated' });
+
+      if (!db) {
+        return res.json({ hasApiKey: false, apiKey: null });
+      }
+
+      const userRef = db.collection('users').doc(uid);
+      const snap = await userRef.get();
+      const data = snap.exists ? snap.data() : {};
+
+      return res.json({
+        hasApiKey: !!data.apiKey,
+        apiKey: data.apiKey || null
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en GET /user/api-key');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Phone: supported countries
+  // ---------------------------
+  router.get('/phone/countries', conditionalAuth, (req, res) => {
+    return res.json(getCountryConfigs());
+  });
+
+  // ---------------------------
+  // User: set country
+  // ---------------------------
+  router.put('/user/country', conditionalAuthNoTrial, async (req, res) => {
+    try {
+      const uid = req.auth?.uid;
+      if (!uid) return res.status(401).json({ error: 'Unauthenticated' });
+
+      const { country } = req.body || {};
+      const configs = getCountryConfigs();
+      if (!country || !configs[country.toUpperCase()]) {
+        return res.status(400).json({ error: 'País no soportado. Usa uno de: ' + Object.keys(configs).join(', ') });
+      }
+
+      const upperCountry = country.toUpperCase();
+
+      if (db) {
+        const userRef = db.collection('users').doc(uid);
+        await userRef.update({ country: upperCountry });
+        invalidateProfileCache(uid);
+      }
+
+      return res.json({ success: true, country: upperCountry });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en PUT /user/country');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: update user plan
+  // ---------------------------
+  router.put('/admin/users/:userId/plan', conditionalAuth, async (req, res) => {
+    try {
+      // Check admin role
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      const { userId } = req.params;
+      const { plan, trialEndsAt } = req.body || {};
+
+      const validPlans = ['active', 'trial', 'expired'];
+      if (!plan || !validPlans.includes(plan)) {
+        return res.status(400).json({ error: 'Invalid plan. Must be one of: active, trial, expired' });
+      }
+
+      const updateData = { plan };
+      if (trialEndsAt) {
+        updateData.trialEndsAt = new Date(trialEndsAt);
+      }
+
+      const userRef = db.collection('users').doc(userId);
+      const snap = await userRef.get();
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      await userRef.update(updateData);
+      invalidateProfileCache(userId);
+
+      logger.info({ adminUid: req.auth.uid, targetUserId: userId, plan, trialEndsAt }, 'Admin updated user plan');
+
+      const updated = (await userRef.get()).data();
+      return res.json({
+        success: true,
+        user: {
+          uid: userId,
+          email: updated.email,
+          plan: updated.plan,
+          role: updated.role,
+          trialEndsAt: updated.trialEndsAt
+        }
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en PUT /admin/users/:userId/plan');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: unlink WhatsApp phone from user
+  // ---------------------------
+  router.delete('/admin/users/:userId/phone', conditionalAuth, async (req, res) => {
+    try {
+      // Check admin role
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      const { userId } = req.params;
+
+      const userRef = db.collection('users').doc(userId);
+      const snap = await userRef.get();
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const previousPhone = snap.data().whatsappPhone;
+
+      // Clear phone in Firestore
+      await userRef.update({ whatsappPhone: null });
+      invalidateProfileCache(userId);
+
+      // Disconnect WhatsApp session if active
+      const manager = sessionManager.sessions.get(userId);
+      if (manager && manager.isReady) {
+        try {
+          await manager.logout();
+          sessionManager.sessions.delete(userId);
+          logger.info({ adminUid: req.auth.uid, targetUserId: userId }, 'Admin disconnected user WhatsApp session');
+        } catch (logoutErr) {
+          logger.warn({ adminUid: req.auth.uid, targetUserId: userId, err: logoutErr?.message }, 'Error disconnecting user session during phone unlink');
+        }
+      }
+
+      logger.info({ adminUid: req.auth.uid, targetUserId: userId, previousPhone }, 'Admin unlinked WhatsApp phone');
+
+      return res.json({
+        success: true,
+        message: 'WhatsApp phone unlinked successfully',
+        previousPhone: previousPhone || null
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en DELETE /admin/users/:userId/phone');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: manual cleanup of a user's Redis data
+  // ---------------------------
+  router.post('/admin/users/:userId/cleanup', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      const { userId } = req.params;
+      const keepAuth = req.body?.keepAuth === true;
+
+      logger.info({ adminUid: req.auth.uid, targetUserId: userId, keepAuth }, 'Admin cleanup requested');
+
+      const result = await redisQueue.cleanupUserData(userId, { keepAuth });
+
+      return res.json({
+        success: result.success,
+        userId,
+        keepAuth,
+        deletedKeys: result.deletedKeys,
+        deletedCount: result.deletedKeys.length,
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en POST /admin/users/:userId/cleanup');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: Redis key statistics
+  // ---------------------------
+  router.get('/admin/redis/stats', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      const stats = await redisQueue.getRedisKeyStats();
+      return res.json({ success: true, ...stats });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en GET /admin/redis/stats');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: Orphan key scanner
+  // ---------------------------
+  router.get('/admin/redis/orphan-scan', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      const scanResult = await redisQueue.scanOrphanKeys();
+      return res.json({
+        success: true,
+        totalUsersScanned: scanResult.totalUsersScanned,
+        orphanCount: scanResult.orphans.length,
+        activeCount: scanResult.active.length,
+        orphans: scanResult.orphans.map(o => ({
+          userId: o.userId,
+          keyCount: o.keyCount,
+          keys: o.keys,
+        })),
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en GET /admin/redis/orphan-scan');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: Delete orphan keys (POST with orphan userIds)
+  // ---------------------------
+  router.post('/admin/redis/orphan-cleanup', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      // First scan, then optionally filter by provided userIds
+      const scanResult = await redisQueue.scanOrphanKeys();
+      let toDelete = scanResult.orphans;
+
+      if (req.body?.userIds && Array.isArray(req.body.userIds)) {
+        const allowed = new Set(req.body.userIds);
+        toDelete = toDelete.filter(o => allowed.has(o.userId));
+      }
+
+      if (toDelete.length === 0) {
+        return res.json({ success: true, message: 'No orphan keys to delete', totalDeleted: 0 });
+      }
+
+      const result = await redisQueue.deleteOrphanKeys(toDelete);
+      return res.json({ success: true, ...result });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en POST /admin/redis/orphan-cleanup');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════
+  // ADMIN: USER MANAGEMENT
+  // ══════════════════════════════════════════════════════
+
+  // ---------------------------
+  // Admin: list all users
+  // ---------------------------
+  router.get('/admin/users', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      if (!db) {
+        return res.status(503).json({ error: 'Firestore not available' });
+      }
+
+      const snapshot = await db.collection('users').get();
+      const users = [];
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        users.push({
+          uid: doc.id,
+          email: data.email || '',
+          displayName: data.displayName || '',
+          plan: data.plan || 'trial',
+          role: data.role || 'user',
+          status: data.status || 'active',
+          country: data.country || 'PY',
+          whatsappPhone: data.whatsappPhone || null,
+          createdAt: data.createdAt || null,
+          trialEndsAt: data.trialEndsAt || null,
+          lastLoginAt: data.lastLoginAt || null
+        });
+      });
+
+      logger.info({ adminUid: req.auth.uid, userCount: users.length }, 'Admin listed all users');
+      return res.json({ users });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en GET /admin/users');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: change user status (active/suspended/disabled)
+  // ---------------------------
+  router.put('/admin/users/:userId/status', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      if (!db) {
+        return res.status(503).json({ error: 'Firestore not available' });
+      }
+
+      const { userId } = req.params;
+      const { status, reason } = req.body || {};
+
+      const validStatuses = ['active', 'suspended', 'disabled'];
+      if (!status || !validStatuses.includes(status)) {
+        return res.status(400).json({ error: 'Invalid status. Must be one of: active, suspended, disabled' });
+      }
+
+      // Prevent self-suspension
+      if (userId === req.auth.uid && status !== 'active') {
+        return res.status(400).json({ error: 'Cannot suspend or disable your own account' });
+      }
+
+      const userRef = db.collection('users').doc(userId);
+      const snap = await userRef.get();
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const updateData = {
+        status,
+        statusChangedAt: admin.firestore.FieldValue.serverTimestamp(),
+        statusChangedBy: req.auth.uid
+      };
+      if (reason) {
+        updateData.statusReason = reason;
+      }
+
+      await userRef.update(updateData);
+      invalidateProfileCache(userId);
+
+      // If suspending/disabling, clear their active session from Redis
+      if (status !== 'active') {
+        try {
+          const manager = sessionManager.sessions.get(userId);
+          if (manager && manager.isReady) {
+            await manager.logout();
+            sessionManager.sessions.delete(userId);
+            logger.info({ adminUid: req.auth.uid, targetUserId: userId }, 'Admin disconnected user WhatsApp session (status change)');
+          }
+        } catch (sessionErr) {
+          logger.warn({ adminUid: req.auth.uid, targetUserId: userId, err: sessionErr?.message }, 'Error disconnecting session during status change');
+        }
+
+        // Clear session guard token
+        try {
+          const { getRedis } = require('./redisClient');
+          const redis = getRedis();
+          if (redis && redis.status === 'ready') {
+            await redis.del(`session:${userId}`);
+          }
+        } catch (redisErr) {
+          logger.warn({ targetUserId: userId, err: redisErr?.message }, 'Error clearing Redis session during status change');
+        }
+      }
+
+      logger.info({ adminUid: req.auth.uid, targetUserId: userId, status, reason }, 'Admin changed user status');
+
+      const updated = (await userRef.get()).data();
+      return res.json({
+        success: true,
+        user: {
+          uid: userId,
+          email: updated.email,
+          status: updated.status,
+          statusChangedAt: updated.statusChangedAt,
+          statusReason: updated.statusReason || null
+        }
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en PUT /admin/users/:userId/status');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: change user role
+  // ---------------------------
+  router.put('/admin/users/:userId/role', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      if (!db) {
+        return res.status(503).json({ error: 'Firestore not available' });
+      }
+
+      const { userId } = req.params;
+      const { role } = req.body || {};
+
+      const validRoles = ['user', 'admin'];
+      if (!role || !validRoles.includes(role)) {
+        return res.status(400).json({ error: 'Invalid role. Must be one of: user, admin' });
+      }
+
+      // Prevent self-demotion
+      if (userId === req.auth.uid && role !== 'admin') {
+        return res.status(400).json({ error: 'Cannot remove admin role from your own account' });
+      }
+
+      const userRef = db.collection('users').doc(userId);
+      const snap = await userRef.get();
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      await userRef.update({ role });
+      invalidateProfileCache(userId);
+
+      logger.info({ adminUid: req.auth.uid, targetUserId: userId, role }, 'Admin changed user role');
+
+      const updated = (await userRef.get()).data();
+      return res.json({
+        success: true,
+        user: {
+          uid: userId,
+          email: updated.email,
+          role: updated.role
+        }
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en PUT /admin/users/:userId/role');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
+  // Admin: delete user completely
+  // ---------------------------
+  router.delete('/admin/users/:userId', conditionalAuth, conditionalRole('admin'), async (req, res) => {
+    try {
+      if (!req.userProfile || req.userProfile.role !== 'admin') {
+        return res.status(403).json({ error: 'Forbidden: admin role required' });
+      }
+
+      if (!db) {
+        return res.status(503).json({ error: 'Firestore not available' });
+      }
+
+      const { userId } = req.params;
+
+      // Prevent self-deletion
+      if (userId === req.auth.uid) {
+        return res.status(400).json({ error: 'Cannot delete your own account' });
+      }
+
+      const userRef = db.collection('users').doc(userId);
+      const snap = await userRef.get();
+      if (!snap.exists) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const userData = snap.data();
+
+      // Disconnect WhatsApp session if active
+      try {
+        const manager = sessionManager.sessions.get(userId);
+        if (manager && manager.isReady) {
+          await manager.logout();
+          sessionManager.sessions.delete(userId);
+        }
+      } catch (sessionErr) {
+        logger.warn({ targetUserId: userId, err: sessionErr?.message }, 'Error disconnecting session during user deletion');
+      }
+
+      // Clean up Redis data
+      try {
+        await redisQueue.cleanupUserData(userId, { keepAuth: false });
+      } catch (redisErr) {
+        logger.warn({ targetUserId: userId, err: redisErr?.message }, 'Error cleaning Redis data during user deletion');
+      }
+
+      // Delete from Firestore
+      await userRef.delete();
+      invalidateProfileCache(userId);
+
+      // Optionally disable Firebase Auth account
+      if (auth) {
+        try {
+          await auth.updateUser(userId, { disabled: true });
+          logger.info({ targetUserId: userId }, 'Firebase Auth account disabled');
+        } catch (authErr) {
+          // User might not exist in Firebase Auth (e.g., dev mode)
+          logger.warn({ targetUserId: userId, err: authErr?.message }, 'Could not disable Firebase Auth account');
+        }
+      }
+
+      logger.info({ adminUid: req.auth.uid, targetUserId: userId, email: userData.email }, 'Admin deleted user');
+
+      return res.json({
+        success: true,
+        message: 'User deleted successfully',
+        deletedUser: {
+          uid: userId,
+          email: userData.email
+        }
+      });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en DELETE /admin/users/:userId');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ══════════════════════════════════════════════════════
+  // TEMPLATES CRUD
+  // ══════════════════════════════════════════════════════
+
+  // Auto-create templates table if it doesn't exist
+  const ensureTemplatesTable = (() => {
+    let created = false;
+    return async () => {
+      if (created) return;
+      const pg = require('./postgresClient');
+      await pg.query(`
+        CREATE TABLE IF NOT EXISTS templates (
+          id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+          user_id VARCHAR(255) NOT NULL,
+          name VARCHAR(255) NOT NULL,
+          content TEXT NOT NULL,
+          category VARCHAR(100),
+          variables TEXT[],
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS idx_templates_user ON templates(user_id);
+      `);
+      created = true;
+    };
+  })();
+
+  // GET /templates — list all templates for the current user
+  router.get('/templates', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await ensureTemplatesTable();
+      const userId = req.auth?.uid || 'default';
+      const { category } = req.query || {};
+      const pg = require('./postgresClient');
+
+      let sql = 'SELECT * FROM templates WHERE user_id = $1';
+      const params = [userId];
+
+      if (category) {
+        sql += ' AND category = $2';
+        params.push(category);
+      }
+
+      sql += ' ORDER BY updated_at DESC';
+
+      const result = await pg.query(sql, params);
+      return res.json({ templates: result.rows });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /templates');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /templates — create a new template
+  router.post('/templates', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await ensureTemplatesTable();
+      const userId = req.auth?.uid || 'default';
+      const { name, content, category, variables } = req.body || {};
+
+      if (!name || !content) {
+        return res.status(400).json({ error: 'Nombre y contenido son requeridos' });
+      }
+
+      const pg = require('./postgresClient');
+      const result = await pg.query(
+        `INSERT INTO templates (user_id, name, content, category, variables)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [userId, name.trim(), content.trim(), category?.trim() || null, variables || null]
+      );
+
+      return res.json({ success: true, template: result.rows[0] });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en POST /templates');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // PUT /templates/:id — update a template
+  router.put('/templates/:id', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await ensureTemplatesTable();
+      const userId = req.auth?.uid || 'default';
+      const { id } = req.params;
+      const { name, content, category, variables } = req.body || {};
+
+      if (!name || !content) {
+        return res.status(400).json({ error: 'Nombre y contenido son requeridos' });
+      }
+
+      const pg = require('./postgresClient');
+      const result = await pg.query(
+        `UPDATE templates SET name = $1, content = $2, category = $3, variables = $4, updated_at = NOW()
+         WHERE id = $5 AND user_id = $6
+         RETURNING *`,
+        [name.trim(), content.trim(), category?.trim() || null, variables || null, id, userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Plantilla no encontrada' });
+      }
+
+      return res.json({ success: true, template: result.rows[0] });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en PUT /templates/:id');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // DELETE /templates/:id — delete a template
+  router.delete('/templates/:id', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      await ensureTemplatesTable();
+      const userId = req.auth?.uid || 'default';
+      const { id } = req.params;
+
+      const pg = require('./postgresClient');
+      const result = await pg.query(
+        'DELETE FROM templates WHERE id = $1 AND user_id = $2 RETURNING id',
+        [id, userId]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Plantilla no encontrada' });
+      }
+
+      return res.json({ success: true });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en DELETE /templates/:id');
+      return res.status(500).json({ error: error.message });
     }
   });
 

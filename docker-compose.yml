@@ -12,9 +12,6 @@ services:
       - RAILWAY_STATIC_URL=${RAILWAY_STATIC_URL}
       - PUBLIC_URL=${PUBLIC_URL}
       - PORT=${PORT:-3000}
-      - KEYCLOAK_URL=${KEYCLOAK_URL}
-      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
-      - KEYCLOAK_AUDIENCE=${KEYCLOAK_AUDIENCE}
       - SESSION_STORE=redis
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -35,6 +32,8 @@ services:
     networks:
       - audio-sender-network
     depends_on:
+      redis:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     healthcheck:
@@ -54,6 +53,12 @@ services:
     container_name: redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--requirepass", "${REDIS_PASSWORD:-changeme}"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-changeme}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
     volumes:
       - redis-data:/data
     ports:
@@ -86,7 +91,6 @@ services:
 
 networks:
   audio-sender-network:
-    external: true
     name: audio-sender-shared-network
 
 volumes:

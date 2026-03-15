@@ -1,3 +1,41 @@
+/**
+ * Redis key patterns (user-scoped):
+ *
+ * Queue & campaign keys (src/queueRedis.js):
+ *   ms:status:{userId}              - campaign sending status (hash)                TTL: 24h
+ *   ms:progress:{userId}            - campaign progress tracking (hash)             TTL: 24h
+ *   ms:cancel:{userId}              - cancellation flag (string)                    TTL: 1h
+ *   ms:lock:campaign:{userId}       - campaign execution lock (string)              TTL: 1h
+ *   ms:list:{userId}                - message recipient list (string/JSON)          TTL: env REDIS_LIST_TTL_SECONDS (default 1h)
+ *   ms:hb:{userId}                  - frontend heartbeat (string)                   TTL: env HEARTBEAT_TTL_SECONDS (default 5m)
+ *   ms:events:{userId}              - event stream for UI (list)                    TTL: env EVENTS_TTL_SECONDS (default 1h)
+ *
+ * Session key (src/middleware/sessionGuard.js):
+ *   ms:session:{userId}             - active session token (string/JSON)            TTL: 24h
+ *
+ * Metrics/cache keys (src/metricsStoreRedis.js / metricsStorePostgres.js):
+ *   ms:contacts:{userId}            - contacts cache (hash)
+ *   ms:contacts:idmap:{userId}      - contacts ID map cache (hash)
+ *   ms:campaigns:{userId}           - campaigns cache (sorted set)
+ *   ms:metrics:events:seq:{userId}  - metric event sequence (string)
+ *   ms:metrics:events:z:{userId}    - metric events sorted set
+ *   ms:metrics:events:h:{userId}    - metric events hash
+ *   ms:metrics:monthly:sent:{userId}  - monthly sent stats (hash)
+ *   ms:metrics:monthly:error:{userId} - monthly error stats (hash)
+ *   ms:metrics:contact:stats:{userId} - contact-level stats (hash)
+ *
+ * WhatsApp/ownership keys:
+ *   wa:owner:{userId}               - pod ownership (string)                        TTL: env REDIS_OWNER_TTL_SECONDS (default 60s)
+ *   wa:auth:{userId}:*              - Baileys auth state (multiple keys)            TTL: env REDIS_TTL_SECONDS (default 12h) — DO NOT expire
+ *   wa:lock:connect:{userId}        - per-user connection lock (string)             TTL: 30-45s (set by acquireLock)
+ *
+ * Global keys:
+ *   ms:messages (BullMQ queue)      - message processing queue
+ *   ms:campaign:seq                 - campaign ID sequence
+ *   ms:campaign:data:{campaignId}   - campaign data (hash)
+ *   ms:campaign:recipients:{campaignId} - campaign recipients (hash)
+ */
+
 const { Queue, Worker, QueueEvents, JobsOptions } = require('bullmq');
 const path = require('path');
 const fs = require('fs');
@@ -36,12 +74,16 @@ function listKey(userId) { return `ms:list:${userId}`; }
 function heartbeatKey(userId) { return `ms:hb:${userId}`; }
 function eventsKey(userId) { return `ms:events:${userId}`; }
 
+const STATUS_TTL = 24 * 60 * 60;    // 24h for status hash
+const PROGRESS_TTL = 24 * 60 * 60;  // 24h for progress hash
+
 async function resetStatus(userId, total) {
   const r = getRedis();
   await r.hset(statusKey(userId), {
     total: String(total), sent: '0', errors: '0', completed: '0', canceled: '0',
     startedAt: String(Date.now()), updatedAt: String(Date.now()),
   });
+  await r.expire(statusKey(userId), STATUS_TTL);
 }
 
 async function incField(userId, field, amount = 1) {
@@ -51,6 +93,7 @@ async function incField(userId, field, amount = 1) {
     await r.pipeline()
       .hincrby(statusKey(userId), field, amount)
       .hset(statusKey(userId), 'updatedAt', String(Date.now()))
+      .expire(statusKey(userId), STATUS_TTL)
       .exec();
   } catch { }
 }
@@ -58,6 +101,7 @@ async function incField(userId, field, amount = 1) {
 async function markCompleted(userId) {
   const r = getRedis();
   await r.hset(statusKey(userId), { completed: '1', finishedAt: String(Date.now()) });
+  await r.expire(statusKey(userId), STATUS_TTL);
 }
 
 async function markCanceled(userId) {
@@ -66,6 +110,7 @@ async function markCanceled(userId) {
     canceled: '1', completed: '1', finishedAt: String(Date.now()), canceledAt: String(Date.now()),
     updatedAt: String(Date.now()),
   });
+  await r.expire(statusKey(userId), STATUS_TTL);
 }
 
 // Guardar/limpiar la lista de números en Redis (por usuario)
@@ -149,6 +194,7 @@ async function requestCancel(userId) {
   const ttl = Math.max(60, Number(process.env.REDIS_CANCEL_TTL_SECONDS || 600));
   await r.set(cancelKey(userId), '1', 'EX', ttl);
   await r.hset(statusKey(userId), { canceled: '1', updatedAt: String(Date.now()) });
+  await r.expire(statusKey(userId), STATUS_TTL);
 }
 
 async function isCanceled(userId) {
@@ -215,6 +261,7 @@ async function enqueueCampaign(userId, numbers, templates, images, singleImage, 
   try {
     const r = getRedis();
     await r.hset(statusKey(userId), { jobId: String(job.id), updatedAt: String(Date.now()) });
+    await r.expire(statusKey(userId), STATUS_TTL);
     // Log event enqueue
     if (typeof addEvent === 'function') {
       await addEvent(userId, 'enqueue', { jobId: String(job.id), total: numbers.length, templateCount: templates?.length || 1 });
@@ -254,6 +301,7 @@ async function setProgress(userId, data) {
   if (data.resumeFrom !== undefined) payload.resumeFrom = String(data.resumeFrom);
   payload.updatedAt = String(Date.now());
   await r.hset(progressKey(userId), payload);
+  await r.expire(progressKey(userId), PROGRESS_TTL);
 }
 
 async function clearProgress(userId) {
@@ -291,40 +339,90 @@ async function removeUserJobs(userId) {
 }
 
 /**
- * Limpieza completa de datos de Redis para un usuario
- * Se ejecuta en: logout, error fatal, desvinculación
+ * Limpieza completa de datos de Redis para un usuario.
+ * Se ejecuta en: logout, error fatal, desvinculación.
+ *
+ * @param {string} userId
+ * @param {object} [options]
+ * @param {boolean} [options.keepAuth=false] - If true, skip deleting wa:auth keys (preserves WhatsApp reconnection state)
+ * @returns {Promise<{success: boolean, deletedKeys: string[]}>}
  */
-async function cleanupUserData(userId) {
-  logger.info({ userId }, 'Limpiando datos de Redis para usuario');
+async function cleanupUserData(userId, options = {}) {
+  const { keepAuth = false } = options;
+  logger.info({ userId, keepAuth }, 'Limpiando datos de Redis para usuario');
   const r = getRedis();
+  const deletedKeys = [];
 
   try {
     // Eliminar todos los jobs pendientes del usuario
     await removeUserJobs(userId);
 
-    // Limpiar estado de campaña
-    await r.del(statusKey(userId));
-    await clearProgress(userId);
-    await clearList(userId);
-    await clearCancel(userId);
+    // Direct keys to delete
+    const directKeys = [
+      statusKey(userId),         // ms:status:{userId}
+      progressKey(userId),       // ms:progress:{userId}
+      listKey(userId),           // ms:list:{userId}
+      cancelKey(userId),         // ms:cancel:{userId}
+      eventsKey(userId),         // ms:events:{userId}
+      heartbeatKey(userId),      // ms:hb:{userId}
+      campaignLockKey(userId),   // ms:lock:campaign:{userId}
+      `ms:session:${userId}`,    // session token
+      `ms:contacts:${userId}`,   // contacts cache
+      `ms:contacts:idmap:${userId}`, // contacts ID map
+      `ms:campaigns:${userId}`,  // campaigns cache
+      `wa:owner:${userId}`,      // pod ownership
+    ];
 
-    // Limpiar eventos
-    const evKey = `ms:events:${userId}`;
-    await r.del(evKey);
+    for (const key of directKeys) {
+      try {
+        const deleted = await r.del(key);
+        if (deleted > 0) deletedKeys.push(key);
+      } catch (err) {
+        logger.warn({ userId, key, err: err?.message }, 'Error deleting key during cleanup');
+      }
+    }
 
-    // Limpiar heartbeat
-    const hbKey = `ms:heartbeat:${userId}`;
-    await r.del(hbKey);
+    // Pattern-based keys: ms:metrics:*:{userId}
+    const metricPatterns = [
+      `ms:metrics:events:seq:${userId}`,
+      `ms:metrics:events:z:${userId}`,
+      `ms:metrics:events:h:${userId}`,
+      `ms:metrics:monthly:sent:${userId}`,
+      `ms:metrics:monthly:error:${userId}`,
+      `ms:metrics:contact:stats:${userId}`,
+    ];
+    for (const key of metricPatterns) {
+      try {
+        const deleted = await r.del(key);
+        if (deleted > 0) deletedKeys.push(key);
+      } catch (err) {
+        logger.warn({ userId, key, err: err?.message }, 'Error deleting metrics key during cleanup');
+      }
+    }
 
-    // Limpiar lock de campaña
-    const lockKey = campaignLockKey(userId);
-    await r.del(lockKey);
+    // wa:auth:{userId}:* — SCAN-based deletion (dynamic suffixes)
+    if (!keepAuth) {
+      try {
+        const authPattern = `wa:auth:${userId}:*`;
+        let cursor = '0';
+        do {
+          const [nextCursor, keys] = await r.scan(cursor, 'MATCH', authPattern, 'COUNT', 200);
+          cursor = nextCursor;
+          if (keys && keys.length) {
+            await r.del(keys);
+            deletedKeys.push(...keys);
+          }
+        } while (cursor !== '0');
+      } catch (err) {
+        logger.warn({ userId, err: err?.message }, 'Error deleting wa:auth keys during cleanup');
+      }
+    }
 
-    logger.info({ userId }, 'Datos de Redis limpiados exitosamente');
-    return true;
+    logger.info({ userId, deletedCount: deletedKeys.length, keepAuth }, 'Datos de Redis limpiados exitosamente');
+    return { success: true, deletedKeys };
   } catch (error) {
     logger.error({ userId, error: error.message }, 'Error limpiando datos de Redis');
-    return false;
+    return { success: false, deletedKeys };
   }
 }
 
@@ -870,6 +968,199 @@ async function closeWorker() {
   await worker.close();
 }
 
+/**
+ * Scan for orphan Redis keys — keys belonging to users with no active session
+ * and no recent heartbeat. Returns list of orphan keys grouped by userId.
+ */
+async function scanOrphanKeys() {
+  const r = getRedis();
+  const prefixes = ['ms:status:', 'ms:progress:', 'ms:cancel:', 'ms:lock:campaign:',
+    'ms:list:', 'ms:hb:', 'ms:events:', 'ms:contacts:', 'ms:campaigns:'];
+
+  const userKeys = new Map(); // userId -> [keys]
+
+  // Scan all ms:* keys
+  try {
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await r.scan(cursor, 'MATCH', 'ms:*', 'COUNT', 200);
+      cursor = nextCursor;
+      for (const key of keys) {
+        // Extract userId from key patterns like ms:prefix:{userId} or ms:prefix:sub:{userId}
+        let uid = null;
+        for (const prefix of prefixes) {
+          if (key.startsWith(prefix)) {
+            uid = key.slice(prefix.length);
+            break;
+          }
+        }
+        // Handle ms:session:{userId}
+        if (!uid && key.startsWith('ms:session:')) {
+          uid = key.slice('ms:session:'.length);
+        }
+        // Handle ms:metrics:*:{userId} patterns
+        if (!uid && key.startsWith('ms:metrics:')) {
+          const parts = key.split(':');
+          if (parts.length >= 4) {
+            uid = parts[parts.length - 1];
+          }
+        }
+        // Handle ms:contacts:idmap:{userId}
+        if (!uid && key.startsWith('ms:contacts:idmap:')) {
+          uid = key.slice('ms:contacts:idmap:'.length);
+        }
+
+        if (uid) {
+          if (!userKeys.has(uid)) userKeys.set(uid, []);
+          userKeys.get(uid).push(key);
+        }
+      }
+    } while (cursor !== '0');
+  } catch (err) {
+    logger.error({ err: err?.message }, 'Error scanning ms:* keys for orphan detection');
+    throw err;
+  }
+
+  // Also scan wa:* keys
+  try {
+    let cursor = '0';
+    do {
+      const [nextCursor, keys] = await r.scan(cursor, 'MATCH', 'wa:*', 'COUNT', 200);
+      cursor = nextCursor;
+      for (const key of keys) {
+        let uid = null;
+        if (key.startsWith('wa:owner:')) {
+          uid = key.slice('wa:owner:'.length);
+        } else if (key.startsWith('wa:auth:')) {
+          // wa:auth:{userId}:suffix
+          const rest = key.slice('wa:auth:'.length);
+          const colonIdx = rest.indexOf(':');
+          uid = colonIdx > 0 ? rest.slice(0, colonIdx) : rest;
+        } else if (key.startsWith('wa:lock:connect:')) {
+          uid = key.slice('wa:lock:connect:'.length);
+        }
+
+        if (uid) {
+          if (!userKeys.has(uid)) userKeys.set(uid, []);
+          userKeys.get(uid).push(key);
+        }
+      }
+    } while (cursor !== '0');
+  } catch (err) {
+    logger.error({ err: err?.message }, 'Error scanning wa:* keys for orphan detection');
+  }
+
+  // Check each userId for active session or recent activity
+  const orphans = [];
+  const active = [];
+  const ORPHAN_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24h
+
+  for (const [uid, keys] of userKeys) {
+    try {
+      // Check if user has an active session token
+      const sessionData = await r.get(`ms:session:${uid}`);
+      if (sessionData) {
+        active.push({ userId: uid, keyCount: keys.length, reason: 'has_session' });
+        continue;
+      }
+
+      // Check if user has a recent heartbeat
+      const hb = await r.get(heartbeatKey(uid));
+      if (hb) {
+        active.push({ userId: uid, keyCount: keys.length, reason: 'has_heartbeat' });
+        continue;
+      }
+
+      // Check status updatedAt — if recent, not orphan
+      const updatedAt = await r.hget(statusKey(uid), 'updatedAt');
+      if (updatedAt && (Date.now() - Number(updatedAt)) < ORPHAN_THRESHOLD_MS) {
+        active.push({ userId: uid, keyCount: keys.length, reason: 'recent_activity' });
+        continue;
+      }
+
+      // Orphaned
+      orphans.push({ userId: uid, keys, keyCount: keys.length });
+    } catch (err) {
+      logger.warn({ uid, err: err?.message }, 'Error checking user activity for orphan scan');
+    }
+  }
+
+  logger.info({ orphanUsers: orphans.length, activeUsers: active.length }, 'Orphan key scan complete');
+  return { orphans, active, totalUsersScanned: userKeys.size };
+}
+
+/**
+ * Delete orphan keys for a specific list of userIds.
+ * Called after scanOrphanKeys to actually remove them.
+ */
+async function deleteOrphanKeys(orphanEntries) {
+  const r = getRedis();
+  let totalDeleted = 0;
+  const results = [];
+
+  for (const entry of orphanEntries) {
+    try {
+      if (entry.keys && entry.keys.length > 0) {
+        await r.del(entry.keys);
+        totalDeleted += entry.keys.length;
+        results.push({ userId: entry.userId, deleted: entry.keys.length });
+      }
+    } catch (err) {
+      logger.warn({ userId: entry.userId, err: err?.message }, 'Error deleting orphan keys');
+      results.push({ userId: entry.userId, deleted: 0, error: err?.message });
+    }
+  }
+
+  logger.info({ totalDeleted, users: results.length }, 'Orphan keys deleted');
+  return { totalDeleted, results };
+}
+
+/**
+ * Get Redis key statistics — count of keys by pattern.
+ */
+async function getRedisKeyStats() {
+  const r = getRedis();
+  const patterns = {
+    'ms:status:*': 0,
+    'ms:progress:*': 0,
+    'ms:cancel:*': 0,
+    'ms:lock:campaign:*': 0,
+    'ms:list:*': 0,
+    'ms:hb:*': 0,
+    'ms:events:*': 0,
+    'ms:session:*': 0,
+    'ms:contacts:*': 0,
+    'ms:campaigns:*': 0,
+    'ms:metrics:*': 0,
+    'wa:owner:*': 0,
+    'wa:auth:*': 0,
+    'wa:lock:*': 0,
+  };
+
+  for (const pattern of Object.keys(patterns)) {
+    try {
+      let count = 0;
+      let cursor = '0';
+      do {
+        const [nextCursor, keys] = await r.scan(cursor, 'MATCH', pattern, 'COUNT', 500);
+        cursor = nextCursor;
+        count += keys.length;
+      } while (cursor !== '0');
+      patterns[pattern] = count;
+    } catch (err) {
+      logger.warn({ pattern, err: err?.message }, 'Error counting keys for pattern');
+    }
+  }
+
+  // Get total DB size
+  let dbSize = 0;
+  try {
+    dbSize = await r.dbsize();
+  } catch { }
+
+  return { patterns, dbSize };
+}
+
 module.exports = {
   enqueueCampaign,
   getStatus,
@@ -881,6 +1172,9 @@ module.exports = {
   removeUserJobs,
   touchHeartbeat,
   closeWorker,
+  scanOrphanKeys,
+  deleteOrphanKeys,
+  getRedisKeyStats,
   // Admin helpers (expuestos por rutas si se requiere)
   async cleanQueue(type = 'completed', graceSec = 3600, limit = 1000) {
     try {

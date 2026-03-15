@@ -71,13 +71,13 @@ class SessionManager {
     logger.info({ userId, sessionPath }, 'Nueva sesión creada para usuario');
   }
 
-  // Obtener sesión por token JWT (después de validar con Keycloak)
+  // Obtener sesión por token JWT (después de validar con Firebase Auth)
   async getSessionByToken(req) {
-    const userId = req.auth?.sub || req.auth?.id; // Desde JWT de Keycloak
+    const userId = req.auth?.uid; // Desde Firebase Auth ID token
     
     logger.info('Getting session by token', {
       userId,
-      userName: req.auth?.name || req.auth?.preferred_username,
+      userName: req.auth?.name || req.auth?.email,
       email: req.auth?.email,
       authPresent: !!req.auth,
       availableFields: Object.keys(req.auth || {})
@@ -256,7 +256,7 @@ class SessionManager {
 
   // Logout por token JWT
   async logoutByToken(req) {
-    const userId = req.auth?.sub || req.auth?.id;
+    const userId = req.auth?.uid;
     
     if (!userId) {
       throw new Error('Usuario no autenticado');

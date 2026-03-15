@@ -1,0 +1,33 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Admin email — full access to everything
+    function isAdmin() {
+      return request.auth != null && request.auth.token.email == 'andyvercha@gmail.com';
+    }
+
+    // User profiles
+    match /users/{userId} {
+      // Users can read their own document; admin can read all
+      allow read: if request.auth != null && (request.auth.uid == userId || isAdmin());
+
+      // Admin can write anything
+      allow write: if isAdmin();
+
+      // Regular users can only update displayName and lastLoginAt
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'lastLoginAt']);
+
+      // Users cannot create or delete their own documents (server-side only)
+      allow create, delete: if false;
+    }
+
+    // Default: deny all other access
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

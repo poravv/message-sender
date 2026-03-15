@@ -18,8 +18,4 @@ data:
   REDIS_EVENTS_TTL_SECONDS: "86400"
   LOG_LEVEL: "info"
   # S3 variables se configuran vía Secret
-
-  # Keycloak (override here if not provided via Secret)
-  KEYCLOAK_URL: "https://auth.mindtechpy.net"
-  KEYCLOAK_REALM: "message-sender"
-  KEYCLOAK_AUDIENCE: "message-sender-api"
+  # Firebase credentials are provided via Secret (FIREBASE_SERVICE_ACCOUNT)

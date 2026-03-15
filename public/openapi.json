@@ -1,0 +1,761 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "WhatsApp Sender Pro API",
+    "description": "API publica para enviar mensajes de WhatsApp, gestionar campanas y recibir webhooks de estado. Disponible para planes Professional y Enterprise.\n\n## Autenticacion\nTodas las llamadas requieren un Bearer token obtenido desde `POST /api/v1/auth/token` usando tu API Key.\n\n## Rate Limiting\nWhatsApp impone un limite de **15 mensajes por minuto** por linea conectada. Las solicitudes que excedan este limite seran encoladas automaticamente.\n\n## Errores\nTodos los errores siguen un formato consistente con `error` y opcionalmente `details`.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "WhatsApp Sender Pro",
+      "url": "https://mindtechpy.net",
+      "email": "andyvercha@gmail.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "API v1"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentication",
+      "description": "Obtener y gestionar tokens de acceso a la API"
+    },
+    {
+      "name": "Messages",
+      "description": "Enviar mensajes individuales, masivos y consultar estado de campanas"
+    },
+    {
+      "name": "Webhooks",
+      "description": "Registrar URLs para recibir notificaciones de eventos"
+    }
+  ],
+  "paths": {
+    "/auth/token": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Obtener token de acceso",
+        "description": "Intercambia tu API Key por un Bearer token JWT para autenticar llamadas subsiguientes. El token expira en 24 horas.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["apiKey"],
+                "properties": {
+                  "apiKey": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Tu API Key (disponible en la seccion API del panel)",
+                    "example": "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token generado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "token": {
+                      "type": "string",
+                      "description": "Bearer token JWT",
+                      "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    },
+                    "expiresIn": {
+                      "type": "integer",
+                      "description": "Tiempo de expiracion en segundos",
+                      "example": 86400
+                    },
+                    "uid": {
+                      "type": "string",
+                      "description": "ID del usuario propietario de la API Key"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "description": "API Key invalida o revocada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Invalid or revoked API key"
+                }
+              }
+            }
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/messages/send": {
+      "post": {
+        "tags": ["Messages"],
+        "summary": "Enviar mensaje individual",
+        "description": "Envia un mensaje de WhatsApp a un unico numero. El mensaje se encola y procesa respetando el rate limit de 15 msgs/min.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["phone", "message"],
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "description": "Numero de telefono en formato internacional (ej: 595991234567)",
+                    "example": "595991234567"
+                  },
+                  "message": {
+                    "type": "string",
+                    "description": "Texto del mensaje. Soporta variables: {nombre}, {tratamiento}, {grupo}",
+                    "example": "Hola {nombre}, te enviamos informacion sobre nuestros servicios."
+                  },
+                  "mediaUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL publica de imagen o audio a adjuntar (opcional)",
+                    "example": "https://example.com/image.jpg"
+                  },
+                  "mediaType": {
+                    "type": "string",
+                    "enum": ["image", "audio"],
+                    "description": "Tipo de media adjunta (requerido si mediaUrl esta presente)",
+                    "example": "image"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mensaje encolado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "messageId": {
+                      "type": "string",
+                      "description": "ID unico del mensaje encolado",
+                      "example": "msg_abc123def456"
+                    },
+                    "phone": {
+                      "type": "string",
+                      "example": "595991234567"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "queued"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "description": "WhatsApp no conectado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "WhatsApp session is not connected. Please connect via the dashboard first."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/bulk": {
+      "post": {
+        "tags": ["Messages"],
+        "summary": "Enviar mensajes masivos",
+        "description": "Crea una campana de envio masivo. Los mensajes se encolan y procesan respetando el rate limit. Soporta rotacion de templates y variables por destinatario.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["recipients", "template"],
+                "properties": {
+                  "recipients": {
+                    "type": "array",
+                    "description": "Lista de destinatarios (max 10,000)",
+                    "items": {
+                      "type": "object",
+                      "required": ["phone"],
+                      "properties": {
+                        "phone": {
+                          "type": "string",
+                          "description": "Numero en formato internacional",
+                          "example": "595991234567"
+                        },
+                        "variables": {
+                          "type": "object",
+                          "description": "Variables para personalizar el mensaje",
+                          "properties": {
+                            "nombre": {
+                              "type": "string",
+                              "example": "Juan"
+                            },
+                            "tratamiento": {
+                              "type": "string",
+                              "example": "Sr."
+                            },
+                            "grupo": {
+                              "type": "string",
+                              "example": "Clientes VIP"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "example": [
+                      { "phone": "595991234567", "variables": { "nombre": "Juan", "tratamiento": "Sr." } },
+                      { "phone": "595981234567", "variables": { "nombre": "Maria", "tratamiento": "Sra." } }
+                    ]
+                  },
+                  "template": {
+                    "type": "string",
+                    "description": "Texto del mensaje con variables opcionales",
+                    "example": "Hola {tratamiento} {nombre}, le informamos sobre nuestra promocion especial."
+                  },
+                  "mediaUrl": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL publica de imagen o audio (opcional)",
+                    "example": "https://example.com/promo.jpg"
+                  },
+                  "campaignName": {
+                    "type": "string",
+                    "description": "Nombre descriptivo para la campana (opcional)",
+                    "example": "Promo Marzo 2026"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Campana creada y mensajes encolados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "campaignId": {
+                      "type": "string",
+                      "description": "ID unico de la campana",
+                      "example": "camp_789xyz"
+                    },
+                    "totalRecipients": {
+                      "type": "integer",
+                      "description": "Cantidad de destinatarios encolados",
+                      "example": 150
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "processing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "429": {
+            "$ref": "#/components/responses/RateLimited"
+          },
+          "503": {
+            "description": "WhatsApp no conectado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/status/{campaignId}": {
+      "get": {
+        "tags": ["Messages"],
+        "summary": "Consultar estado de campana",
+        "description": "Retorna el estado actual de una campana de envio masivo, incluyendo conteos y resultados individuales.",
+        "parameters": [
+          {
+            "name": "campaignId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID de la campana",
+            "example": "camp_789xyz"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado de la campana",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "campaignId": {
+                      "type": "string",
+                      "example": "camp_789xyz"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "Promo Marzo 2026"
+                    },
+                    "total": {
+                      "type": "integer",
+                      "description": "Total de mensajes en la campana",
+                      "example": 150
+                    },
+                    "sent": {
+                      "type": "integer",
+                      "description": "Mensajes enviados exitosamente",
+                      "example": 142
+                    },
+                    "errors": {
+                      "type": "integer",
+                      "description": "Mensajes con error",
+                      "example": 8
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": ["processing", "completed", "cancelled"],
+                      "description": "Estado general de la campana",
+                      "example": "completed"
+                    },
+                    "results": {
+                      "type": "array",
+                      "description": "Resultados individuales por destinatario",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "phone": {
+                            "type": "string",
+                            "example": "595991234567"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": ["sent", "error", "pending"],
+                            "example": "sent"
+                          },
+                          "sentAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "error": {
+                            "type": "string",
+                            "description": "Detalle del error (si aplica)",
+                            "example": null
+                          }
+                        }
+                      }
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Campana no encontrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "example": {
+                  "error": "Campaign not found"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhooks": {
+      "post": {
+        "tags": ["Webhooks"],
+        "summary": "Registrar webhook",
+        "description": "Registra una URL para recibir notificaciones de eventos. Se envia un POST a la URL registrada cada vez que ocurre un evento suscrito.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["url", "events"],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "URL HTTPS que recibira las notificaciones",
+                    "example": "https://tu-servidor.com/webhooks/whatsapp"
+                  },
+                  "events": {
+                    "type": "array",
+                    "description": "Lista de eventos a suscribir",
+                    "items": {
+                      "type": "string",
+                      "enum": ["message.sent", "message.failed", "message.delivered", "campaign.completed"]
+                    },
+                    "example": ["message.sent", "message.failed", "message.delivered"]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook registrado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "webhookId": {
+                      "type": "string",
+                      "example": "wh_abc123"
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": "https://tu-servidor.com/webhooks/whatsapp"
+                    },
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "secret": {
+                      "type": "string",
+                      "description": "Secret para verificar la firma HMAC-SHA256 de los payloads",
+                      "example": "whsec_xxxxxx"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "get": {
+        "tags": ["Webhooks"],
+        "summary": "Listar webhooks registrados",
+        "description": "Retorna todos los webhooks registrados para el usuario autenticado.",
+        "responses": {
+          "200": {
+            "description": "Lista de webhooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "webhooks": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "webhookId": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "events": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          },
+                          "active": {
+                            "type": "boolean"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Webhooks"],
+        "summary": "Eliminar webhook",
+        "description": "Elimina un webhook registrado por su ID.",
+        "parameters": [
+          {
+            "name": "webhookId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID del webhook a eliminar"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook eliminado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Webhook no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Token obtenido desde POST /api/v1/auth/token"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Descripcion del error"
+          },
+          "details": {
+            "type": "string",
+            "description": "Informacion adicional (opcional)"
+          }
+        },
+        "required": ["error"]
+      },
+      "WebhookPayload": {
+        "type": "object",
+        "description": "Formato del payload enviado a tu webhook URL",
+        "properties": {
+          "event": {
+            "type": "string",
+            "enum": ["message.sent", "message.failed", "message.delivered", "campaign.completed"],
+            "description": "Tipo de evento"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Hora del evento en ISO 8601"
+          },
+          "data": {
+            "type": "object",
+            "description": "Datos del evento",
+            "properties": {
+              "messageId": {
+                "type": "string"
+              },
+              "campaignId": {
+                "type": "string"
+              },
+              "phone": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string"
+              },
+              "error": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "example": {
+          "event": "message.sent",
+          "timestamp": "2026-03-14T15:30:00Z",
+          "data": {
+            "messageId": "msg_abc123",
+            "campaignId": "camp_789xyz",
+            "phone": "595991234567",
+            "status": "sent"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Solicitud invalida - faltan campos requeridos o formato incorrecto",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Missing required field: phone"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Token invalido, expirado o no proporcionado",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Invalid or expired token"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Plan no permite acceso a la API (requiere Professional o Enterprise)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "API access requires Professional or Enterprise plan"
+            }
+          }
+        }
+      },
+      "RateLimited": {
+        "description": "Demasiadas solicitudes - rate limit de WhatsApp excedido",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "error": {
+                  "type": "string",
+                  "example": "Rate limit exceeded"
+                },
+                "retryAfter": {
+                  "type": "integer",
+                  "description": "Segundos a esperar antes de reintentar",
+                  "example": 60
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

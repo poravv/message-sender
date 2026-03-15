@@ -77,7 +77,7 @@ function renderContactsTable(items) {
     tr.innerHTML = `
       <td><code>${c.phone || '—'}</code></td>
       <td>${c.nombre || '—'}</td>
-      <td>${c.sustantivo || '—'}</td>
+      <td>${c.tratamiento || '—'}</td>
       <td>${c.grupo || '<span class="text-muted">—</span>'}</td>
       <td>${sourceBadge}</td>
       <td class="actions">
@@ -123,31 +123,31 @@ async function addContact(e) {
   
   const phone = document.getElementById('contactPhone')?.value?.trim();
   const nombre = document.getElementById('contactNombre')?.value?.trim();
-  const sustantivo = document.getElementById('contactSustantivo')?.value?.trim();
+  const tratamiento = document.getElementById('contactTratamiento')?.value?.trim();
   const grupo = document.getElementById('contactGrupo')?.value?.trim();
-  
+
   if (!phone) {
     showAlert('El número es requerido', 'warning');
     return;
   }
-  
+
   try {
     const res = await authFetch('/contacts', {
       method: 'POST',
-      body: JSON.stringify({ phone, nombre, sustantivo, grupo })
+      body: JSON.stringify({ phone, nombre, tratamiento, grupo })
     });
-    
+
     if (!res.ok) {
       const data = await res.json();
       throw new Error(data.error || 'Error al agregar contacto');
     }
-    
+
     showAlert('Contacto agregado', 'success');
-    
+
     // Clear form
     document.getElementById('contactPhone').value = '';
     document.getElementById('contactNombre').value = '';
-    document.getElementById('contactSustantivo').value = '';
+    document.getElementById('contactTratamiento').value = '';
     document.getElementById('contactGrupo').value = '';
     
     loadContacts(1);
@@ -170,12 +170,12 @@ async function editContact(id) {
     editingContactId = id;
     const phoneInput = document.getElementById('editContactPhone');
     const nombreInput = document.getElementById('editContactNombre');
-    const sustantivoInput = document.getElementById('editContactSustantivo');
+    const tratamientoInput = document.getElementById('editContactTratamiento');
     const grupoInput = document.getElementById('editContactGrupo');
 
     if (phoneInput) phoneInput.value = contact.phone || '';
     if (nombreInput) nombreInput.value = contact.nombre || '';
-    if (sustantivoInput) sustantivoInput.value = contact.sustantivo || '';
+    if (tratamientoInput) tratamientoInput.value = contact.tratamiento || '';
     if (grupoInput) grupoInput.value = contact.grupo || '';
 
     openEditContactModal();
@@ -205,7 +205,7 @@ async function submitEditContact(e) {
 
   const phone = document.getElementById('editContactPhone')?.value?.trim() || '';
   const nombre = document.getElementById('editContactNombre')?.value?.trim() || '';
-  const sustantivo = document.getElementById('editContactSustantivo')?.value?.trim() || '';
+  const tratamiento = document.getElementById('editContactTratamiento')?.value?.trim() || '';
   const grupo = document.getElementById('editContactGrupo')?.value?.trim() || '';
 
   if (!phone) {
@@ -219,7 +219,7 @@ async function submitEditContact(e) {
   try {
     const updateRes = await authFetch(`/contacts/${editingContactId}`, {
       method: 'PUT',
-      body: JSON.stringify({ phone, nombre, sustantivo, grupo })
+      body: JSON.stringify({ phone, nombre, tratamiento, grupo })
     });
 
     if (!updateRes.ok) {

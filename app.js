@@ -19,6 +19,7 @@ const path = require('path');
 const { retentionHours } = require('./src/config');
 const { cleanupOldFiles } = require('./src/utils');
 const { buildRoutes } = require('./src/routes');
+const { buildApiV1Routes } = require('./src/apiV1Routes');
 const sessionManager = require('./src/sessionManager');
 const { getRedis } = require('./src/redisClient');
 
@@ -38,6 +39,9 @@ app.use(express.json());
 
 // Rutas de API (buildRoutes ahora maneja las sesiones automáticamente)
 app.use('/', buildRoutes());
+
+// API v1 — Public API for Professional/Enterprise plans
+app.use('/api/v1', buildApiV1Routes());
 
 // Raíz -> index.html (sin auth)
 app.get('/', (_req, res) => {

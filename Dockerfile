@@ -28,8 +28,6 @@ COPY --from=deps /app/package*.json ./
 COPY app.js ./
 COPY public ./public
 COPY src ./src
-COPY nodemon.json ./nodemon.json
-
 # Crear directorios de trabajo y permisos
 RUN mkdir -p uploads bot_sessions temp && chown -R node:node /app
 USER node

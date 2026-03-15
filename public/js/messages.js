@@ -1,5 +1,5 @@
 /**
- * Messages - Send Messages Functionality
+ * Messages - Send Messages Functionality (Redesigned)
  */
 
 let currentJobId = null;
@@ -18,45 +18,79 @@ const emojiCategories = {
   flags: ['🏁', '🚩', '🎌', '🏴', '🏳️', '🏳️‍🌈', '🏳️‍⚧️', '🏴‍☠️', '🇦🇷', '🇧🇷', '🇨🇱', '🇨🇴', '🇪🇨', '🇪🇸', '🇲🇽', '🇵🇪', '🇵🇾', '🇺🇾', '🇻🇪', '🇺🇸', '🇬🇧', '🇫🇷', '🇩🇪', '🇮🇹', '🇯🇵', '🇰🇷', '🇨🇳']
 };
 
-// Setup message form
+// Track extra template count
+let extraTemplateCount = 0;
+const MAX_EXTRA_TEMPLATES = 4;
+
+// ========== Setup: Message Form ==========
 function setupMessageForm() {
   const form = document.getElementById('messageForm');
   if (!form) return;
-  
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    
+
     if (!window.isWhatsAppConnected || !window.isWhatsAppConnected()) {
       showAlert('Primero debes conectar WhatsApp', 'warning');
       return;
     }
-    
+
     await sendMessages();
   });
 }
 
-// Setup message type handlers
-function setupMessageTypeHandlers() {
-  const typeInputs = document.querySelectorAll('input[name="messageType"]');
+// ========== Setup: Media Chips ==========
+function setupMediaChips() {
+  const chips = document.querySelectorAll('.media-chip');
+  const hiddenInput = document.getElementById('messageTypeHidden');
   const sections = {
     single: document.getElementById('singleImageSection'),
     multiple: document.getElementById('multipleImagesSection'),
     audio: document.getElementById('audioSection')
   };
-  
-  typeInputs.forEach(input => {
-    input.addEventListener('change', () => {
+
+  chips.forEach(chip => {
+    chip.addEventListener('click', () => {
+      const media = chip.dataset.media;
+      const isActive = chip.classList.contains('active');
+
+      // Deactivate all chips and hide all sections
+      chips.forEach(c => c.classList.remove('active'));
       Object.values(sections).forEach(s => s?.classList.add('d-none'));
-      
-      const type = input.value;
-      if (sections[type]) {
-        sections[type].classList.remove('d-none');
+
+      if (isActive) {
+        // Toggle off
+        if (hiddenInput) hiddenInput.value = 'none';
+      } else {
+        // Activate this chip
+        chip.classList.add('active');
+        if (hiddenInput) hiddenInput.value = media;
+        if (sections[media]) sections[media].classList.remove('d-none');
       }
+    });
+  });
+
+  // Clear buttons
+  document.querySelectorAll('.media-clear-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const type = btn.dataset.clear;
+      // Reset file input
+      const inputMap = { single: 'singleImage', multiple: 'images', audio: 'audioFile' };
+      const infoMap = { single: 'singleImageInfo', multiple: 'multipleImagesInfo', audio: 'audioFileInfo' };
+      const input = document.getElementById(inputMap[type]);
+      const info = document.getElementById(infoMap[type]);
+      if (input) input.value = '';
+      if (info) { info.innerHTML = ''; info.classList.remove('has-file'); }
+
+      // Deactivate chip
+      chips.forEach(c => c.classList.remove('active'));
+      Object.values(sections).forEach(s => s?.classList.add('d-none'));
+      if (hiddenInput) hiddenInput.value = 'none';
     });
   });
 }
 
-// Setup file inputs
+// ========== Setup: File Inputs ==========
 function setupFileInputs() {
   const inputs = [
     { id: 'csvFile', infoId: 'csvFileInfo' },
@@ -64,133 +98,263 @@ function setupFileInputs() {
     { id: 'images', infoId: 'multipleImagesInfo' },
     { id: 'audioFile', infoId: 'audioFileInfo' }
   ];
-  
+
   inputs.forEach(({ id, infoId }) => {
     const input = document.getElementById(id);
     const info = document.getElementById(infoId);
     if (!input || !info) return;
-    
+
     input.addEventListener('change', () => {
       if (input.files.length > 0) {
         const files = Array.from(input.files);
         const names = files.map(f => f.name).join(', ');
         const totalSize = files.reduce((sum, f) => sum + f.size, 0);
-        info.innerHTML = `<i class="bi bi-file-earmark-check"></i> ${names} (${formatFileSize(totalSize)})`;
+        info.innerHTML = '<i class="bi bi-file-earmark-check"></i> ' + names + ' (' + formatFileSize(totalSize) + ')';
         info.classList.add('has-file');
+        // Update recipient badge for CSV
+        if (id === 'csvFile') updateRecipientBadge();
       } else {
         info.innerHTML = '';
         info.classList.remove('has-file');
+        if (id === 'csvFile') updateRecipientBadge();
       }
     });
   });
 }
 
-// Format file size
 function formatFileSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / 1048576).toFixed(1) + ' MB';
 }
 
-// Setup templates
+// ========== Setup: Templates (Main + Advanced) ==========
 function setupTemplates() {
-  const countSelect = document.getElementById('templateCount');
   const container = document.getElementById('templatesContainer');
-  if (!countSelect || !container) return;
+  if (!container) return;
 
-  function renderTemplates(count) {
-    container.innerHTML = '';
-    // Close any open emoji pickers
-    document.querySelectorAll('.emoji-picker-float').forEach(el => el.remove());
-
-    for (let i = 1; i <= count; i++) {
-      const badgeClass = `template-badge-${i}`;
-      const template = document.createElement('div');
-      template.className = 'template-item';
-      template.innerHTML = `
-        <div class="template-header">
-          <span class="template-badge ${badgeClass}">Parte ${i}</span>
-          <div class="template-toolbar">
-            <button type="button" class="variable-chip" data-template="${i}" data-variable="{nombre}" title="Insertar nombre">
-              {nombre}
-            </button>
-            <button type="button" class="variable-chip" data-template="${i}" data-variable="{sustantivo}" title="Insertar tratamiento">
-              {sustantivo}
-            </button>
-            <button type="button" class="variable-chip" data-template="${i}" data-variable="{grupo}" title="Insertar grupo">
-              {grupo}
-            </button>
-            <button type="button" class="btn-emoji" data-template="${i}" title="Emojis">
-              <i class="bi bi-emoji-smile"></i>
-            </button>
-          </div>
-        </div>
-        <textarea
-          class="form-control message-textarea"
-          id="message${i}"
-          name="message${i}"
-          rows="4"
-          placeholder="Escribe tu mensaje aqui... Usa {nombre} para personalizar"
-          ${i === 1 ? 'required' : ''}
-        ></textarea>
-        <div class="char-count"><span id="charCount${i}">0</span> caracteres</div>
-      `;
-      container.appendChild(template);
-
-      // Char counter
-      const textarea = template.querySelector(`#message${i}`);
-      const counter = template.querySelector(`#charCount${i}`);
-      textarea.addEventListener('input', () => {
-        counter.textContent = textarea.value.length;
-      });
-    }
-  }
-
-  renderTemplates(1);
-  countSelect.addEventListener('change', () => renderTemplates(parseInt(countSelect.value)));
+  // Render the primary template (always visible)
+  renderSingleTemplate(container, 1, true);
 }
 
-// Setup emoji picker (floating per-template)
+function renderSingleTemplate(container, num, required) {
+  const badgeClass = 'template-badge-' + num;
+  const template = document.createElement('div');
+  template.className = 'template-item';
+  template.dataset.templateNum = num;
+  template.innerHTML =
+    '<div class="template-header">' +
+      '<span class="template-badge ' + badgeClass + '">Mensaje ' + num + '</span>' +
+      '<div class="template-toolbar">' +
+        '<button type="button" class="btn-emoji" data-template="' + num + '" title="Emojis"><i class="bi bi-emoji-smile"></i></button>' +
+        '<button type="button" class="btn-preview-template" data-template="' + num + '" title="Vista previa"><i class="bi bi-eye"></i></button>' +
+      '</div>' +
+    '</div>' +
+    '<div class="variable-chips">' +
+      '<button type="button" class="variable-chip" data-template="' + num + '" data-variable="{nombre}" title="Insertar nombre"><i class="bi bi-person"></i> {nombre}</button>' +
+      '<button type="button" class="variable-chip" data-template="' + num + '" data-variable="{tratamiento}" title="Insertar tratamiento"><i class="bi bi-award"></i> {tratamiento}</button>' +
+      '<button type="button" class="variable-chip" data-template="' + num + '" data-variable="{grupo}" title="Insertar grupo"><i class="bi bi-people"></i> {grupo}</button>' +
+    '</div>' +
+    '<textarea class="form-control message-textarea" id="message' + num + '" name="message' + num + '" rows="3" placeholder="Escribe tu mensaje aqui... Usa {nombre} para personalizar" ' + (required ? 'required' : '') + '></textarea>' +
+    '<div class="char-count"><span id="charCount' + num + '">0</span> caracteres</div>';
+
+  container.appendChild(template);
+
+  // Char counter
+  var textarea = template.querySelector('#message' + num);
+  var counter = template.querySelector('#charCount' + num);
+  textarea.addEventListener('input', function() {
+    counter.textContent = textarea.value.length;
+  });
+}
+
+// ========== Setup: Advanced Templates ==========
+function setupAdvancedTemplates() {
+  var toggle = document.getElementById('advancedTemplatesToggle');
+  var section = document.getElementById('advancedTemplatesSection');
+  var addBtn = document.getElementById('addExtraTemplateBtn');
+  var templateCountInput = document.getElementById('templateCount');
+
+  if (!toggle || !section) return;
+
+  toggle.addEventListener('click', function() {
+    var isOpen = !section.classList.contains('d-none');
+    section.classList.toggle('d-none', isOpen);
+    toggle.classList.toggle('open', !isOpen);
+  });
+
+  if (addBtn) {
+    addBtn.addEventListener('click', function() {
+      if (extraTemplateCount >= MAX_EXTRA_TEMPLATES) {
+        showAlert('Maximo ' + (MAX_EXTRA_TEMPLATES + 1) + ' mensajes permitidos', 'warning');
+        return;
+      }
+      extraTemplateCount++;
+      var num = extraTemplateCount + 1; // 2, 3, 4, 5
+      var container = document.getElementById('extraTemplatesContainer');
+      renderSingleTemplate(container, num, false);
+
+      // Add remove button to the new template
+      var item = container.querySelector('[data-template-num="' + num + '"]');
+      if (item) {
+        var removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'extra-template-remove';
+        removeBtn.innerHTML = '<i class="bi bi-trash"></i>';
+        removeBtn.title = 'Eliminar mensaje ' + num;
+        removeBtn.addEventListener('click', function() {
+          item.remove();
+          recalcExtraTemplates();
+        });
+        item.querySelector('.template-header').appendChild(removeBtn);
+      }
+
+      if (templateCountInput) templateCountInput.value = extraTemplateCount + 1;
+
+      if (extraTemplateCount >= MAX_EXTRA_TEMPLATES) {
+        addBtn.classList.add('d-none');
+      }
+    });
+  }
+}
+
+function recalcExtraTemplates() {
+  var container = document.getElementById('extraTemplatesContainer');
+  var addBtn = document.getElementById('addExtraTemplateBtn');
+  var templateCountInput = document.getElementById('templateCount');
+  if (!container) return;
+
+  // Re-number remaining extra templates
+  var items = container.querySelectorAll('.template-item');
+  extraTemplateCount = items.length;
+
+  items.forEach(function(item, idx) {
+    var num = idx + 2;
+    item.dataset.templateNum = num;
+    var badge = item.querySelector('.template-badge');
+    if (badge) {
+      badge.className = 'template-badge template-badge-' + num;
+      badge.textContent = 'Mensaje ' + num;
+    }
+    var textarea = item.querySelector('textarea');
+    if (textarea) {
+      textarea.id = 'message' + num;
+      textarea.name = 'message' + num;
+    }
+    // Update variable chip data-template attrs
+    item.querySelectorAll('[data-template]').forEach(function(el) {
+      el.dataset.template = num;
+    });
+    var counter = item.querySelector('.char-count span');
+    if (counter) counter.id = 'charCount' + num;
+  });
+
+  if (templateCountInput) templateCountInput.value = extraTemplateCount + 1;
+  if (addBtn) addBtn.classList.toggle('d-none', extraTemplateCount >= MAX_EXTRA_TEMPLATES);
+}
+
+// ========== Setup: Saved Template Dropdown ==========
+function setupSavedTemplateDropdown() {
+  var select = document.getElementById('savedTemplateSelect');
+  if (!select) return;
+
+  // Try to load templates from API
+  loadSavedTemplates();
+
+  select.addEventListener('change', function() {
+    var val = select.value;
+    if (!val) return;
+
+    var textarea = document.getElementById('message1');
+    if (textarea) {
+      textarea.value = val;
+      textarea.dispatchEvent(new Event('input'));
+    }
+    // Reset selection
+    select.selectedIndex = 0;
+  });
+}
+
+async function loadSavedTemplates() {
+  var select = document.getElementById('savedTemplateSelect');
+  if (!select) return;
+
+  try {
+    var res = await authFetch('/templates');
+    if (!res || !res.ok) {
+      // No templates endpoint — hide the dropdown
+      var wrapper = document.querySelector('.template-dropdown-wrapper');
+      var divider = document.querySelector('.send-divider');
+      if (wrapper) wrapper.classList.add('d-none');
+      if (divider) divider.classList.add('d-none');
+      return;
+    }
+
+    var data = await res.json();
+    var templates = data.templates || data || [];
+
+    if (!Array.isArray(templates) || templates.length === 0) {
+      var wrapper2 = document.querySelector('.template-dropdown-wrapper');
+      var divider2 = document.querySelector('.send-divider');
+      if (wrapper2) wrapper2.classList.add('d-none');
+      if (divider2) divider2.classList.add('d-none');
+      return;
+    }
+
+    templates.forEach(function(t) {
+      var opt = document.createElement('option');
+      opt.value = t.content || t.text || t.message || '';
+      opt.textContent = t.name || t.title || (opt.value.substring(0, 50) + '...');
+      select.appendChild(opt);
+    });
+  } catch (e) {
+    // Templates endpoint not available — hide dropdown silently
+    var wrapper3 = document.querySelector('.template-dropdown-wrapper');
+    var divider3 = document.querySelector('.send-divider');
+    if (wrapper3) wrapper3.classList.add('d-none');
+    if (divider3) divider3.classList.add('d-none');
+  }
+}
+
+// ========== Setup: Emoji Picker ==========
 function setupEmojiPicker() {
   let activePickerTemplate = null;
 
   function createFloatingPicker(templateNum) {
-    // Remove any existing floating picker
     document.querySelectorAll('.emoji-picker-float').forEach(el => el.remove());
 
-    const header = document.querySelector(`.btn-emoji[data-template="${templateNum}"]`)?.closest('.template-header');
+    const header = document.querySelector('.btn-emoji[data-template="' + templateNum + '"]')?.closest('.template-header');
     if (!header) return;
 
     const picker = document.createElement('div');
     picker.className = 'emoji-picker-float';
-    picker.innerHTML = `
-      <div class="emoji-categories">
-        ${Object.keys(emojiCategories).map((cat, idx) => {
-          const icons = { smileys: '😀', people: '👤', nature: '🌱', food: '🍎', activities: '⚽', travel: '🚗', objects: '💡', symbols: '❤️', flags: '🏁' };
-          return `<button type="button" class="emoji-category${idx === 0 ? ' active' : ''}" data-category="${cat}">${icons[cat] || '😀'}</button>`;
-        }).join('')}
-      </div>
-      <div class="emoji-grid"></div>
-    `;
+    picker.innerHTML =
+      '<div class="emoji-categories">' +
+        Object.keys(emojiCategories).map(function(cat, idx) {
+          var icons = { smileys: '😀', people: '👤', nature: '🌱', food: '🍎', activities: '⚽', travel: '🚗', objects: '💡', symbols: '❤️', flags: '🏁' };
+          return '<button type="button" class="emoji-category' + (idx === 0 ? ' active' : '') + '" data-category="' + cat + '">' + (icons[cat] || '😀') + '</button>';
+        }).join('') +
+      '</div>' +
+      '<div class="emoji-grid"></div>';
     header.appendChild(picker);
     activePickerTemplate = templateNum;
 
-    const grid = picker.querySelector('.emoji-grid');
+    var grid = picker.querySelector('.emoji-grid');
 
     function renderEmojis(category) {
       grid.innerHTML = '';
-      const emojis = emojiCategories[category] || emojiCategories.smileys;
-      emojis.forEach(emoji => {
-        const btn = document.createElement('button');
+      var emojis = emojiCategories[category] || emojiCategories.smileys;
+      emojis.forEach(function(emoji) {
+        var btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'emoji-btn';
         btn.textContent = emoji;
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', function(e) {
           e.stopPropagation();
-          const textarea = document.getElementById(`message${templateNum}`);
+          var textarea = document.getElementById('message' + templateNum);
           if (textarea) {
-            const pos = textarea.selectionStart;
-            const text = textarea.value;
+            var pos = textarea.selectionStart;
+            var text = textarea.value;
             textarea.value = text.slice(0, pos) + emoji + text.slice(pos);
             textarea.focus();
             textarea.selectionStart = textarea.selectionEnd = pos + emoji.length;
@@ -203,28 +367,25 @@ function setupEmojiPicker() {
 
     renderEmojis('smileys');
 
-    picker.querySelectorAll('.emoji-category').forEach(btn => {
-      btn.addEventListener('click', (e) => {
+    picker.querySelectorAll('.emoji-category').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
         e.stopPropagation();
-        picker.querySelectorAll('.emoji-category').forEach(b => b.classList.remove('active'));
+        picker.querySelectorAll('.emoji-category').forEach(function(b) { b.classList.remove('active'); });
         btn.classList.add('active');
         renderEmojis(btn.dataset.category);
       });
     });
 
-    // Prevent picker clicks from bubbling
-    picker.addEventListener('click', (e) => e.stopPropagation());
+    picker.addEventListener('click', function(e) { e.stopPropagation(); });
   }
 
-  // Toggle emoji picker on emoji button click
-  document.addEventListener('click', (e) => {
-    const emojiBtn = e.target.closest('.btn-emoji');
+  document.addEventListener('click', function(e) {
+    var emojiBtn = e.target.closest('.btn-emoji');
     if (emojiBtn) {
       e.stopPropagation();
-      const templateNum = emojiBtn.dataset.template;
+      var templateNum = emojiBtn.dataset.template;
       if (activePickerTemplate === templateNum) {
-        // Close if clicking same button
-        document.querySelectorAll('.emoji-picker-float').forEach(el => el.remove());
+        document.querySelectorAll('.emoji-picker-float').forEach(function(el) { el.remove(); });
         activePickerTemplate = null;
       } else {
         createFloatingPicker(templateNum);
@@ -232,27 +393,26 @@ function setupEmojiPicker() {
       return;
     }
 
-    // Close picker on outside click
     if (!e.target.closest('.emoji-picker-float')) {
-      document.querySelectorAll('.emoji-picker-float').forEach(el => el.remove());
+      document.querySelectorAll('.emoji-picker-float').forEach(function(el) { el.remove(); });
       activePickerTemplate = null;
     }
   });
 }
 
-// Setup inline variable chips (per-template)
+// ========== Setup: Variables ==========
 function setupVariables() {
-  document.addEventListener('click', (e) => {
-    const chip = e.target.closest('.variable-chip');
+  document.addEventListener('click', function(e) {
+    var chip = e.target.closest('.variable-chip');
     if (!chip) return;
 
-    const templateNum = chip.dataset.template;
-    const variable = chip.dataset.variable;
-    const textarea = document.getElementById(`message${templateNum}`);
+    var templateNum = chip.dataset.template;
+    var variable = chip.dataset.variable;
+    var textarea = document.getElementById('message' + templateNum);
     if (!textarea) return;
 
-    const pos = textarea.selectionStart;
-    const text = textarea.value;
+    var pos = textarea.selectionStart;
+    var text = textarea.value;
     textarea.value = text.slice(0, pos) + variable + text.slice(pos);
     textarea.focus();
     textarea.selectionStart = textarea.selectionEnd = pos + variable.length;
@@ -260,20 +420,20 @@ function setupVariables() {
   });
 }
 
-// Send messages
+// ========== Send Messages ==========
 async function sendMessages() {
-  const form = document.getElementById('messageForm');
-  const submitBtn = document.getElementById('sendMessageBtn');
-  const progressSection = document.getElementById('messageStatus');
-  
+  var form = document.getElementById('messageForm');
+  var submitBtn = document.getElementById('sendMessageBtn');
+  var progressSection = document.getElementById('messageStatus');
+
   if (!form || !submitBtn) return;
-  
+
   // Get recipient source
-  const recipientSource = document.getElementById('recipientSource')?.value || 'csv';
-  
+  var recipientSource = document.getElementById('recipientSource')?.value || 'contacts';
+
   // Validate based on source
   if (recipientSource === 'csv') {
-    const csvFile = document.getElementById('csvFile');
+    var csvFile = document.getElementById('csvFile');
     if (!csvFile?.files?.length) {
       showAlert('Debes seleccionar un archivo CSV', 'warning');
       return;
@@ -284,72 +444,73 @@ async function sendMessages() {
       return;
     }
   } else if (recipientSource === 'group') {
-    const groupSelect = document.getElementById('groupSelect');
+    var groupSelect = document.getElementById('groupSelect');
     if (!groupSelect?.value) {
       showAlert('Debes seleccionar un grupo', 'warning');
       return;
     }
   }
-  
+
   // Collect form data
-  const formData = new FormData(form);
-  
+  var formData = new FormData(form);
+
   // Set recipient source
   formData.set('recipientSource', recipientSource);
-  
+
+  // Set messageType from hidden input
+  var messageType = document.getElementById('messageTypeHidden')?.value || 'none';
+  formData.set('messageType', messageType);
+
   // Add source-specific data
   if (recipientSource === 'contacts') {
     formData.set('contactIds', JSON.stringify(Array.from(selectedContactIds)));
-    // Remove CSV file if present
     formData.delete('csvFile');
   } else if (recipientSource === 'group') {
     formData.set('groupName', document.getElementById('groupSelect')?.value || '');
-    // Remove CSV file if present
     formData.delete('csvFile');
   }
-  
-  // Add all message templates
-  const templateCount = parseInt(document.getElementById('templateCount')?.value || 1);
-  const templates = [];
-  for (let i = 1; i <= templateCount; i++) {
-    const msg = document.getElementById(`message${i}`)?.value || '';
-    formData.set(`message${i}`, msg);
+
+  // Collect all templates (main + extra)
+  var templateCount = parseInt(document.getElementById('templateCount')?.value || 1);
+  var templates = [];
+  for (var i = 1; i <= templateCount; i++) {
+    var msg = document.getElementById('message' + i)?.value || '';
+    formData.set('message' + i, msg);
     if (msg.trim()) templates.push(msg.trim());
   }
 
   if (templates.length === 0) {
-    showAlert('Debes escribir al menos un template de mensaje', 'warning');
+    showAlert('Debes escribir al menos un mensaje', 'warning');
     return;
   }
 
-  // Keep compatibility with current and older backend variants
   formData.set('templates', JSON.stringify(templates));
   formData.set('message', templates[0]);
-  
+
   submitBtn.classList.add('loading');
   submitBtn.disabled = true;
-  
+
   try {
-    const res = await authFetch('/send-messages', {
+    var res = await authFetch('/send-messages', {
       method: 'POST',
       body: formData
     });
-    
-    const data = await res.json();
-    
+
+    var data = await res.json();
+
     if (!res.ok) {
       throw new Error(data.error || 'Error al enviar');
     }
-    
+
     currentJobId = data.jobId;
-    
+
     if (progressSection) {
       progressSection.classList.remove('d-none');
     }
-    
+
     startProgressPolling();
-    showAlert('Envío iniciado correctamente', 'success');
-    
+    showAlert('Envio iniciado correctamente', 'success');
+
   } catch (error) {
     showAlert(error.message, 'danger', 'Error');
   } finally {
@@ -358,26 +519,26 @@ async function sendMessages() {
   }
 }
 
-// Poll progress
+// ========== Progress Polling ==========
 function startProgressPolling() {
   if (progressPollingInterval) {
     clearInterval(progressPollingInterval);
   }
-  
-  progressPollingInterval = setInterval(async () => {
+
+  progressPollingInterval = setInterval(async function() {
     try {
-      const res = await authFetch('/message-status');
+      var res = await authFetch('/message-status');
       if (!res.ok) return;
-      
-      const data = await res.json();
+
+      var data = await res.json();
       updateProgress(data);
-      
+
       if (data.state === 'completed' || data.state === 'failed' || data.completed) {
         clearInterval(progressPollingInterval);
         progressPollingInterval = null;
-        
+
         if (data.state === 'completed' || data.completed) {
-          showAlert('Envío completado', 'success');
+          showAlert('Envio completado', 'success');
         }
       }
     } catch (e) {
@@ -386,59 +547,55 @@ function startProgressPolling() {
   }, 1000);
 }
 
-// Update progress UI
 function updateProgress(data) {
-  const total = data.total || 0;
-  const sent = data.sent || 0;
-  const errors = data.errors || 0;
-  const percentage = total > 0 ? Math.round((sent / total) * 100) : 0;
-  
-  const els = {
+  var total = data.total || 0;
+  var sent = data.sent || 0;
+  var errors = data.errors || 0;
+  var percentage = total > 0 ? Math.round((sent / total) * 100) : 0;
+
+  var els = {
     total: document.getElementById('totalCount'),
     sent: document.getElementById('sentCount'),
     errors: document.getElementById('errorCount'),
     progress: document.querySelector('.progress-fill'),
     percentage: document.querySelector('.progress-percentage')
   };
-  
+
   if (els.total) els.total.textContent = total;
   if (els.sent) els.sent.textContent = sent;
   if (els.errors) els.errors.textContent = errors;
-  if (els.progress) els.progress.style.width = `${percentage}%`;
-  if (els.percentage) els.percentage.textContent = `${percentage}%`;
-  
-  // Update table
+  if (els.progress) els.progress.style.width = percentage + '%';
+  if (els.percentage) els.percentage.textContent = percentage + '%';
+
   if (data.results && Array.isArray(data.results)) {
     updateResultsTable(data.results);
   }
 }
 
-// Update results table
 function updateResultsTable(results) {
-  const tbody = document.getElementById('statusTableBody');
+  var tbody = document.getElementById('statusTableBody');
   if (!tbody) return;
-  
+
   tbody.innerHTML = '';
-  results.slice(-50).reverse().forEach(r => {
-    const tr = document.createElement('tr');
-    const statusClass = r.success ? 'success' : 'danger';
-    const statusIcon = r.success ? 'check-circle' : 'x-circle';
-    tr.innerHTML = `
-      <td><code>${r.phone || ''}</code></td>
-      <td><span class="badge bg-${statusClass}"><i class="bi bi-${statusIcon}"></i> ${r.success ? 'Enviado' : 'Error'}</span></td>
-      <td>${r.time || ''}</td>
-      <td class="small">${r.message || ''}</td>
-    `;
+  results.slice(-50).reverse().forEach(function(r) {
+    var tr = document.createElement('tr');
+    var statusClass = r.success ? 'success' : 'danger';
+    var statusIcon = r.success ? 'check-circle' : 'x-circle';
+    tr.innerHTML =
+      '<td><code>' + (r.phone || '') + '</code></td>' +
+      '<td><span class="badge bg-' + statusClass + '"><i class="bi bi-' + statusIcon + '"></i> ' + (r.success ? 'Enviado' : 'Error') + '</span></td>' +
+      '<td>' + (r.time || '') + '</td>' +
+      '<td class="small">' + (r.message || '') + '</td>';
     tbody.appendChild(tr);
   });
 }
 
-// Cancel sending
+// ========== Cancel / Export ==========
 async function cancelSending() {
   try {
     await authFetch('/cancel-campaign', { method: 'POST' });
-    showAlert('Envío cancelado', 'warning');
-    
+    showAlert('Envio cancelado', 'warning');
+
     if (progressPollingInterval) {
       clearInterval(progressPollingInterval);
     }
@@ -447,29 +604,28 @@ async function cancelSending() {
   }
 }
 
-// Export results
 function exportResults() {
-  const tbody = document.getElementById('statusTableBody');
+  var tbody = document.getElementById('statusTableBody');
   if (!tbody || tbody.children.length === 0) {
     showAlert('No hay datos para exportar', 'warning');
     return;
   }
-  
-  const rows = Array.from(tbody.children);
-  const csv = [
-    'Número,Estado,Hora,Respuesta',
-    ...rows.map(row => {
-      const cells = Array.from(row.children);
-      return cells.map(c => `"${c.textContent.trim()}"`).join(',');
+
+  var rows = Array.from(tbody.children);
+  var csv = [
+    'Numero,Estado,Hora,Respuesta',
+    ...rows.map(function(row) {
+      var cells = Array.from(row.children);
+      return cells.map(function(c) { return '"' + c.textContent.trim() + '"'; }).join(',');
     })
   ].join('\n');
-  
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const link = document.createElement('a');
+
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
-  link.download = `resultados-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.download = 'resultados-' + new Date().toISOString().slice(0, 10) + '.csv';
   link.click();
-  
+
   showAlert('Resultados exportados', 'success');
 }
 
@@ -485,73 +641,110 @@ const contactSelectorState = {
 };
 let contactSelectorSearchTimer = null;
 
-// Setup recipient source tabs
 function setupRecipientSourceTabs() {
-  const tabs = document.querySelectorAll('.source-tab');
-  const sourceInput = document.getElementById('recipientSource');
-  const sections = {
+  var tabs = document.querySelectorAll('.rc-tab');
+  var sourceInput = document.getElementById('recipientSource');
+  var sections = {
     csv: document.getElementById('csvSourceSection'),
     contacts: document.getElementById('contactsSourceSection'),
     group: document.getElementById('groupSourceSection')
   };
-  
+
   if (!tabs.length || !sourceInput) return;
-  
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      const source = tab.dataset.source;
-      
+
+  tabs.forEach(function(tab) {
+    tab.addEventListener('click', function() {
+      var source = tab.dataset.source;
+
       // Update active tab
-      tabs.forEach(t => t.classList.remove('active'));
+      tabs.forEach(function(t) { t.classList.remove('active'); });
       tab.classList.add('active');
-      
+
       // Update hidden input
       sourceInput.value = source;
-      
+
       // Show/hide sections
-      Object.entries(sections).forEach(([key, section]) => {
+      Object.entries(sections).forEach(function(entry) {
+        var key = entry[0], section = entry[1];
         if (section) {
           section.classList.toggle('d-none', key !== source);
         }
       });
-      
+
       // Load data if needed
       if (source === 'contacts') {
         loadContactsForSelector(1);
       } else if (source === 'group') {
         loadGroupsForSelector();
       }
+
+      updateRecipientBadge();
     });
   });
+
+  // Default: load contacts on init
+  loadContactsForSelector(1);
 
   setupContactsSearch();
   setupContactsSelectAll();
   setupContactSelectorPagination();
 }
 
+function updateRecipientBadge() {
+  var badge = document.getElementById('recipientCountBadge');
+  if (!badge) return;
+
+  var source = document.getElementById('recipientSource')?.value || 'contacts';
+  var count = 0;
+
+  if (source === 'contacts') {
+    count = selectedContactIds.size;
+  } else if (source === 'group') {
+    var countText = document.getElementById('groupContactsCountText')?.textContent || '';
+    var match = countText.match(/(\d+)/);
+    if (match) count = parseInt(match[1]);
+  } else if (source === 'csv') {
+    var csvFile = document.getElementById('csvFile');
+    count = csvFile?.files?.length ? 1 : 0;
+    if (count) {
+      badge.textContent = 'CSV cargado';
+      badge.classList.add('visible');
+      return;
+    }
+  }
+
+  if (count > 0) {
+    badge.textContent = count + ' ' + (source === 'contacts' ? 'seleccionados' : 'contactos');
+    badge.classList.add('visible');
+  } else {
+    badge.textContent = '';
+    badge.classList.remove('visible');
+  }
+}
+
 // Load contacts for multi-select
-async function loadContactsForSelector(page = 1) {
-  const container = document.getElementById('contactsList');
+async function loadContactsForSelector(page) {
+  page = page || 1;
+  var container = document.getElementById('contactsList');
   if (!container) return;
 
-  container.innerHTML = `
-    <div class="loading-contacts">
-      <div class="spinner-small"></div>
-      <span>Cargando contactos...</span>
-    </div>
-  `;
+  container.innerHTML =
+    '<div class="loading-contacts">' +
+      '<div class="spinner-small"></div>' +
+      '<span>Cargando contactos...</span>' +
+    '</div>';
 
   try {
-    const searchInput = document.getElementById('contactSelectorSearch');
-    const search = searchInput?.value?.trim() || '';
-    const targetPage = Math.max(1, Number(page) || 1);
+    var searchInput = document.getElementById('contactSelectorSearch');
+    var search = searchInput?.value?.trim() || '';
+    var targetPage = Math.max(1, Number(page) || 1);
 
-    const res = await authFetch(`/contacts${buildQuery({
-      search,
+    var res = await authFetch('/contacts' + buildQuery({
+      search: search,
       page: targetPage,
       pageSize: contactSelectorState.pageSize
-    })}`);
-    const data = await res.json();
+    }));
+    var data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Error al cargar contactos');
 
     contactSelectorState.search = search;
@@ -562,123 +755,118 @@ async function loadContactsForSelector(page = 1) {
 
     allContactsForSend = data.items || [];
 
-    // If contact list changed after deletes/filters and page is now empty, move one page back
     if (allContactsForSend.length === 0 && contactSelectorState.total > 0 && contactSelectorState.page > 1) {
       return loadContactsForSelector(contactSelectorState.page - 1);
     }
 
-    // Update totals and paging
-    const totalEl = document.getElementById('totalContactsCount');
+    var totalEl = document.getElementById('totalContactsCount');
     if (totalEl) totalEl.textContent = contactSelectorState.total;
     updateContactSelectorPagination();
     updateSelectedCount();
 
     if (contactSelectorState.total === 0) {
-      container.innerHTML = `
-        <div class="no-contacts-message">
-          <i class="bi bi-person-x"></i>
-          <p>No tienes contactos guardados</p>
-          <small>Ve a la sección Contactos para agregar o importar</small>
-        </div>
-      `;
+      container.innerHTML =
+        '<div class="no-contacts-message">' +
+          '<i class="bi bi-person-x"></i>' +
+          '<p>No tienes contactos guardados</p>' +
+          '<small>Ve a la seccion Contactos para agregar o importar</small>' +
+        '</div>';
       return;
     }
 
     renderContactsCheckList(allContactsForSend);
   } catch (error) {
-    container.innerHTML = `<div class="no-contacts-message"><i class="bi bi-exclamation-triangle"></i><p>Error al cargar contactos</p></div>`;
+    container.innerHTML = '<div class="no-contacts-message"><i class="bi bi-exclamation-triangle"></i><p>Error al cargar contactos</p></div>';
     console.error('Error loading contacts:', error);
   }
 }
 
-// Render contacts checklist
 function renderContactsCheckList(contacts) {
-  const container = document.getElementById('contactsList');
+  var container = document.getElementById('contactsList');
   if (!container) return;
-  
+
   container.innerHTML = '';
-  
-  contacts.forEach(contact => {
-    const item = document.createElement('label');
+
+  contacts.forEach(function(contact) {
+    var item = document.createElement('label');
     item.className = 'contact-checkbox-item';
-    item.innerHTML = `
-      <input type="checkbox" value="${contact.id}" ${selectedContactIds.has(contact.id) ? 'checked' : ''}>
-      <div class="contact-info">
-        <span class="contact-name">${contact.nombre || contact.phone}</span>
-        <span class="contact-number">${contact.phone}</span>
-      </div>
-      ${contact.grupo ? `<span class="contact-group-badge">${contact.grupo}</span>` : ''}
-    `;
-    
-    const checkbox = item.querySelector('input');
-    checkbox.addEventListener('change', () => {
+    item.innerHTML =
+      '<input type="checkbox" value="' + contact.id + '" ' + (selectedContactIds.has(contact.id) ? 'checked' : '') + '>' +
+      '<div class="contact-info">' +
+        '<span class="contact-name">' + (contact.nombre || contact.phone) + '</span>' +
+        '<span class="contact-number">' + contact.phone + '</span>' +
+      '</div>' +
+      (contact.grupo ? '<span class="contact-group-badge">' + contact.grupo + '</span>' : '');
+
+    var checkbox = item.querySelector('input');
+    checkbox.addEventListener('change', function() {
       if (checkbox.checked) {
         selectedContactIds.add(contact.id);
       } else {
         selectedContactIds.delete(contact.id);
       }
       updateSelectedCount();
+      updateRecipientBadge();
     });
-    
+
     container.appendChild(item);
   });
 }
 
-// Update selected count
 function updateSelectedCount() {
-  const countEl = document.getElementById('selectedContactsCount');
+  var countEl = document.getElementById('selectedContactsCount');
   if (countEl) {
     countEl.textContent = selectedContactIds.size;
   }
 }
 
-// Setup contacts search
 function setupContactsSearch() {
-  const searchInput = document.getElementById('contactSelectorSearch');
+  var searchInput = document.getElementById('contactSelectorSearch');
   if (!searchInput) return;
 
   if (searchInput.dataset.bound === '1') return;
   searchInput.dataset.bound = '1';
 
-  searchInput.addEventListener('input', () => {
+  searchInput.addEventListener('input', function() {
     if (contactSelectorSearchTimer) clearTimeout(contactSelectorSearchTimer);
-    contactSelectorSearchTimer = setTimeout(() => {
+    contactSelectorSearchTimer = setTimeout(function() {
       loadContactsForSelector(1);
     }, 250);
   });
 }
 
-// Setup select all/clear buttons
 function setupContactsSelectAll() {
-  const selectAllBtn = document.getElementById('selectAllContactsBtn');
-  const clearBtn = document.getElementById('clearSelectedContactsBtn');
+  var selectAllBtn = document.getElementById('selectAllContactsBtn');
+  var clearBtn = document.getElementById('clearSelectedContactsBtn');
 
   if (selectAllBtn && selectAllBtn.dataset.bound !== '1') {
     selectAllBtn.dataset.bound = '1';
-    selectAllBtn.addEventListener('click', () => {
-      allContactsForSend.forEach(c => selectedContactIds.add(c.id));
+    selectAllBtn.addEventListener('click', function() {
+      allContactsForSend.forEach(function(c) { selectedContactIds.add(c.id); });
       renderContactsCheckList(allContactsForSend);
       updateSelectedCount();
+      updateRecipientBadge();
     });
   }
 
   if (clearBtn && clearBtn.dataset.bound !== '1') {
     clearBtn.dataset.bound = '1';
-    clearBtn.addEventListener('click', () => {
+    clearBtn.addEventListener('click', function() {
       selectedContactIds.clear();
       renderContactsCheckList(allContactsForSend);
       updateSelectedCount();
+      updateRecipientBadge();
     });
   }
 }
 
 function setupContactSelectorPagination() {
-  const prevBtn = document.getElementById('contactSelectorPrevBtn');
-  const nextBtn = document.getElementById('contactSelectorNextBtn');
+  var prevBtn = document.getElementById('contactSelectorPrevBtn');
+  var nextBtn = document.getElementById('contactSelectorNextBtn');
 
   if (prevBtn && prevBtn.dataset.bound !== '1') {
     prevBtn.dataset.bound = '1';
-    prevBtn.addEventListener('click', () => {
+    prevBtn.addEventListener('click', function() {
       if (contactSelectorState.page > 1) {
         loadContactsForSelector(contactSelectorState.page - 1);
       }
@@ -687,7 +875,7 @@ function setupContactSelectorPagination() {
 
   if (nextBtn && nextBtn.dataset.bound !== '1') {
     nextBtn.dataset.bound = '1';
-    nextBtn.addEventListener('click', () => {
+    nextBtn.addEventListener('click', function() {
       if (contactSelectorState.page < contactSelectorState.totalPages) {
         loadContactsForSelector(contactSelectorState.page + 1);
       }
@@ -696,12 +884,12 @@ function setupContactSelectorPagination() {
 }
 
 function updateContactSelectorPagination() {
-  const pageInfo = document.getElementById('contactSelectorPageInfo');
-  const prevBtn = document.getElementById('contactSelectorPrevBtn');
-  const nextBtn = document.getElementById('contactSelectorNextBtn');
+  var pageInfo = document.getElementById('contactSelectorPageInfo');
+  var prevBtn = document.getElementById('contactSelectorPrevBtn');
+  var nextBtn = document.getElementById('contactSelectorNextBtn');
 
   if (pageInfo) {
-    pageInfo.textContent = `Página ${contactSelectorState.page} de ${contactSelectorState.totalPages}`;
+    pageInfo.textContent = 'Pagina ' + contactSelectorState.page + ' de ' + contactSelectorState.totalPages;
   }
   if (prevBtn) prevBtn.disabled = contactSelectorState.page <= 1;
   if (nextBtn) nextBtn.disabled = contactSelectorState.page >= contactSelectorState.totalPages;
@@ -709,88 +897,252 @@ function updateContactSelectorPagination() {
 
 // Load groups for dropdown
 async function loadGroupsForSelector() {
-  const select = document.getElementById('groupSelect');
+  var select = document.getElementById('groupSelect');
   if (!select) return;
-  
+
   select.innerHTML = '<option value="">-- Cargando grupos --</option>';
-  
+
   try {
-    const res = await authFetch('/contacts/groups');
+    var res = await authFetch('/contacts/groups');
     if (!res.ok) throw new Error('Error al cargar grupos');
-    
-    const data = await res.json();
-    const groups = data.groups || [];
-    
+
+    var data = await res.json();
+    var groups = data.groups || [];
+
     if (groups.length === 0) {
       select.innerHTML = '<option value="">-- No hay grupos --</option>';
       return;
     }
-    
+
     select.innerHTML = '<option value="">-- Selecciona un grupo --</option>';
-    groups.forEach(g => {
-      const option = document.createElement('option');
+    groups.forEach(function(g) {
+      var option = document.createElement('option');
       option.value = g;
       option.textContent = g;
       select.appendChild(option);
     });
-    
-    // Setup change handler to show count
-    select.addEventListener('change', loadGroupContactsCount);
-    
+
+    select.addEventListener('change', function() {
+      loadGroupContactsCount();
+      updateRecipientBadge();
+    });
+
   } catch (error) {
     select.innerHTML = '<option value="">-- Error al cargar --</option>';
     console.error('Error loading groups:', error);
   }
 }
 
-// Load group contacts count
 async function loadGroupContactsCount() {
-  const select = document.getElementById('groupSelect');
-  const countEl = document.getElementById('groupContactsCount');
-  const countText = document.getElementById('groupContactsCountText');
-  
+  var select = document.getElementById('groupSelect');
+  var countEl = document.getElementById('groupContactsCount');
+  var countText = document.getElementById('groupContactsCountText');
+
   if (!select || !countEl || !countText) return;
-  
-  const groupName = select.value;
-  
+
+  var groupName = select.value;
+
   if (!groupName) {
-    countEl.classList.add('d-none');
+    countText.textContent = 'Selecciona un grupo para ver los contactos';
     return;
   }
-  
+
   try {
-    const res = await authFetch(`/contacts${buildQuery({ group: groupName, page: 1, pageSize: 1 })}`);
+    var res = await authFetch('/contacts' + buildQuery({ group: groupName, page: 1, pageSize: 1 }));
     if (!res.ok) throw new Error('Error');
-    
-    const data = await res.json();
-    const total = Number(data.total || 0);
-    
-    countText.textContent = `${total} contactos`;
+
+    var data = await res.json();
+    var total = Number(data.total || 0);
+
+    countText.textContent = total + ' contactos';
     countEl.classList.remove('d-none');
-    
+
   } catch (error) {
-    countEl.classList.add('d-none');
+    countText.textContent = 'Error al cargar';
   }
 }
 
-// Initialize Messages module
+// ========== WhatsApp Preview Modal ==========
+function setupPreview() {
+  // Main preview button
+  var mainBtn = document.getElementById('previewMessageBtn');
+  if (mainBtn) {
+    mainBtn.addEventListener('click', function() {
+      openWaPreview();
+    });
+  }
+
+  // Per-template preview buttons (delegated)
+  document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.btn-preview-template');
+    if (btn) {
+      openWaPreview(parseInt(btn.dataset.template));
+    }
+  });
+
+  // Close handlers
+  var closeIds = ['waPreviewClose', 'waPreviewCloseX', 'waPreviewCloseBtn'];
+  closeIds.forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('click', closeWaPreview);
+  });
+
+  // Click backdrop to close
+  var overlay = document.getElementById('waPreviewModal');
+  if (overlay) {
+    overlay.addEventListener('click', function(e) {
+      if (e.target === overlay) closeWaPreview();
+    });
+  }
+
+  // ESC to close
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') closeWaPreview();
+  });
+}
+
+function openWaPreview(singleTemplateNum) {
+  var modal = document.getElementById('waPreviewModal');
+  var chat = document.getElementById('waPreviewChat');
+  var varsContainer = document.getElementById('waPreviewVars');
+  if (!modal || !chat) return;
+
+  var exampleValues = {
+    '{nombre}': 'Juan',
+    '{tratamiento}': 'Sr.',
+    '{grupo}': 'Clientes VIP'
+  };
+
+  // Collect templates
+  var templates = [];
+  var templateCount = parseInt(document.getElementById('templateCount')?.value || 1);
+
+  if (singleTemplateNum) {
+    var msg = document.getElementById('message' + singleTemplateNum)?.value || '';
+    if (msg.trim()) templates.push(msg.trim());
+  } else {
+    for (var i = 1; i <= templateCount; i++) {
+      var msg = document.getElementById('message' + i)?.value || '';
+      if (msg.trim()) templates.push(msg.trim());
+    }
+  }
+
+  if (templates.length === 0) {
+    showAlert('Escribe al menos un mensaje para ver la vista previa', 'warning');
+    return;
+  }
+
+  // Check media type
+  var mediaType = document.getElementById('messageTypeHidden')?.value || 'none';
+  var hasImage = (mediaType === 'single' || mediaType === 'multiple');
+  var hasAudio = (mediaType === 'audio');
+
+  // Get current time
+  var now = new Date();
+  var timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
+  // Build chat messages
+  chat.innerHTML = '';
+
+  templates.forEach(function(tpl, idx) {
+    var rendered = tpl;
+    Object.keys(exampleValues).forEach(function(key) {
+      rendered = rendered.split(key).join(exampleValues[key]);
+    });
+
+    // Escape HTML
+    var div = document.createElement('div');
+    div.textContent = rendered;
+    var safeText = div.innerHTML.replace(/\n/g, '<br>');
+
+    var bubble = document.createElement('div');
+    bubble.className = 'wa-msg-wrapper';
+
+    var content = '';
+
+    // Image placeholder (only for first message or single preview)
+    if (hasImage && idx === 0) {
+      content += '<div class="wa-msg-image"><i class="bi bi-image"></i><span>Imagen adjunta</span></div>';
+    }
+
+    // Audio placeholder
+    if (hasAudio && idx === 0) {
+      content += '<div class="wa-msg-audio"><i class="bi bi-mic-fill"></i><div class="wa-msg-audio-wave"></div><span>0:12</span></div>';
+    }
+
+    content += '<div class="wa-msg-text">' + safeText + '</div>';
+    content += '<div class="wa-msg-meta"><span class="wa-msg-time">' + timeStr + '</span><span class="wa-msg-checks"><i class="bi bi-check-all"></i></span></div>';
+
+    bubble.innerHTML = '<div class="wa-msg-bubble wa-msg-sent">' + content + '</div>';
+
+    // Add template number label if multiple
+    if (templates.length > 1) {
+      var label = document.createElement('div');
+      label.className = 'wa-msg-label';
+      label.textContent = 'Mensaje ' + (singleTemplateNum || (idx + 1));
+      bubble.insertBefore(label, bubble.firstChild);
+    }
+
+    chat.appendChild(bubble);
+  });
+
+  // Build variables info
+  if (varsContainer) {
+    var usedVars = [];
+    var allText = templates.join(' ');
+    Object.keys(exampleValues).forEach(function(key) {
+      if (allText.indexOf(key) !== -1) {
+        usedVars.push('<span class="wa-preview-var-item"><code>' + key + '</code> <i class="bi bi-arrow-right"></i> <strong>' + exampleValues[key] + '</strong></span>');
+      }
+    });
+
+    if (usedVars.length > 0) {
+      varsContainer.innerHTML = '<div class="wa-preview-vars-title">Variables usadas:</div>' + usedVars.join('');
+      varsContainer.classList.remove('d-none');
+    } else {
+      varsContainer.classList.add('d-none');
+    }
+  }
+
+  modal.classList.remove('d-none');
+  // Force reflow then animate in
+  modal.offsetHeight;
+  modal.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeWaPreview() {
+  var modal = document.getElementById('waPreviewModal');
+  if (!modal || modal.classList.contains('d-none')) return;
+
+  modal.classList.remove('active');
+  setTimeout(function() {
+    modal.classList.add('d-none');
+    document.body.style.overflow = '';
+  }, 200);
+}
+
+// ========== Initialize ==========
 function initMessages() {
   setupMessageForm();
-  setupMessageTypeHandlers();
+  setupMediaChips();
   setupFileInputs();
   setupTemplates();
+  setupAdvancedTemplates();
+  setupSavedTemplateDropdown();
   setupEmojiPicker();
   setupVariables();
+  setupPreview();
   setupRecipientSourceTabs();
-  
+
   // Cancel button
-  const cancelBtn = document.getElementById('cancelBtn');
+  var cancelBtn = document.getElementById('cancelBtn');
   if (cancelBtn) {
     cancelBtn.addEventListener('click', cancelSending);
   }
-  
+
   // Export button
-  const exportBtn = document.getElementById('exportBtn');
+  var exportBtn = document.getElementById('exportBtn');
   if (exportBtn) {
     exportBtn.addEventListener('click', exportResults);
   }
@@ -800,3 +1152,4 @@ function initMessages() {
 window.initMessages = initMessages;
 window.cancelSending = cancelSending;
 window.exportResults = exportResults;
+window.loadSavedTemplates = loadSavedTemplates;

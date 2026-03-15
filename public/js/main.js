@@ -6,15 +6,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 Iniciando WhatsApp Sender Pro...');
   
   // Initialize authentication
-  const authSuccess = await initKeycloak();
-  
+  const authSuccess = await initFirebaseAuth();
+
   if (!authSuccess) {
-    console.error('❌ Falló la autenticación');
+    console.error('Fallo la autenticacion');
     return;
   }
-  
-  console.log('✅ Autenticación correcta');
-  
+
+  console.log('Autenticacion correcta');
+
+  // Create/claim session (single active session enforcement)
+  if (!localStorage.getItem('sessionToken')) {
+    await createAppSession();
+  }
+
+  // Load user profile (trial status, role, etc.)
+  await loadUserProfile();
+
   // Setup theme
   setupThemeToggle();
   
@@ -26,7 +34,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   initWhatsApp();
   initMessages();
   initContacts();
-  
+  initTemplates();
+  initPlans();
+  initApi();
+  // Show admin tab if user is admin (after profile is loaded)
+  if (window.userProfile && window.userProfile.role === 'admin') {
+    var adminTabBtn = document.getElementById('admin-tab-btn');
+    if (adminTabBtn) adminTabBtn.classList.remove('d-none');
+  }
+  if (typeof initAdmin === 'function') initAdmin();
+
   // Setup logout
   const logoutBtn = document.getElementById('logout-btn');
   if (logoutBtn) {
@@ -35,7 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   
   // Initial tab from hash or default to dashboard
   const hash = window.location.hash.substring(1);
-  const validTabs = ['dashboard', 'whatsapp', 'send', 'contacts'];
+  const validTabs = ['dashboard', 'whatsapp', 'send', 'templates', 'contacts', 'plans', 'api', 'admin'];
   const initialTab = validTabs.includes(hash) ? hash : 'dashboard';
   showTab(initialTab);
   

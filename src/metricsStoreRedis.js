@@ -78,7 +78,7 @@ async function upsertContact(userId, data, source = 'manual') {
     const updated = {
       ...existing,
       nombre: data.nombre !== undefined ? data.nombre : existing.nombre,
-      sustantivo: data.sustantivo !== undefined ? data.sustantivo : existing.sustantivo,
+      tratamiento: (data.tratamiento !== undefined ? data.tratamiento : (data.sustantivo !== undefined ? data.sustantivo : existing.tratamiento)),
       grupo: data.grupo !== undefined ? data.grupo : existing.grupo,
       updatedAt: ts,
       lastSeenAt: ts,
@@ -91,7 +91,7 @@ async function upsertContact(userId, data, source = 'manual') {
     id: mkContactId(),
     phone,
     nombre: data.nombre || null,
-    sustantivo: data.sustantivo || null,
+    tratamiento: data.tratamiento || data.sustantivo || null,
     grupo: data.grupo || null,
     source: source || 'manual',
     createdAt: ts,
@@ -122,7 +122,7 @@ async function updateContact(userId, contactId, patch) {
     ...existing,
     phone: targetPhone,
     nombre: patch.nombre !== undefined ? patch.nombre : existing.nombre,
-    sustantivo: patch.sustantivo !== undefined ? patch.sustantivo : existing.sustantivo,
+    tratamiento: (patch.tratamiento !== undefined ? patch.tratamiento : (patch.sustantivo !== undefined ? patch.sustantivo : existing.tratamiento)),
     grupo: patch.grupo !== undefined ? patch.grupo : existing.grupo,
     updatedAt: now(),
   };
@@ -163,7 +163,7 @@ async function listContacts(userId, opts = {}) {
 
   if (search) {
     items = items.filter((c) => {
-      const haystack = `${c.phone || ''} ${c.nombre || ''} ${c.sustantivo || ''} ${c.grupo || ''}`.toLowerCase();
+      const haystack = `${c.phone || ''} ${c.nombre || ''} ${c.tratamiento || ''} ${c.grupo || ''}`.toLowerCase();
       return haystack.includes(search);
     });
   }
@@ -231,7 +231,7 @@ async function importContactsFromEntries(userId, entries, source = 'csv') {
     const contactPayload = {
       phone: number,
       nombre: vars.nombre || entry.nombre || null,
-      sustantivo: vars.sustantivo || entry.sustantivo || null,
+      tratamiento: vars.tratamiento || vars.sustantivo || entry.tratamiento || entry.sustantivo || null,
       grupo: vars.grupo || entry.grupo || null,
     };
 
@@ -249,7 +249,7 @@ async function importContactsFromEntries(userId, entries, source = 'csv') {
       variables: {
         ...vars,
         nombre: c.nombre || vars.nombre || '',
-        sustantivo: c.sustantivo || vars.sustantivo || '',
+        tratamiento: c.tratamiento || vars.tratamiento || vars.sustantivo || '',
         grupo: c.grupo || vars.grupo || '',
       },
     });
@@ -332,7 +332,7 @@ async function initCampaignRecipients(userId, campaignId, entries = []) {
       phone,
       contactId: entry.contactId || null,
       nombre: entry?.variables?.nombre || entry.nombre || null,
-      sustantivo: entry?.variables?.sustantivo || entry.sustantivo || null,
+      tratamiento: entry?.variables?.tratamiento || entry?.variables?.sustantivo || entry.tratamiento || entry.sustantivo || null,
       group: entry?.variables?.grupo || entry.group || null,
       status: 'queued',
       attempts: 0,
@@ -412,7 +412,7 @@ async function recordRecipientStatus(userId, campaignId, entry, status, meta = {
     phone,
     contactId: entry.contactId || null,
     nombre: entry?.variables?.nombre || null,
-    sustantivo: entry?.variables?.sustantivo || null,
+    tratamiento: entry?.variables?.tratamiento || entry?.variables?.sustantivo || null,
     group: entry?.variables?.grupo || entry.group || null,
     status: 'queued',
     attempts: 0,

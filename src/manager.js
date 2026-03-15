@@ -12,6 +12,8 @@ const { MessageQueue } = require('./queue');
 const logger = require('./logger');
 const { getAuthState } = require('./auth');
 const { getRedis } = require('./redisClient');
+const { db } = require('./firebaseAdmin');
+const { invalidateProfileCache } = require('./middleware/ensureUserProfile');
 
 class WhatsAppManager {
   constructor(userId = 'default') {
@@ -120,6 +122,74 @@ class WhatsAppManager {
 
   updateActivity() {
     this.lastActivity = Date.now();
+  }
+
+  /**
+   * Extract phone number from Baileys sock.user.id
+   * Format: 595971XXXXXX:XX@s.whatsapp.net → 595971XXXXXX
+   */
+  _extractPhoneFromJid(jid) {
+    if (!jid) return null;
+    return jid.split(':')[0].split('@')[0];
+  }
+
+  /**
+   * After successful WhatsApp connection, check phone uniqueness and store in Firestore.
+   * Returns true if phone is OK, false if phone belongs to another user (will disconnect).
+   */
+  async _handlePhoneRegistration(phoneNumber) {
+    const userId = this._getScopedUserId();
+    try {
+      // Check if another user already has this phone
+      const existing = await db.collection('users')
+        .where('whatsappPhone', '==', phoneNumber)
+        .limit(10)
+        .get();
+
+      const otherUser = existing.docs.find(doc => doc.id !== userId);
+      if (otherUser) {
+        logger.warn(
+          { userId, phoneNumber, otherUserId: otherUser.id },
+          'Phone number already linked to another user'
+        );
+        return false;
+      }
+
+      // Store phone in Firestore
+      await db.collection('users').doc(userId).update({
+        whatsappPhone: phoneNumber
+      });
+      invalidateProfileCache(userId);
+      logger.info({ userId, phoneNumber }, 'WhatsApp phone saved to Firestore');
+      return true;
+    } catch (err) {
+      // If Firestore is down, log warning but don't block WhatsApp
+      logger.warn(
+        { userId, phoneNumber, err: err?.message },
+        'Failed to register phone in Firestore — WhatsApp will still work'
+      );
+      return true; // Allow connection to proceed
+    }
+  }
+
+  /**
+   * Clear whatsappPhone in Firestore for this user.
+   * Called on explicit logout/disconnect.
+   */
+  async _clearFirestorePhone() {
+    const userId = this._getScopedUserId();
+    try {
+      await db.collection('users').doc(userId).update({
+        whatsappPhone: null
+      });
+      invalidateProfileCache(userId);
+      logger.info({ userId }, 'WhatsApp phone cleared from Firestore');
+    } catch (err) {
+      logger.warn(
+        { userId, err: err?.message },
+        'Failed to clear phone from Firestore'
+      );
+    }
   }
 
   getState() {
@@ -338,6 +408,27 @@ class WhatsAppManager {
 
             // OK
             logger.info({ phoneNumber }, 'Número autorizado');
+
+            // Task 4.2: Check phone uniqueness before allowing connection
+            const phoneOk = await this._handlePhoneRegistration(phoneNumber);
+            if (!phoneOk) {
+              this.isReady = false;
+              this.connectionState = 'phone_taken';
+              this.securityAlert = {
+                timestamp: Date.now(),
+                messages: ['Este número ya está asociado a otro usuario'],
+                phoneNumber,
+                type: 'phone_taken',
+              };
+
+              try {
+                await this.sock?.logout();
+                this.sock = null;
+                await this._deleteSessionFilesCompletely();
+              } catch { /* noop */ }
+              return;
+            }
+
             this.isReady = true;
             this.lastActivity = Date.now();
 
@@ -733,6 +824,9 @@ class WhatsAppManager {
   async logout() {
     try {
       logger.info(`Cerrando sesión de WhatsApp para usuario ${this.userId}`);
+
+      // Task 4.6: Clear phone from Firestore on explicit logout
+      await this._clearFirestorePhone();
 
       // marcar estado
       this.isReady = false;

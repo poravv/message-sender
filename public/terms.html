@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Terminos y Condiciones - WhatsApp Sender Pro</title>
+  <meta name="description" content="Terminos y condiciones de uso y politica de privacidad de WhatsApp Sender Pro">
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2325D366'/><text x='50%' y='50%' text-anchor='middle' dy='.35em' font-size='50'>📱</text></svg>">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"/>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --bg-primary: #0f1419;
+      --bg-secondary: #1a1f26;
+      --bg-tertiary: #242b33;
+      --bg-card: #1a1f26;
+      --text-primary: #e7e9ea;
+      --text-secondary: #8b98a5;
+      --text-muted: #6e7681;
+      --border-color: #2f3640;
+      --border-light: #3d444d;
+      --accent: #25D366;
+      --accent-hover: #20bd5a;
+      --danger: #f87171;
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --transition: 0.2s ease;
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f5f7f9;
+      --bg-tertiary: #e8ecf0;
+      --bg-card: #ffffff;
+      --text-primary: #1a1f26;
+      --text-secondary: #57606a;
+      --text-muted: #8b949e;
+      --border-color: #d0d7de;
+      --border-light: #e1e4e8;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.7;
+    }
+
+    /* Header */
+    .terms-header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1.5rem 0;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .terms-header .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 1.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .terms-header .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      text-decoration: none;
+      color: var(--text-primary);
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .terms-header .brand i {
+      color: var(--accent);
+      font-size: 1.4rem;
+    }
+
+    .terms-header .back-link {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: color var(--transition);
+    }
+
+    .terms-header .back-link:hover {
+      color: var(--accent);
+    }
+
+    .theme-toggle-mini {
+      background: var(--bg-tertiary);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      border-radius: var(--radius-sm);
+      padding: 0.4rem 0.6rem;
+      cursor: pointer;
+      font-size: 1rem;
+      transition: all var(--transition);
+      margin-left: 0.75rem;
+    }
+
+    .theme-toggle-mini:hover {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    /* Main content */
+    .terms-container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    .terms-title-section {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding-bottom: 2rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .terms-title-section h1 {
+      font-size: 2rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+
+    .terms-title-section .subtitle {
+      color: var(--text-secondary);
+      font-size: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    .terms-title-section .last-updated {
+      display: inline-block;
+      background: var(--bg-tertiary);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 0.35rem 1rem;
+      border-radius: 20px;
+      border: 1px solid var(--border-color);
+    }
+
+    /* Table of contents */
+    .toc {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1.75rem 2rem;
+      margin-bottom: 3rem;
+    }
+
+    .toc h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+    }
+
+    .toc ol {
+      list-style: none;
+      counter-reset: toc-counter;
+      padding-left: 0;
+      margin: 0;
+    }
+
+    .toc ol li {
+      counter-increment: toc-counter;
+      margin-bottom: 0.4rem;
+    }
+
+    .toc ol li a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.95rem;
+      transition: color var(--transition);
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+
+    .toc ol li a::before {
+      content: counter(toc-counter) ".";
+      color: var(--accent);
+      font-weight: 600;
+      min-width: 1.5rem;
+    }
+
+    .toc ol li a:hover {
+      color: var(--accent);
+    }
+
+    .toc .toc-divider {
+      height: 1px;
+      background: var(--border-color);
+      margin: 0.75rem 0;
+    }
+
+    /* Sections */
+    .legal-section {
+      margin-bottom: 2.5rem;
+    }
+
+    .legal-section h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 2px solid var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .legal-section h2 .section-number {
+      background: var(--accent);
+      color: #fff;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.9rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .legal-section h3 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .legal-section p {
+      color: var(--text-secondary);
+      margin-bottom: 0.75rem;
+      font-size: 0.95rem;
+    }
+
+    .legal-section ul {
+      color: var(--text-secondary);
+      padding-left: 1.5rem;
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+    }
+
+    .legal-section ul li {
+      margin-bottom: 0.4rem;
+    }
+
+    .legal-section ul li::marker {
+      color: var(--accent);
+    }
+
+    .legal-section .highlight-box {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius-sm);
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+    }
+
+    .legal-section .warning-box {
+      background: rgba(248, 113, 113, 0.05);
+      border: 1px solid rgba(248, 113, 113, 0.15);
+      border-left: 3px solid var(--danger);
+      border-radius: var(--radius-sm);
+      padding: 1rem 1.25rem;
+      margin: 1rem 0;
+      font-size: 0.95rem;
+      color: var(--text-secondary);
+    }
+
+    .legal-section .warning-box strong {
+      color: var(--danger);
+    }
+
+    /* Section divider */
+    .section-divider {
+      text-align: center;
+      margin: 3.5rem 0;
+      position: relative;
+    }
+
+    .section-divider::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 50%;
+      height: 1px;
+      background: var(--border-color);
+    }
+
+    .section-divider span {
+      position: relative;
+      background: var(--bg-primary);
+      padding: 0 1.5rem;
+      color: var(--accent);
+      font-size: 1.5rem;
+    }
+
+    /* Contact section */
+    .contact-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 2rem;
+      text-align: center;
+      margin-top: 3rem;
+    }
+
+    .contact-section h2 {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      color: var(--text-primary);
+    }
+
+    .contact-section p {
+      color: var(--text-secondary);
+      font-size: 0.95rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .contact-section a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+
+    .contact-section a:hover {
+      text-decoration: underline;
+    }
+
+    /* Footer */
+    .terms-footer {
+      text-align: center;
+      padding: 2rem 1.5rem;
+      border-top: 1px solid var(--border-color);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    .terms-footer a {
+      color: var(--text-secondary);
+      text-decoration: none;
+    }
+
+    .terms-footer a:hover {
+      color: var(--accent);
+    }
+
+    /* Smooth scrolling */
+    html {
+      scroll-behavior: smooth;
+    }
+
+    /* Back to top */
+    .back-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      width: 3rem;
+      height: 3rem;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 12px rgba(37, 211, 102, 0.3);
+      transition: all var(--transition);
+      z-index: 50;
+    }
+
+    .back-to-top:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 16px rgba(37, 211, 102, 0.4);
+    }
+
+    .back-to-top.visible {
+      display: flex;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .terms-title-section h1 {
+        font-size: 1.5rem;
+      }
+
+      .terms-container {
+        padding: 1.5rem 1rem 3rem;
+      }
+
+      .toc {
+        padding: 1.25rem 1.5rem;
+      }
+
+      .legal-section h2 {
+        font-size: 1.25rem;
+      }
+
+      .contact-section {
+        padding: 1.5rem;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Header -->
+  <header class="terms-header">
+    <div class="container">
+      <a class="brand" href="/login.html">
+        <i class="bi bi-whatsapp"></i>
+        <span>WhatsApp Sender Pro</span>
+      </a>
+      <div style="display:flex;align-items:center;">
+        <a class="back-link" href="/login.html">
+          <i class="bi bi-arrow-left"></i> Volver
+        </a>
+        <button class="theme-toggle-mini" id="themeToggle" title="Cambiar tema">
+          <i class="bi bi-moon-fill" id="themeIcon"></i>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Content -->
+  <main class="terms-container">
+    <!-- Title -->
+    <div class="terms-title-section">
+      <h1>Terminos y Condiciones de Uso</h1>
+      <p class="subtitle">WhatsApp Sender Pro - Plataforma de envio de mensajes</p>
+      <span class="last-updated"><i class="bi bi-calendar3"></i> Ultima actualizacion: Marzo 2026</span>
+    </div>
+
+    <!-- Table of Contents -->
+    <nav class="toc">
+      <h2><i class="bi bi-list-ul"></i> Contenido</h2>
+      <ol>
+        <li><a href="#acceptance">Aceptacion de los Terminos</a></li>
+        <li><a href="#service">Descripcion del Servicio</a></li>
+        <li><a href="#responsibility">Responsabilidades del Usuario</a></li>
+        <li><a href="#liability">Limitacion de Responsabilidad</a></li>
+        <li><a href="#accounts">Reglas de la Cuenta</a></li>
+        <li><a href="#ip">Propiedad Intelectual</a></li>
+        <li><a href="#modifications">Modificaciones a los Terminos</a></li>
+      </ol>
+      <div class="toc-divider"></div>
+      <ol start="8">
+        <li><a href="#data-collection">Recopilacion de Datos</a></li>
+        <li><a href="#data-storage">Almacenamiento de Datos</a></li>
+        <li><a href="#data-sharing">Comparticion de Datos</a></li>
+        <li><a href="#data-security">Seguridad de los Datos</a></li>
+        <li><a href="#data-retention">Retencion de Datos</a></li>
+        <li><a href="#cookies">Cookies</a></li>
+        <li><a href="#user-rights">Derechos del Usuario</a></li>
+      </ol>
+      <div class="toc-divider"></div>
+      <ol start="15">
+        <li><a href="#contact">Contacto</a></li>
+      </ol>
+    </nav>
+
+    <!-- ==================== TERMS OF SERVICE ==================== -->
+
+    <div class="section-divider">
+      <span><i class="bi bi-file-earmark-text"></i></span>
+    </div>
+
+    <div style="text-align:center;margin-bottom:2.5rem;">
+      <h2 style="font-size:1.4rem;font-weight:700;color:var(--text-primary);margin-bottom:0.25rem;">Terminos de Servicio</h2>
+      <p style="color:var(--text-muted);font-size:0.9rem;">Condiciones que rigen el uso de la plataforma</p>
+    </div>
+
+    <!-- 1. Acceptance -->
+    <section class="legal-section" id="acceptance">
+      <h2><span class="section-number">1</span> Aceptacion de los Terminos</h2>
+      <p>
+        Al acceder, registrarse o utilizar la plataforma WhatsApp Sender Pro (en adelante, "la Plataforma", "el Servicio" o "WA Sender Pro"), usted acepta quedar vinculado por estos Terminos y Condiciones de Uso, asi como por nuestra Politica de Privacidad.
+      </p>
+      <p>
+        Si no esta de acuerdo con alguno de estos terminos, le solicitamos que no utilice la Plataforma. El uso continuado del Servicio constituye la aceptacion plena e incondicional de todos los terminos aqui establecidos.
+      </p>
+      <div class="highlight-box">
+        <strong>Importante:</strong> Estos terminos constituyen un acuerdo legalmente vinculante entre usted (el "Usuario") y WhatsApp Sender Pro (el "Proveedor"). Al crear una cuenta, usted confirma que ha leido, comprendido y aceptado estos terminos en su totalidad.
+      </div>
+    </section>
+
+    <!-- 2. Service Description -->
+    <section class="legal-section" id="service">
+      <h2><span class="section-number">2</span> Descripcion del Servicio</h2>
+      <p>
+        WhatsApp Sender Pro es una plataforma tecnologica que permite a los usuarios enviar mensajes a traves de WhatsApp Web utilizando la biblioteca de codigo abierto Baileys. El Servicio incluye:
+      </p>
+      <ul>
+        <li>Conexion a WhatsApp Web mediante codigo QR</li>
+        <li>Gestion de contactos y listas de destinatarios</li>
+        <li>Creacion y uso de plantillas de mensajes</li>
+        <li>Envio de mensajes de texto, imagenes y archivos de audio</li>
+        <li>Panel de control con estadisticas de envio</li>
+        <li>Programacion y gestion de campanas de mensajeria</li>
+      </ul>
+      <div class="highlight-box">
+        <strong>Nota:</strong> WhatsApp Sender Pro no esta afiliado, asociado, autorizado, respaldado ni conectado de ninguna manera con WhatsApp Inc., Meta Platforms Inc. o cualquiera de sus subsidiarias. WhatsApp es una marca registrada de WhatsApp Inc.
+      </div>
+    </section>
+
+    <!-- 3. User Responsibility -->
+    <section class="legal-section" id="responsibility">
+      <h2><span class="section-number">3</span> Responsabilidades del Usuario</h2>
+      <p>
+        Al utilizar la Plataforma, el Usuario acepta y se compromete a cumplir con las siguientes obligaciones:
+      </p>
+
+      <h3>3.1 Contenido de los Mensajes</h3>
+      <ul>
+        <li>El Usuario es <strong>el unico y exclusivo responsable</strong> de todo el contenido que envie a traves de la Plataforma.</li>
+        <li>Esta terminantemente prohibido enviar contenido que sea ilegal, difamatorio, amenazante, abusivo, obsceno o que viole los derechos de terceros.</li>
+        <li>El Usuario no utilizara la Plataforma para enviar spam, mensajes no solicitados, phishing, estafas, malware o cualquier tipo de contenido malicioso.</li>
+      </ul>
+
+      <h3>3.2 Consentimiento de Destinatarios</h3>
+      <ul>
+        <li>El Usuario <strong>debe contar con el consentimiento previo</strong> de cada destinatario antes de enviarle mensajes a traves de la Plataforma.</li>
+        <li>El Usuario es responsable de mantener registros que demuestren dicho consentimiento.</li>
+        <li>El Usuario debe ofrecer a los destinatarios un mecanismo claro para revocar su consentimiento (opt-out).</li>
+      </ul>
+
+      <h3>3.3 Cumplimiento Legal</h3>
+      <ul>
+        <li>El Usuario debe cumplir con los <strong>Terminos de Servicio de WhatsApp</strong> en todo momento.</li>
+        <li>El Usuario debe cumplir con todas las leyes y regulaciones aplicables en su jurisdiccion, incluyendo pero no limitado a: GDPR (Union Europea), CAN-SPAM Act (Estados Unidos), LGPD (Brasil), y cualquier legislacion local de proteccion de datos y anti-spam.</li>
+        <li>El Usuario asume toda la responsabilidad legal derivada del uso que haga de la Plataforma.</li>
+      </ul>
+
+      <h3>3.4 Uso Prohibido</h3>
+      <p>Queda estrictamente prohibido:</p>
+      <ul>
+        <li>Enviar mensajes masivos no solicitados (spam)</li>
+        <li>Realizar actividades de phishing, suplantacion de identidad o fraude</li>
+        <li>Acosar, intimidar o amenazar a otros usuarios o destinatarios</li>
+        <li>Utilizar la Plataforma para cualquier actividad ilegal</li>
+        <li>Intentar acceder a cuentas de otros usuarios</li>
+        <li>Realizar ingenieria inversa o intentar vulnerar la seguridad de la Plataforma</li>
+        <li>Sobrecargar intencionalmente los servidores o la infraestructura del Servicio</li>
+      </ul>
+
+      <div class="warning-box">
+        <strong>Advertencia:</strong> El incumplimiento de estas responsabilidades puede resultar en la suspension inmediata y permanente de su cuenta, sin derecho a reembolso, y en la posible notificacion a las autoridades competentes.
+      </div>
+    </section>
+
+    <!-- 4. Liability -->
+    <section class="legal-section" id="liability">
+      <h2><span class="section-number">4</span> Limitacion de Responsabilidad</h2>
+
+      <h3>4.1 Servicio "TAL CUAL"</h3>
+      <p>
+        La Plataforma se proporciona <strong>"TAL CUAL" (AS IS)</strong> y <strong>"SEGUN DISPONIBILIDAD" (AS AVAILABLE)</strong>, sin garantias de ningun tipo, ya sean expresas o implicitas, incluyendo pero no limitado a garantias de comerciabilidad, idoneidad para un proposito particular o no infraccion.
+      </p>
+
+      <h3>4.2 Exclusiones de Responsabilidad</h3>
+      <p>WhatsApp Sender Pro <strong>NO</strong> se hace responsable por:</p>
+      <ul>
+        <li><strong>Contenido de mensajes:</strong> No somos responsables del contenido, naturaleza o consecuencias de los mensajes enviados por los usuarios a traves de la Plataforma.</li>
+        <li><strong>Baneos o restricciones de WhatsApp:</strong> No somos responsables si WhatsApp suspende, restringe o banea la cuenta del usuario como resultado del uso de la Plataforma.</li>
+        <li><strong>Fallos en la entrega:</strong> No garantizamos la entrega de los mensajes. La entrega depende de multiples factores fuera de nuestro control, incluyendo la disponibilidad de WhatsApp y el estado de la linea del destinatario.</li>
+        <li><strong>Tasas de entrega:</strong> No garantizamos porcentajes o tasas de entrega especificas.</li>
+        <li><strong>Interrupciones del servicio:</strong> No somos responsables por interrupciones temporales o permanentes del servicio debido a mantenimiento, fallos tecnicos, cambios en WhatsApp Web u otras causas fuera de nuestro control.</li>
+        <li><strong>Perdida de datos:</strong> No somos responsables por la perdida de contactos, plantillas u otros datos del usuario, aunque implementamos medidas razonables para protegerlos.</li>
+        <li><strong>Danos indirectos:</strong> En ningun caso seremos responsables por danos indirectos, incidentales, especiales, consecuentes o punitivos.</li>
+      </ul>
+
+      <h3>4.3 Limitacion Economica</h3>
+      <p>
+        En la maxima medida permitida por la ley aplicable, la responsabilidad total y acumulada de WhatsApp Sender Pro ante el Usuario por cualquier reclamacion relacionada con el Servicio estara <strong>limitada al monto total de las tarifas de suscripcion pagadas</strong> por el Usuario durante los doce (12) meses anteriores a la reclamacion.
+      </p>
+
+      <div class="warning-box">
+        <strong>Importante:</strong> El Usuario reconoce y acepta que utiliza la Plataforma bajo su propia cuenta y riesgo. El Usuario indemnizara y mantendra libre de responsabilidad a WhatsApp Sender Pro ante cualquier reclamacion de terceros derivada del uso que el Usuario haga de la Plataforma.
+      </div>
+    </section>
+
+    <!-- 5. Account Rules -->
+    <section class="legal-section" id="accounts">
+      <h2><span class="section-number">5</span> Reglas de la Cuenta</h2>
+      <ul>
+        <li><strong>Una cuenta por persona o entidad:</strong> Cada persona fisica o juridica puede tener una unica cuenta en la Plataforma.</li>
+        <li><strong>Una linea de WhatsApp por cuenta:</strong> Cada cuenta puede vincular una unica linea de WhatsApp.</li>
+        <li><strong>Cuenta personal e intransferible:</strong> Esta prohibido compartir, vender, alquilar o transferir la cuenta a terceros.</li>
+        <li><strong>Credenciales seguras:</strong> El Usuario es responsable de mantener la confidencialidad de sus credenciales de acceso y de todas las actividades que ocurran bajo su cuenta.</li>
+        <li><strong>Informacion veraz:</strong> El Usuario debe proporcionar informacion real y actualizada al momento del registro.</li>
+        <li><strong>Suspension y cancelacion:</strong> Nos reservamos el derecho de suspender o cancelar cuentas que violen estos Terminos, sin previo aviso y sin obligacion de reembolso.</li>
+      </ul>
+    </section>
+
+    <!-- 6. IP -->
+    <section class="legal-section" id="ip">
+      <h2><span class="section-number">6</span> Propiedad Intelectual</h2>
+      <p>
+        Todo el codigo fuente, diseno, interfaz de usuario, logotipos, marcas, textos y demas elementos de la Plataforma son propiedad exclusiva de WhatsApp Sender Pro y estan protegidos por las leyes de propiedad intelectual aplicables.
+      </p>
+      <p>
+        Se concede al Usuario una licencia limitada, no exclusiva, no transferible y revocable para utilizar la Plataforma unicamente para los fines previstos en estos Terminos.
+      </p>
+      <p>
+        Queda prohibida la reproduccion, distribucion, modificacion, ingenieria inversa, descompilacion o creacion de obras derivadas de la Plataforma sin autorizacion expresa por escrito.
+      </p>
+    </section>
+
+    <!-- 7. Modifications -->
+    <section class="legal-section" id="modifications">
+      <h2><span class="section-number">7</span> Modificaciones a los Terminos</h2>
+      <p>
+        WhatsApp Sender Pro se reserva el derecho de modificar, actualizar o reemplazar estos Terminos en cualquier momento y a su entera discrecion. Las modificaciones entraran en vigor desde el momento de su publicacion en la Plataforma.
+      </p>
+      <p>
+        Es responsabilidad del Usuario revisar periodicamente estos Terminos. <strong>El uso continuado de la Plataforma despues de la publicacion de cambios constituye la aceptacion de dichos cambios.</strong>
+      </p>
+      <p>
+        Para cambios significativos, realizaremos esfuerzos razonables para notificar a los usuarios a traves del correo electronico asociado a su cuenta.
+      </p>
+    </section>
+
+    <!-- ==================== PRIVACY POLICY ==================== -->
+
+    <div class="section-divider">
+      <span><i class="bi bi-shield-lock"></i></span>
+    </div>
+
+    <div style="text-align:center;margin-bottom:2.5rem;">
+      <h2 style="font-size:1.4rem;font-weight:700;color:var(--text-primary);margin-bottom:0.25rem;">Politica de Privacidad</h2>
+      <p style="color:var(--text-muted);font-size:0.9rem;">Como recopilamos, usamos y protegemos su informacion</p>
+    </div>
+
+    <!-- 8. Data Collection -->
+    <section class="legal-section" id="data-collection">
+      <h2><span class="section-number">8</span> Recopilacion de Datos</h2>
+      <p>
+        Recopilamos la siguiente informacion cuando usted utiliza la Plataforma:
+      </p>
+
+      <h3>8.1 Datos proporcionados por el Usuario</h3>
+      <ul>
+        <li><strong>Datos de registro:</strong> Nombre, direccion de correo electronico</li>
+        <li><strong>Datos de conexion:</strong> Numero de telefono de WhatsApp vinculado</li>
+        <li><strong>Datos de uso:</strong> Contactos importados, plantillas de mensajes creadas, metadatos de campanas (nombre, fecha, numero de destinatarios)</li>
+      </ul>
+
+      <h3>8.2 Datos que NO recopilamos</h3>
+      <div class="highlight-box">
+        <ul style="margin-bottom:0;padding-left:1.25rem;">
+          <li><strong>NO</strong> almacenamos el contenido de los mensajes una vez entregados</li>
+          <li><strong>NO</strong> leemos ni accedemos a las conversaciones de WhatsApp del usuario</li>
+          <li><strong>NO</strong> recopilamos datos de los destinatarios de los mensajes mas alla del numero de telefono proporcionado por el usuario</li>
+          <li><strong>NO</strong> recopilamos datos de ubicacion, grabaciones de voz ni datos biometricos</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 9. Data Storage -->
+    <section class="legal-section" id="data-storage">
+      <h2><span class="section-number">9</span> Almacenamiento de Datos</h2>
+      <p>
+        Los datos del Usuario se almacenan utilizando los siguientes servicios y tecnologias:
+      </p>
+      <ul>
+        <li><strong>Autenticacion:</strong> Gestionada a traves de Firebase Authentication (Google). Las credenciales son procesadas y almacenadas por Google segun sus propias politicas de seguridad.</li>
+        <li><strong>Perfiles de usuario:</strong> Almacenados en Google Cloud Firestore, con las medidas de seguridad proporcionadas por Google Cloud Platform.</li>
+        <li><strong>Contactos y metadatos de campanas:</strong> Almacenados en bases de datos PostgreSQL protegidas, con acceso restringido y cifrado en transito.</li>
+        <li><strong>Sesiones de WhatsApp:</strong> Los datos de sesion se almacenan temporalmente en Redis con cifrado y se eliminan al desconectarse.</li>
+      </ul>
+    </section>
+
+    <!-- 10. Data Sharing -->
+    <section class="legal-section" id="data-sharing">
+      <h2><span class="section-number">10</span> Comparticion de Datos</h2>
+      <div class="highlight-box">
+        <strong>WhatsApp Sender Pro NO vende, alquila ni comparte datos personales de los usuarios con terceros</strong> con fines comerciales, publicitarios o de marketing.
+      </div>
+      <p>
+        Los datos pueden compartirse unicamente en los siguientes casos:
+      </p>
+      <ul>
+        <li><strong>Proveedores de infraestructura:</strong> Los datos se procesan a traves de servicios de terceros (Google Cloud, Firebase) necesarios para el funcionamiento de la Plataforma, sujetos a sus respectivas politicas de privacidad y acuerdos de procesamiento de datos.</li>
+        <li><strong>Requerimientos legales:</strong> Cuando sea necesario para cumplir con una obligacion legal, orden judicial o requerimiento de autoridad competente.</li>
+        <li><strong>Proteccion de derechos:</strong> Cuando sea razonablemente necesario para proteger los derechos, propiedad o seguridad de WhatsApp Sender Pro, sus usuarios o el publico.</li>
+      </ul>
+    </section>
+
+    <!-- 11. Data Security -->
+    <section class="legal-section" id="data-security">
+      <h2><span class="section-number">11</span> Seguridad de los Datos</h2>
+      <p>
+        Implementamos medidas de seguridad tecnicas y organizativas para proteger los datos del usuario:
+      </p>
+      <ul>
+        <li><strong>Cifrado en transito:</strong> Todas las comunicaciones se realizan a traves de conexiones seguras HTTPS/TLS.</li>
+        <li><strong>Autenticacion robusta:</strong> Utilizamos JSON Web Tokens (JWT) para la autenticacion y autorizacion de las sesiones.</li>
+        <li><strong>Gestion de sesiones:</strong> Control de sesion unica activa por cuenta, con tokens de sesion revocables.</li>
+        <li><strong>Acceso restringido:</strong> Los datos se almacenan en servidores con acceso limitado y monitorizado.</li>
+        <li><strong>Verificacion de correo:</strong> Requerimos verificacion de correo electronico para activar las cuentas.</li>
+      </ul>
+      <p>
+        A pesar de estas medidas, ningun sistema de seguridad es infalible. No podemos garantizar la seguridad absoluta de los datos, aunque nos comprometemos a notificar a los usuarios afectados en caso de una brecha de seguridad significativa.
+      </p>
+    </section>
+
+    <!-- 12. Data Retention -->
+    <section class="legal-section" id="data-retention">
+      <h2><span class="section-number">12</span> Retencion de Datos</h2>
+      <ul>
+        <li><strong>Datos de cuenta:</strong> Se conservan mientras la cuenta permanezca activa.</li>
+        <li><strong>Contactos y plantillas:</strong> Se mantienen mientras la cuenta este activa. El usuario puede eliminarlos manualmente en cualquier momento.</li>
+        <li><strong>Estadisticas y metadatos:</strong> Se conservan por un periodo maximo de 12 meses con fines analiticos.</li>
+        <li><strong>Al cancelar la cuenta:</strong> Todos los datos personales, contactos, plantillas y metadatos asociados se eliminan dentro de un plazo de 30 dias habiles.</li>
+        <li><strong>Datos de sesion:</strong> Los datos temporales de sesion de WhatsApp se eliminan automaticamente al desconectarse o tras un periodo de inactividad.</li>
+      </ul>
+    </section>
+
+    <!-- 13. Cookies -->
+    <section class="legal-section" id="cookies">
+      <h2><span class="section-number">13</span> Cookies</h2>
+      <p>
+        WhatsApp Sender Pro utiliza un <strong>uso minimo de cookies y almacenamiento local</strong>:
+      </p>
+      <ul>
+        <li><strong>Tokens de sesion:</strong> Necesarios para mantener la autenticacion del usuario (almacenamiento local del navegador).</li>
+        <li><strong>Preferencias de tema:</strong> Para recordar la preferencia de tema claro/oscuro del usuario.</li>
+        <li><strong>Cookies de Firebase:</strong> Cookies tecnicas necesarias para el funcionamiento de la autenticacion de Firebase.</li>
+      </ul>
+      <div class="highlight-box">
+        <strong>NO</strong> utilizamos cookies de seguimiento, cookies publicitarias, cookies de terceros con fines de marketing, ni herramientas de rastreo de comportamiento (analytics de terceros, pixel de seguimiento, etc.).
+      </div>
+    </section>
+
+    <!-- 14. User Rights -->
+    <section class="legal-section" id="user-rights">
+      <h2><span class="section-number">14</span> Derechos del Usuario</h2>
+      <p>
+        En cumplimiento con las leyes de proteccion de datos aplicables, el Usuario tiene los siguientes derechos:
+      </p>
+      <ul>
+        <li><strong>Derecho de acceso:</strong> Solicitar una copia de todos los datos personales que almacenamos sobre usted.</li>
+        <li><strong>Derecho de rectificacion:</strong> Solicitar la correccion de datos personales inexactos o incompletos.</li>
+        <li><strong>Derecho de eliminacion:</strong> Solicitar la eliminacion de su cuenta y todos los datos personales asociados.</li>
+        <li><strong>Derecho de portabilidad:</strong> Solicitar la exportacion de sus datos en un formato estructurado y de uso comun.</li>
+        <li><strong>Derecho de oposicion:</strong> Oponerse al procesamiento de sus datos en determinadas circunstancias.</li>
+      </ul>
+      <p>
+        Para ejercer cualquiera de estos derechos, contactenos a traves de los medios indicados en la seccion de Contacto. Responderemos a su solicitud en un plazo maximo de 30 dias habiles.
+      </p>
+    </section>
+
+    <!-- ==================== CONTACT ==================== -->
+
+    <section class="contact-section" id="contact">
+      <h2><i class="bi bi-headset"></i> Contacto</h2>
+      <p>Para consultas sobre estos Terminos y Condiciones o la Politica de Privacidad:</p>
+      <p>
+        <i class="bi bi-envelope"></i>
+        <a href="mailto:andyvercha@gmail.com">andyvercha@gmail.com</a>
+      </p>
+      <p>
+        <i class="bi bi-whatsapp"></i>
+        <a href="https://wa.me/595992756462" target="_blank">+595 992 756 462</a>
+      </p>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="terms-footer">
+    <p>&copy; 2026 WhatsApp Sender Pro. Todos los derechos reservados.</p>
+    <p style="margin-top:0.5rem;">
+      <a href="https://mindtechpy.net" target="_blank">mindtechpy.net</a>
+      &middot; Desarrollado por Andres Vera
+    </p>
+  </footer>
+
+  <!-- Back to top button -->
+  <button class="back-to-top" id="backToTop" title="Volver arriba">
+    <i class="bi bi-arrow-up"></i>
+  </button>
+
+  <script>
+    // Apply saved theme
+    var savedTheme = localStorage.getItem('theme') || 'dark';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    updateThemeIcon(savedTheme);
+
+    // Theme toggle
+    document.getElementById('themeToggle').addEventListener('click', function() {
+      var current = document.documentElement.getAttribute('data-theme');
+      var next = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      updateThemeIcon(next);
+    });
+
+    function updateThemeIcon(theme) {
+      var icon = document.getElementById('themeIcon');
+      if (icon) {
+        icon.className = theme === 'dark' ? 'bi bi-moon-fill' : 'bi bi-sun-fill';
+      }
+    }
+
+    // Back to top button
+    var backToTopBtn = document.getElementById('backToTop');
+    window.addEventListener('scroll', function() {
+      if (window.scrollY > 400) {
+        backToTopBtn.classList.add('visible');
+      } else {
+        backToTopBtn.classList.remove('visible');
+      }
+    });
+
+    backToTopBtn.addEventListener('click', function() {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  </script>
+</body>
+</html>
