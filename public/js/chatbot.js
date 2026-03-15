@@ -279,6 +279,73 @@ function populateStartNodeSelector() {
   select.innerHTML = html;
 }
 
+function getFlowOrder() {
+  // Build adjacency: node_id -> [target_node_ids]
+  var adj = {};
+  var nodeMap = {};
+  chatbotNodes.forEach(function(n, idx) {
+    nodeMap[n.node_id] = idx;
+    adj[n.node_id] = [];
+    var c = n.content || {};
+    if (n.type === 'menu' && c.options) {
+      c.options.forEach(function(opt) {
+        var t = opt.trigger || opt.next;
+        if (t) adj[n.node_id].push(t);
+      });
+    } else if (c.next) {
+      adj[n.node_id].push(c.next);
+    }
+  });
+
+  // Find start node
+  var startId = (chatbotConfig && chatbotConfig.start_node_id) || '';
+  if (!startId || !nodeMap.hasOwnProperty(startId)) {
+    // Default: first menu, or first node
+    for (var i = 0; i < chatbotNodes.length; i++) {
+      if (chatbotNodes[i].type === 'menu') { startId = chatbotNodes[i].node_id; break; }
+    }
+    if (!startId && chatbotNodes.length > 0) startId = chatbotNodes[0].node_id;
+  }
+
+  // BFS from start
+  var visited = {};
+  var ordered = [];
+  var queue = [startId];
+  visited[startId] = true;
+  while (queue.length > 0) {
+    var current = queue.shift();
+    if (nodeMap.hasOwnProperty(current)) {
+      ordered.push(nodeMap[current]);
+      (adj[current] || []).forEach(function(t) {
+        if (!visited[t] && nodeMap.hasOwnProperty(t)) {
+          visited[t] = true;
+          queue.push(t);
+        }
+      });
+    }
+  }
+
+  // Append any unreachable nodes at the end
+  chatbotNodes.forEach(function(n, idx) {
+    if (!visited[n.node_id]) ordered.push(idx);
+  });
+
+  return { order: ordered, startId: startId };
+}
+
+function getNodeTargetLabel(node) {
+  var c = node.content || {};
+  if (node.type === 'menu' && c.options && c.options.length > 0) {
+    return c.options.map(function(opt, i) {
+      var target = opt.trigger || opt.next || '(sin destino)';
+      return (i + 1) + '. ' + (opt.label || '?') + ' \u2192 ' + target;
+    }).join('\n');
+  }
+  if (node.type === 'end') return null;
+  if (c.next) return c.next;
+  return null;
+}
+
 function renderFlowBuilder() {
   var container = document.getElementById('cb-nodes-list');
   if (!container) return;
@@ -293,13 +360,58 @@ function renderFlowBuilder() {
     return;
   }
 
+  var flowInfo = getFlowOrder();
+  var orderedIndices = flowInfo.order;
+  var startId = flowInfo.startId;
+
   var html = '';
-  chatbotNodes.forEach(function(node, idx) {
-    html += renderNodeCard(node, idx);
+  orderedIndices.forEach(function(idx, step) {
+    var node = chatbotNodes[idx];
+    var isStart = node.node_id === startId;
+    var isEnd = node.type === 'end';
+
+    // Step indicator + arrow between cards
+    if (step > 0) {
+      html += '<div class="cb-card-connector"><i class="bi bi-arrow-down"></i></div>';
+    }
+
+    // Step badge
+    var stepBadge =
+      '<div class="cb-step-badge' + (isStart ? ' cb-step-start' : '') + (isEnd ? ' cb-step-end' : '') + '">' +
+        (isStart ? '<i class="bi bi-play-circle-fill"></i> ' : '') +
+        (isEnd ? '<i class="bi bi-stop-circle-fill"></i> ' : '') +
+        'Paso ' + (step + 1) +
+      '</div>';
+
+    // Flow target summary
+    var targetLabel = getNodeTargetLabel(node);
+    var targetHtml = '';
+    if (targetLabel && node.type === 'menu') {
+      var lines = targetLabel.split('\n');
+      targetHtml = '<div class="cb-node-flow-targets">';
+      targetHtml += '<span class="cb-flow-targets-title"><i class="bi bi-signpost-split"></i> Destinos:</span>';
+      lines.forEach(function(line) {
+        targetHtml += '<span class="cb-flow-target-line">' + escHtml(line) + '</span>';
+      });
+      targetHtml += '</div>';
+    } else if (targetLabel) {
+      targetHtml =
+        '<div class="cb-node-flow-targets">' +
+          '<span class="cb-flow-targets-title"><i class="bi bi-arrow-right-circle"></i> Va a:</span>' +
+          '<span class="cb-flow-target-line">' + escHtml(targetLabel) + '</span>' +
+        '</div>';
+    } else if (isEnd) {
+      targetHtml =
+        '<div class="cb-node-flow-targets cb-flow-end-label">' +
+          '<span class="cb-flow-targets-title"><i class="bi bi-stop-circle"></i> Fin del flujo</span>' +
+        '</div>';
+    }
+
+    html += stepBadge + renderNodeCard(node, idx) + targetHtml;
   });
   container.innerHTML = html;
 
-  // Attach events
+  // Attach events (use original indices)
   chatbotNodes.forEach(function(node, idx) {
     attachNodeEvents(idx);
   });
@@ -706,7 +818,7 @@ async function saveAllNodes() {
   }
 }
 
-// ── Flow Preview ──
+// ── Flow Preview (Vertical Diagram) ──
 function renderFlowPreview() {
   var container = document.getElementById('cb-flow-preview');
   if (!container) return;
@@ -716,33 +828,111 @@ function renderFlowPreview() {
     return;
   }
 
-  var html = '<div class="cb-preview-graph">';
+  var nodeMap = {};
+  chatbotNodes.forEach(function(n) { nodeMap[n.node_id] = n; });
 
-  chatbotNodes.forEach(function(node, idx) {
+  var flowInfo = getFlowOrder();
+  var startId = flowInfo.startId;
+
+  // Recursive render function that builds a vertical tree
+  var rendered = {};
+
+  function renderNodeBox(nodeId, depth) {
+    if (!nodeId || !nodeMap[nodeId]) {
+      return '<div class="cbfp-node cbfp-missing"><div class="cbfp-node-header cbfp-missing-header">' +
+        '<i class="bi bi-exclamation-triangle"></i> ' + escHtml(nodeId || '?') + ' (no existe)</div></div>';
+    }
+    if (rendered[nodeId]) {
+      // Already rendered — show reference
+      var refMeta = NODE_TYPES[nodeMap[nodeId].type] || NODE_TYPES.message;
+      return '<div class="cbfp-node cbfp-ref" style="--node-color: ' + refMeta.color + '">' +
+        '<div class="cbfp-node-header" style="background: ' + refMeta.color + '">' +
+        '<i class="bi bi-arrow-return-right"></i> ' + escHtml(nodeId) +
+        '</div><div class="cbfp-ref-label">ver arriba</div></div>';
+    }
+    if (depth > 15) return ''; // safety
+    rendered[nodeId] = true;
+
+    var node = nodeMap[nodeId];
     var meta = NODE_TYPES[node.type] || NODE_TYPES.message;
-    var connections = getNodeConnections(node);
+    var content = node.content || {};
+    var isStart = nodeId === startId;
+    var isEnd = node.type === 'end';
 
-    html += '<div class="cb-preview-node" style="--node-color: ' + meta.color + '">';
-    html += '<div class="cb-preview-node-header" style="background: ' + meta.color + '">';
-    html += '<i class="bi ' + meta.icon + '"></i> ' + escHtml(node.node_id);
+    // Text preview
+    var textPreview = content.text || content.message || content.prompt || '';
+    if (textPreview.length > 60) textPreview = textPreview.substring(0, 57) + '...';
+
+    var html = '<div class="cbfp-node' + (isStart ? ' cbfp-start' : '') + (isEnd ? ' cbfp-end' : '') + '" style="--node-color: ' + meta.color + '">';
+
+    // Header
+    html += '<div class="cbfp-node-header" style="background: ' + meta.color + '">';
+    if (isStart) html += '<i class="bi bi-play-circle-fill"></i> ';
+    else if (isEnd) html += '<i class="bi bi-stop-circle-fill"></i> ';
+    else html += '<i class="bi ' + meta.icon + '"></i> ';
+    html += escHtml(nodeId);
+    html += '<span class="cbfp-type-label">' + meta.label + '</span>';
     html += '</div>';
-    html += '<div class="cb-preview-node-type">' + meta.label + '</div>';
 
-    if (connections.length > 0) {
-      html += '<div class="cb-preview-connections">';
-      connections.forEach(function(conn) {
-        html += '<span class="cb-preview-arrow">' + escHtml(conn.label) + ' <i class="bi bi-arrow-right"></i> ' + escHtml(conn.target) + '</span>';
+    // Body with text preview
+    if (textPreview) {
+      html += '<div class="cbfp-node-body">"' + escHtml(textPreview) + '"</div>';
+    }
+
+    // Menu options inline
+    if (node.type === 'menu' && content.options && content.options.length > 0) {
+      html += '<div class="cbfp-menu-list">';
+      content.options.forEach(function(opt, i) {
+        var target = opt.trigger || opt.next || '';
+        html += '<div class="cbfp-menu-item">' +
+          '<span class="cbfp-menu-num">' + (i + 1) + '.</span> ' +
+          escHtml(opt.label || '?') +
+          (target ? ' <i class="bi bi-arrow-right"></i> <strong>' + escHtml(target) + '</strong>' : '') +
+          '</div>';
       });
       html += '</div>';
     }
 
-    html += '</div>';
+    html += '</div>'; // close cbfp-node
 
-    // Arrow between sequential nodes
-    if (idx < chatbotNodes.length - 1) {
-      html += '<div class="cb-preview-connector"><i class="bi bi-chevron-right"></i></div>';
+    // Render children
+    var children = getNodeConnections(node);
+    if (children.length === 1) {
+      // Single child — vertical line down
+      html += '<div class="cbfp-connector-down"><div class="cbfp-line"></div><i class="bi bi-arrow-down-short"></i></div>';
+      html += renderNodeBox(children[0].target, depth + 1);
+    } else if (children.length > 1) {
+      // Multiple children — branch
+      html += '<div class="cbfp-connector-down"><div class="cbfp-line"></div><i class="bi bi-arrow-down-short"></i></div>';
+      html += '<div class="cbfp-branch">';
+      children.forEach(function(child) {
+        html += '<div class="cbfp-branch-col">';
+        html += '<div class="cbfp-branch-label">' + escHtml(child.label) + '</div>';
+        html += renderNodeBox(child.target, depth + 1);
+        html += '</div>';
+      });
+      html += '</div>';
     }
+
+    return html;
+  }
+
+  var html = '<div class="cbfp-diagram">';
+  html += renderNodeBox(startId, 0);
+
+  // Render any unreachable nodes
+  var unreachable = [];
+  chatbotNodes.forEach(function(n) {
+    if (!rendered[n.node_id]) unreachable.push(n.node_id);
   });
+  if (unreachable.length > 0) {
+    html += '<div class="cbfp-unreachable-section">';
+    html += '<div class="cbfp-unreachable-title"><i class="bi bi-exclamation-triangle"></i> Nodos no conectados al flujo</div>';
+    unreachable.forEach(function(nid) {
+      html += renderNodeBox(nid, 0);
+    });
+    html += '</div>';
+  }
 
   html += '</div>';
   container.innerHTML = html;
