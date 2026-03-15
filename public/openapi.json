@@ -37,6 +37,22 @@
     {
       "name": "Configuration",
       "description": "Consultar configuracion disponible para el envio de mensajes"
+    },
+    {
+      "name": "Chatbot",
+      "description": "Configuracion y gestion del chatbot con flujos automatizados e integracion de IA"
+    },
+    {
+      "name": "Inbox",
+      "description": "Bandeja de entrada para visualizar y responder mensajes recibidos de contactos"
+    },
+    {
+      "name": "Campaigns",
+      "description": "Consultar campanas de envio y sus respuestas"
+    },
+    {
+      "name": "Phone & Country",
+      "description": "Configuracion de pais y normalizacion de numeros de telefono"
     }
   ],
   "paths": {
@@ -714,6 +730,985 @@
           }
         }
       }
+    },
+    "/chatbot/config": {
+      "get": {
+        "tags": ["Chatbot"],
+        "summary": "Obtener configuracion del chatbot",
+        "description": "Retorna la configuracion actual del chatbot del usuario autenticado, incluyendo horarios, opciones de IA y mensajes predefinidos.",
+        "responses": {
+          "200": {
+            "description": "Configuracion del chatbot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "config": {
+                      "$ref": "#/components/schemas/ChatbotConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Chatbot"],
+        "summary": "Crear configuracion del chatbot",
+        "description": "Crea la configuracion inicial del chatbot para el usuario. Solo se permite una configuracion por usuario.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatbotConfigInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuracion creada exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "config": {
+                      "$ref": "#/components/schemas/ChatbotConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "put": {
+        "tags": ["Chatbot"],
+        "summary": "Actualizar configuracion del chatbot",
+        "description": "Actualiza la configuracion del chatbot. Se pueden enviar solo los campos que se desean modificar.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatbotConfigInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Configuracion actualizada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "config": {
+                      "$ref": "#/components/schemas/ChatbotConfig"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/chatbot/nodes": {
+      "get": {
+        "tags": ["Chatbot"],
+        "summary": "Obtener nodos del flujo del chatbot",
+        "description": "Retorna todos los nodos del flujo conversacional del chatbot del usuario.",
+        "responses": {
+          "200": {
+            "description": "Lista de nodos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "nodes": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChatbotNode"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "tags": ["Chatbot"],
+        "summary": "Crear/reemplazar nodos del flujo",
+        "description": "Reemplaza todos los nodos del flujo conversacional del chatbot. Envia el flujo completo; los nodos existentes se eliminan y se crean los nuevos.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nodes"],
+                "properties": {
+                  "nodes": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/ChatbotNodeInput"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nodos guardados exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "count": {
+                      "type": "integer",
+                      "description": "Cantidad de nodos guardados",
+                      "example": 5
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/chatbot/nodes/{nodeId}": {
+      "delete": {
+        "tags": ["Chatbot"],
+        "summary": "Eliminar un nodo del flujo",
+        "description": "Elimina un nodo individual del flujo del chatbot por su ID.",
+        "parameters": [
+          {
+            "name": "nodeId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "ID del nodo a eliminar"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nodo eliminado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Nodo no encontrado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/chatbot/conversations": {
+      "get": {
+        "tags": ["Chatbot"],
+        "summary": "Listar conversaciones activas del chatbot",
+        "description": "Retorna todas las conversaciones activas del chatbot, ordenadas por ultima actividad.",
+        "responses": {
+          "200": {
+            "description": "Lista de conversaciones",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversations": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/ChatbotConversation"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/chatbot/conversations/{phone}/deactivate": {
+      "put": {
+        "tags": ["Chatbot"],
+        "summary": "Desactivar bot para un contacto",
+        "description": "Desactiva manualmente el chatbot para un contacto especifico.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Numero de telefono del contacto"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bot desactivado para el contacto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/chatbot/conversations/{phone}": {
+      "delete": {
+        "tags": ["Chatbot"],
+        "summary": "Reiniciar conversacion del chatbot",
+        "description": "Reinicia el estado de la conversacion del chatbot para un contacto, volviendo al nodo inicial.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Numero de telefono del contacto"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Conversacion reiniciada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/messages/inbox": {
+      "get": {
+        "tags": ["Inbox"],
+        "summary": "Listar conversaciones de la bandeja de entrada",
+        "description": "Retorna las conversaciones agrupadas por contacto con el ultimo mensaje, conteo de no leidos y paginacion.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            },
+            "description": "Numero de pagina"
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            },
+            "description": "Cantidad de conversaciones por pagina"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Buscar por numero de telefono o nombre del contacto"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de conversaciones",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "conversations": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "contact_phone": {
+                            "type": "string"
+                          },
+                          "contact_name": {
+                            "type": "string"
+                          },
+                          "last_message": {
+                            "type": "string"
+                          },
+                          "last_message_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "unread_count": {
+                            "type": "integer"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    },
+                    "page": {
+                      "type": "integer"
+                    },
+                    "pageSize": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/messages/inbox/unread": {
+      "get": {
+        "tags": ["Inbox"],
+        "summary": "Obtener conteo de conversaciones no leidas",
+        "description": "Retorna el numero total de conversaciones con mensajes no leidos.",
+        "responses": {
+          "200": {
+            "description": "Conteo de no leidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "unreadCount": {
+                      "type": "integer",
+                      "example": 5
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/messages/inbox/{phone}": {
+      "get": {
+        "tags": ["Inbox"],
+        "summary": "Obtener mensajes de un contacto",
+        "description": "Retorna el historial de mensajes con un contacto especifico, incluyendo mensajes enviados, recibidos y respuestas del bot.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Numero de telefono del contacto"
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 50
+            },
+            "description": "Cantidad maxima de mensajes a retornar"
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Obtener mensajes anteriores a esta fecha (paginacion por cursor)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historial de mensajes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/InboxMessage"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Inbox"],
+        "summary": "Eliminar historial de chat con un contacto",
+        "description": "Elimina todos los mensajes almacenados de la conversacion con un contacto especifico. No afecta los mensajes en WhatsApp.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Numero de telefono del contacto"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Historial eliminado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/messages/inbox/{phone}/reply": {
+      "post": {
+        "tags": ["Inbox"],
+        "summary": "Enviar respuesta a un contacto",
+        "description": "Envia un mensaje de respuesta a un contacto desde la bandeja de entrada. Marca la conversacion como intervencion humana, lo que pausa el chatbot temporalmente.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Numero de telefono del contacto"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["message"],
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "description": "Texto del mensaje a enviar",
+                    "example": "Hola, gracias por tu mensaje. Te respondo personalmente."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Mensaje enviado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "description": "WhatsApp no conectado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/inbox/{phone}/bot-status": {
+      "get": {
+        "tags": ["Inbox"],
+        "summary": "Obtener estado del bot para un contacto",
+        "description": "Retorna si el chatbot esta activo o pausado para un contacto especifico.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Numero de telefono del contacto"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado del bot",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "bot_paused": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/messages/inbox/{phone}/pause-bot": {
+      "put": {
+        "tags": ["Inbox"],
+        "summary": "Pausar bot para un contacto",
+        "description": "Pausa el chatbot para un contacto especifico. El bot no respondera automaticamente hasta que se reanude.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Numero de telefono del contacto"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bot pausado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "bot_paused": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/messages/inbox/{phone}/resume-bot": {
+      "put": {
+        "tags": ["Inbox"],
+        "summary": "Reanudar bot para un contacto",
+        "description": "Reanuda el chatbot para un contacto especifico que fue pausado previamente.",
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Numero de telefono del contacto"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bot reanudado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "bot_paused": {
+                      "type": "boolean",
+                      "example": false
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/campaigns": {
+      "get": {
+        "tags": ["Campaigns"],
+        "summary": "Listar campanas",
+        "description": "Retorna una lista paginada de campanas del usuario con estadisticas de envio.",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de campanas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "campaigns": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "status": {
+                            "type": "string"
+                          },
+                          "total_recipients": {
+                            "type": "integer"
+                          },
+                          "sent_count": {
+                            "type": "integer"
+                          },
+                          "error_count": {
+                            "type": "integer"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/campaigns/{id}/responses": {
+      "get": {
+        "tags": ["Campaigns"],
+        "summary": "Obtener respuestas de una campana",
+        "description": "Retorna los mensajes entrantes recibidos de los contactos de una campana despues de la fecha de envio.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "ID de la campana"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuestas de la campana",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "responses": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "contact_phone": {
+                            "type": "string"
+                          },
+                          "contact_name": {
+                            "type": "string"
+                          },
+                          "message_text": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Campana no encontrada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/phone/countries": {
+      "get": {
+        "tags": ["Phone & Country"],
+        "summary": "Listar paises disponibles",
+        "description": "Retorna la lista de paises disponibles para la normalizacion de numeros de telefono.",
+        "responses": {
+          "200": {
+            "description": "Lista de paises",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "countries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "code": {
+                            "type": "string",
+                            "example": "PY"
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "Paraguay"
+                          },
+                          "dialCode": {
+                            "type": "string",
+                            "example": "595"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/user/country": {
+      "put": {
+        "tags": ["Phone & Country"],
+        "summary": "Configurar pais del usuario",
+        "description": "Establece el pais del usuario para la normalizacion automatica de numeros de telefono.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["country"],
+                "properties": {
+                  "country": {
+                    "type": "string",
+                    "description": "Codigo de pais ISO 3166-1 alpha-2",
+                    "example": "PY"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Pais configurado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -739,6 +1734,265 @@
           }
         },
         "required": ["error"]
+      },
+      "ChatbotConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Mi Bot"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "active_hours_start": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "active_hours_end": {
+            "type": "string",
+            "example": "22:00"
+          },
+          "active_days": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Dias activos (1=Lunes..7=Domingo)",
+            "example": [1, 2, 3, 4, 5]
+          },
+          "cooldown_minutes": {
+            "type": "integer",
+            "example": 30
+          },
+          "only_known_contacts": {
+            "type": "boolean"
+          },
+          "max_responses_per_contact": {
+            "type": "integer",
+            "example": 5
+          },
+          "ai_enabled": {
+            "type": "boolean"
+          },
+          "ai_provider": {
+            "type": "string",
+            "example": "openai"
+          },
+          "ai_model": {
+            "type": "string",
+            "example": "gpt-4o-mini"
+          },
+          "ai_system_prompt": {
+            "type": "string"
+          },
+          "welcome_message": {
+            "type": "string"
+          },
+          "fallback_message": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatbotConfigInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Mi Bot"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "active_hours_start": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "active_hours_end": {
+            "type": "string",
+            "example": "22:00"
+          },
+          "active_days": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "cooldown_minutes": {
+            "type": "integer"
+          },
+          "only_known_contacts": {
+            "type": "boolean"
+          },
+          "max_responses_per_contact": {
+            "type": "integer"
+          },
+          "ai_enabled": {
+            "type": "boolean"
+          },
+          "ai_provider": {
+            "type": "string"
+          },
+          "ai_api_key": {
+            "type": "string",
+            "description": "Clave de API del proveedor de IA (se almacena cifrada)"
+          },
+          "ai_model": {
+            "type": "string"
+          },
+          "ai_system_prompt": {
+            "type": "string"
+          },
+          "welcome_message": {
+            "type": "string"
+          },
+          "fallback_message": {
+            "type": "string"
+          }
+        }
+      },
+      "ChatbotNode": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "config_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "node_id": {
+            "type": "string",
+            "description": "Identificador del nodo dentro del flujo"
+          },
+          "type": {
+            "type": "string",
+            "description": "Tipo de nodo (message, question, condition, etc.)"
+          },
+          "content": {
+            "type": "object",
+            "description": "Contenido y configuracion del nodo (estructura variable segun tipo)"
+          },
+          "position_x": {
+            "type": "integer"
+          },
+          "position_y": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "ChatbotNodeInput": {
+        "type": "object",
+        "required": ["node_id", "type", "content"],
+        "properties": {
+          "node_id": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "content": {
+            "type": "object"
+          },
+          "position_x": {
+            "type": "integer",
+            "default": 0
+          },
+          "position_y": {
+            "type": "integer",
+            "default": 0
+          }
+        }
+      },
+      "ChatbotConversation": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contact_phone": {
+            "type": "string"
+          },
+          "current_node_id": {
+            "type": "string"
+          },
+          "context": {
+            "type": "object"
+          },
+          "responses_today": {
+            "type": "integer"
+          },
+          "last_response_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "InboxMessage": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "contact_phone": {
+            "type": "string"
+          },
+          "contact_name": {
+            "type": "string"
+          },
+          "message_text": {
+            "type": "string"
+          },
+          "message_type": {
+            "type": "string",
+            "enum": ["text", "image", "audio", "video", "document"],
+            "example": "text"
+          },
+          "media_url": {
+            "type": "string"
+          },
+          "is_from_contact": {
+            "type": "boolean",
+            "description": "true si el mensaje fue enviado por el contacto, false si fue enviado por el usuario"
+          },
+          "is_bot_reply": {
+            "type": "boolean",
+            "description": "true si el mensaje fue generado por el chatbot"
+          },
+          "read": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       },
       "WebhookPayload": {
         "type": "object",

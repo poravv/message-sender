@@ -470,23 +470,26 @@
         <li><a href="#acceptance">Aceptacion de los Terminos</a></li>
         <li><a href="#service">Descripcion del Servicio</a></li>
         <li><a href="#responsibility">Responsabilidades del Usuario</a></li>
+        <li><a href="#chatbot">Chatbot y Respuestas Automatizadas</a></li>
+        <li><a href="#ai-integration">Integracion con Inteligencia Artificial</a></li>
         <li><a href="#liability">Limitacion de Responsabilidad</a></li>
         <li><a href="#accounts">Reglas de la Cuenta</a></li>
         <li><a href="#ip">Propiedad Intelectual</a></li>
         <li><a href="#modifications">Modificaciones a los Terminos</a></li>
       </ol>
       <div class="toc-divider"></div>
-      <ol start="8">
+      <ol start="10">
         <li><a href="#data-collection">Recopilacion de Datos</a></li>
         <li><a href="#data-storage">Almacenamiento de Datos</a></li>
         <li><a href="#data-sharing">Comparticion de Datos</a></li>
         <li><a href="#data-security">Seguridad de los Datos</a></li>
         <li><a href="#data-retention">Retencion de Datos</a></li>
+        <li><a href="#inbox">Bandeja de Entrada y Mensajes Recibidos</a></li>
         <li><a href="#cookies">Cookies</a></li>
         <li><a href="#user-rights">Derechos del Usuario</a></li>
       </ol>
       <div class="toc-divider"></div>
-      <ol start="15">
+      <ol start="18">
         <li><a href="#contact">Contacto</a></li>
       </ol>
     </nav>
@@ -529,6 +532,10 @@
         <li>Envio de mensajes de texto, imagenes y archivos de audio</li>
         <li>Panel de control con estadisticas de envio</li>
         <li>Programacion y gestion de campanas de mensajeria</li>
+        <li>Chatbot y sistema de respuestas automatizadas con flujos personalizables</li>
+        <li>Integracion opcional con proveedores de inteligencia artificial (OpenAI y otros)</li>
+        <li>Bandeja de entrada para visualizar y responder mensajes recibidos de contactos</li>
+        <li>Sistema de planes y suscripciones con acceso a la API publica</li>
       </ul>
       <div class="highlight-box">
         <strong>Nota:</strong> WhatsApp Sender Pro no esta afiliado, asociado, autorizado, respaldado ni conectado de ninguna manera con WhatsApp Inc., Meta Platforms Inc. o cualquiera de sus subsidiarias. WhatsApp es una marca registrada de WhatsApp Inc.
@@ -580,16 +587,82 @@
       </div>
     </section>
 
-    <!-- 4. Liability -->
-    <section class="legal-section" id="liability">
-      <h2><span class="section-number">4</span> Limitacion de Responsabilidad</h2>
+    <!-- 4. Chatbot & Auto-responder -->
+    <section class="legal-section" id="chatbot">
+      <h2><span class="section-number">4</span> Chatbot y Respuestas Automatizadas</h2>
+      <p>
+        La Plataforma ofrece funcionalidades de chatbot y respuestas automatizadas que permiten al Usuario configurar flujos de conversacion y respuestas predefinidas a mensajes entrantes de WhatsApp.
+      </p>
 
-      <h3>4.1 Servicio "TAL CUAL"</h3>
+      <h3>4.1 Responsabilidad sobre el Contenido Automatizado</h3>
+      <ul>
+        <li>El Usuario es el <strong>unico y exclusivo responsable</strong> del contenido de todas las respuestas automatizadas configuradas en su chatbot, incluyendo mensajes de bienvenida, respuestas de flujo y mensajes de fallback.</li>
+        <li>El Usuario debe asegurarse de que las respuestas automatizadas cumplan con las leyes aplicables y los Terminos de Servicio de WhatsApp.</li>
+        <li>El Usuario no debe configurar el chatbot para enviar contenido ilegal, enganoso, difamatorio o que infrinja derechos de terceros.</li>
+      </ul>
+
+      <h3>4.2 Limitaciones del Chatbot</h3>
+      <ul>
+        <li>Las respuestas automatizadas se generan segun la configuracion del Usuario y los flujos definidos. La Plataforma no garantiza que las respuestas sean apropiadas para todas las situaciones.</li>
+        <li>El chatbot opera dentro de horarios configurables y respeta limites de frecuencia para evitar el envio excesivo de mensajes.</li>
+        <li>El Usuario puede pausar o desactivar el chatbot para contactos especificos en cualquier momento desde la bandeja de entrada.</li>
+      </ul>
+
+      <h3>4.3 Intervencion Humana</h3>
+      <p>
+        El Usuario es responsable de supervisar las conversaciones automatizadas y de intervenir manualmente cuando sea necesario. La Plataforma proporciona herramientas para pausar el bot y responder directamente a los contactos.
+      </p>
+
+      <div class="highlight-box">
+        <strong>Importante:</strong> WhatsApp Sender Pro no se responsabiliza por las consecuencias derivadas de las respuestas automatizadas configuradas por el Usuario, incluyendo pero no limitado a: perdida de clientes, malentendidos, o violaciones a los Terminos de Servicio de WhatsApp.
+      </div>
+    </section>
+
+    <!-- 5. AI Integration -->
+    <section class="legal-section" id="ai-integration">
+      <h2><span class="section-number">5</span> Integracion con Inteligencia Artificial</h2>
+      <p>
+        La Plataforma permite la integracion opcional con proveedores de inteligencia artificial (IA) de terceros, como OpenAI y otros, para generar respuestas automatizadas inteligentes dentro del chatbot.
+      </p>
+
+      <h3>5.1 Claves de API del Usuario</h3>
+      <ul>
+        <li>El Usuario <strong>proporciona su propia clave de API</strong> (API Key) del proveedor de IA que desee utilizar.</li>
+        <li>Las claves de API se almacenan de forma <strong>cifrada</strong> en nuestros servidores utilizando algoritmos de cifrado estandar de la industria (AES-256).</li>
+        <li>El Usuario es el unico responsable de los costos generados por el uso de su clave de API con el proveedor de IA. La Plataforma no intermedia ni asume responsabilidad por los cargos del proveedor de IA.</li>
+        <li>El Usuario es responsable de mantener la seguridad de su clave de API y de revocarla en caso de sospecha de uso no autorizado.</li>
+      </ul>
+
+      <h3>5.2 Procesamiento de Datos por IA</h3>
+      <ul>
+        <li>Cuando la IA esta habilitada, los mensajes entrantes de los contactos del Usuario se envian al proveedor de IA seleccionado para generar respuestas. Este envio se realiza directamente utilizando la clave de API del Usuario.</li>
+        <li>El procesamiento de datos por parte del proveedor de IA esta sujeto a los <strong>terminos y politicas de privacidad del proveedor</strong> (por ejemplo, la politica de uso de datos de OpenAI).</li>
+        <li>WhatsApp Sender Pro <strong>no controla ni es responsable</strong> del tratamiento que el proveedor de IA haga de los datos enviados.</li>
+        <li>La Plataforma no almacena las conversaciones con IA mas alla de lo registrado en la base de datos del historial de mensajes del Usuario.</li>
+      </ul>
+
+      <h3>5.3 Calidad de las Respuestas de IA</h3>
+      <ul>
+        <li>Las respuestas generadas por IA son producidas por proveedores de terceros y <strong>no son controladas ni garantizadas</strong> por WhatsApp Sender Pro.</li>
+        <li>Las respuestas de IA pueden ser inexactas, incompletas o inapropiadas. El Usuario es responsable de supervisar y ajustar la configuracion del sistema de IA (prompt del sistema, modelo utilizado).</li>
+        <li>WhatsApp Sender Pro no asume responsabilidad por danos derivados de respuestas generadas por IA, incluyendo informacion erronea, ofensiva o que viole derechos de terceros.</li>
+      </ul>
+
+      <div class="warning-box">
+        <strong>Advertencia:</strong> Al habilitar la integracion con IA, el Usuario acepta que los mensajes de sus contactos seran procesados por un proveedor de IA externo. Es responsabilidad del Usuario informar a sus contactos sobre el uso de respuestas automatizadas con IA cuando las leyes locales asi lo requieran.
+      </div>
+    </section>
+
+    <!-- 6. Liability -->
+    <section class="legal-section" id="liability">
+      <h2><span class="section-number">6</span> Limitacion de Responsabilidad</h2>
+
+      <h3>6.1 Servicio "TAL CUAL"</h3>
       <p>
         La Plataforma se proporciona <strong>"TAL CUAL" (AS IS)</strong> y <strong>"SEGUN DISPONIBILIDAD" (AS AVAILABLE)</strong>, sin garantias de ningun tipo, ya sean expresas o implicitas, incluyendo pero no limitado a garantias de comerciabilidad, idoneidad para un proposito particular o no infraccion.
       </p>
 
-      <h3>4.2 Exclusiones de Responsabilidad</h3>
+      <h3>6.2 Exclusiones de Responsabilidad</h3>
       <p>WhatsApp Sender Pro <strong>NO</strong> se hace responsable por:</p>
       <ul>
         <li><strong>Contenido de mensajes:</strong> No somos responsables del contenido, naturaleza o consecuencias de los mensajes enviados por los usuarios a traves de la Plataforma.</li>
@@ -599,9 +672,12 @@
         <li><strong>Interrupciones del servicio:</strong> No somos responsables por interrupciones temporales o permanentes del servicio debido a mantenimiento, fallos tecnicos, cambios en WhatsApp Web u otras causas fuera de nuestro control.</li>
         <li><strong>Perdida de datos:</strong> No somos responsables por la perdida de contactos, plantillas u otros datos del usuario, aunque implementamos medidas razonables para protegerlos.</li>
         <li><strong>Danos indirectos:</strong> En ningun caso seremos responsables por danos indirectos, incidentales, especiales, consecuentes o punitivos.</li>
+        <li><strong>Respuestas del chatbot:</strong> No somos responsables por las respuestas automatizadas enviadas por el chatbot configurado por el usuario, incluyendo respuestas generadas por inteligencia artificial.</li>
+        <li><strong>Costos de proveedores de IA:</strong> No somos responsables por los costos generados por el uso de la clave de API del usuario con proveedores de inteligencia artificial de terceros.</li>
+        <li><strong>Contenido generado por IA:</strong> No controlamos ni garantizamos la precision, adecuacion o legalidad de las respuestas generadas por proveedores de IA de terceros.</li>
       </ul>
 
-      <h3>4.3 Limitacion Economica</h3>
+      <h3>6.3 Limitacion Economica</h3>
       <p>
         En la maxima medida permitida por la ley aplicable, la responsabilidad total y acumulada de WhatsApp Sender Pro ante el Usuario por cualquier reclamacion relacionada con el Servicio estara <strong>limitada al monto total de las tarifas de suscripcion pagadas</strong> por el Usuario durante los doce (12) meses anteriores a la reclamacion.
       </p>
@@ -611,9 +687,9 @@
       </div>
     </section>
 
-    <!-- 5. Account Rules -->
+    <!-- 7. Account Rules -->
     <section class="legal-section" id="accounts">
-      <h2><span class="section-number">5</span> Reglas de la Cuenta</h2>
+      <h2><span class="section-number">7</span> Reglas de la Cuenta</h2>
       <ul>
         <li><strong>Una cuenta por persona o entidad:</strong> Cada persona fisica o juridica puede tener una unica cuenta en la Plataforma.</li>
         <li><strong>Una linea de WhatsApp por cuenta:</strong> Cada cuenta puede vincular una unica linea de WhatsApp.</li>
@@ -624,9 +700,9 @@
       </ul>
     </section>
 
-    <!-- 6. IP -->
+    <!-- 8. IP -->
     <section class="legal-section" id="ip">
-      <h2><span class="section-number">6</span> Propiedad Intelectual</h2>
+      <h2><span class="section-number">8</span> Propiedad Intelectual</h2>
       <p>
         Todo el codigo fuente, diseno, interfaz de usuario, logotipos, marcas, textos y demas elementos de la Plataforma son propiedad exclusiva de WhatsApp Sender Pro y estan protegidos por las leyes de propiedad intelectual aplicables.
       </p>
@@ -638,9 +714,9 @@
       </p>
     </section>
 
-    <!-- 7. Modifications -->
+    <!-- 9. Modifications -->
     <section class="legal-section" id="modifications">
-      <h2><span class="section-number">7</span> Modificaciones a los Terminos</h2>
+      <h2><span class="section-number">9</span> Modificaciones a los Terminos</h2>
       <p>
         WhatsApp Sender Pro se reserva el derecho de modificar, actualizar o reemplazar estos Terminos en cualquier momento y a su entera discrecion. Las modificaciones entraran en vigor desde el momento de su publicacion en la Plataforma.
       </p>
@@ -663,34 +739,37 @@
       <p style="color:var(--text-muted);font-size:0.9rem;">Como recopilamos, usamos y protegemos su informacion</p>
     </div>
 
-    <!-- 8. Data Collection -->
+    <!-- 10. Data Collection -->
     <section class="legal-section" id="data-collection">
-      <h2><span class="section-number">8</span> Recopilacion de Datos</h2>
+      <h2><span class="section-number">10</span> Recopilacion de Datos</h2>
       <p>
         Recopilamos la siguiente informacion cuando usted utiliza la Plataforma:
       </p>
 
-      <h3>8.1 Datos proporcionados por el Usuario</h3>
+      <h3>10.1 Datos proporcionados por el Usuario</h3>
       <ul>
         <li><strong>Datos de registro:</strong> Nombre, direccion de correo electronico</li>
         <li><strong>Datos de conexion:</strong> Numero de telefono de WhatsApp vinculado</li>
         <li><strong>Datos de uso:</strong> Contactos importados, plantillas de mensajes creadas, metadatos de campanas (nombre, fecha, numero de destinatarios)</li>
+        <li><strong>Datos de chatbot:</strong> Configuracion de flujos de chatbot, mensajes de bienvenida, prompts del sistema de IA</li>
+        <li><strong>Claves de API de IA:</strong> Almacenadas de forma cifrada (AES-256) para la integracion con proveedores de IA</li>
+        <li><strong>Mensajes entrantes:</strong> Mensajes recibidos de contactos de WhatsApp para la funcionalidad de bandeja de entrada</li>
       </ul>
 
-      <h3>8.2 Datos que NO recopilamos</h3>
+      <h3>10.2 Datos que NO recopilamos</h3>
       <div class="highlight-box">
         <ul style="margin-bottom:0;padding-left:1.25rem;">
-          <li><strong>NO</strong> almacenamos el contenido de los mensajes una vez entregados</li>
-          <li><strong>NO</strong> leemos ni accedemos a las conversaciones de WhatsApp del usuario</li>
-          <li><strong>NO</strong> recopilamos datos de los destinatarios de los mensajes mas alla del numero de telefono proporcionado por el usuario</li>
+          <li><strong>NO</strong> almacenamos el contenido de los mensajes salientes una vez entregados (los mensajes entrantes se almacenan temporalmente en la bandeja de entrada hasta que el usuario los elimine)</li>
+          <li><strong>NO</strong> leemos ni accedemos a las conversaciones de WhatsApp del usuario fuera de las funcionalidades de bandeja de entrada y chatbot configuradas por el propio usuario</li>
+          <li><strong>NO</strong> recopilamos datos de los destinatarios de los mensajes mas alla del numero de telefono y nombre proporcionado por el usuario o recibido por WhatsApp</li>
           <li><strong>NO</strong> recopilamos datos de ubicacion, grabaciones de voz ni datos biometricos</li>
         </ul>
       </div>
     </section>
 
-    <!-- 9. Data Storage -->
+    <!-- 11. Data Storage -->
     <section class="legal-section" id="data-storage">
-      <h2><span class="section-number">9</span> Almacenamiento de Datos</h2>
+      <h2><span class="section-number">11</span> Almacenamiento de Datos</h2>
       <p>
         Los datos del Usuario se almacenan utilizando los siguientes servicios y tecnologias:
       </p>
@@ -699,12 +778,16 @@
         <li><strong>Perfiles de usuario:</strong> Almacenados en Google Cloud Firestore, con las medidas de seguridad proporcionadas por Google Cloud Platform.</li>
         <li><strong>Contactos y metadatos de campanas:</strong> Almacenados en bases de datos PostgreSQL protegidas, con acceso restringido y cifrado en transito.</li>
         <li><strong>Sesiones de WhatsApp:</strong> Los datos de sesion se almacenan temporalmente en Redis con cifrado y se eliminan al desconectarse.</li>
+        <li><strong>Configuracion de chatbot:</strong> Los flujos, nodos y configuraciones del chatbot se almacenan en PostgreSQL asociados a la cuenta del usuario.</li>
+        <li><strong>Claves de API de IA:</strong> Las claves de API de proveedores de IA se almacenan cifradas con AES-256 en PostgreSQL. Solo se descifran en memoria al momento de realizar llamadas al proveedor de IA.</li>
+        <li><strong>Mensajes entrantes:</strong> Los mensajes recibidos de contactos de WhatsApp se almacenan en PostgreSQL para la funcionalidad de bandeja de entrada.</li>
+        <li><strong>Conversaciones de chatbot:</strong> El estado de las conversaciones del chatbot (nodo actual, contexto) se almacena en PostgreSQL para mantener la continuidad del flujo.</li>
       </ul>
     </section>
 
-    <!-- 10. Data Sharing -->
+    <!-- 12. Data Sharing -->
     <section class="legal-section" id="data-sharing">
-      <h2><span class="section-number">10</span> Comparticion de Datos</h2>
+      <h2><span class="section-number">12</span> Comparticion de Datos</h2>
       <div class="highlight-box">
         <strong>WhatsApp Sender Pro NO vende, alquila ni comparte datos personales de los usuarios con terceros</strong> con fines comerciales, publicitarios o de marketing.
       </div>
@@ -715,12 +798,13 @@
         <li><strong>Proveedores de infraestructura:</strong> Los datos se procesan a traves de servicios de terceros (Google Cloud, Firebase) necesarios para el funcionamiento de la Plataforma, sujetos a sus respectivas politicas de privacidad y acuerdos de procesamiento de datos.</li>
         <li><strong>Requerimientos legales:</strong> Cuando sea necesario para cumplir con una obligacion legal, orden judicial o requerimiento de autoridad competente.</li>
         <li><strong>Proteccion de derechos:</strong> Cuando sea razonablemente necesario para proteger los derechos, propiedad o seguridad de WhatsApp Sender Pro, sus usuarios o el publico.</li>
+        <li><strong>Proveedores de inteligencia artificial:</strong> Cuando el Usuario habilita la funcion de IA en el chatbot, los mensajes entrantes de sus contactos se envian al proveedor de IA seleccionado (por ejemplo, OpenAI) utilizando la clave de API del propio Usuario. Este envio es necesario para generar respuestas inteligentes y esta sujeto a los terminos del proveedor de IA.</li>
       </ul>
     </section>
 
-    <!-- 11. Data Security -->
+    <!-- 13. Data Security -->
     <section class="legal-section" id="data-security">
-      <h2><span class="section-number">11</span> Seguridad de los Datos</h2>
+      <h2><span class="section-number">13</span> Seguridad de los Datos</h2>
       <p>
         Implementamos medidas de seguridad tecnicas y organizativas para proteger los datos del usuario:
       </p>
@@ -730,27 +814,64 @@
         <li><strong>Gestion de sesiones:</strong> Control de sesion unica activa por cuenta, con tokens de sesion revocables.</li>
         <li><strong>Acceso restringido:</strong> Los datos se almacenan en servidores con acceso limitado y monitorizado.</li>
         <li><strong>Verificacion de correo:</strong> Requerimos verificacion de correo electronico para activar las cuentas.</li>
+        <li><strong>Cifrado de claves de API:</strong> Las claves de API de proveedores de IA se almacenan cifradas con AES-256-CBC y solo se descifran en memoria durante el procesamiento.</li>
       </ul>
       <p>
         A pesar de estas medidas, ningun sistema de seguridad es infalible. No podemos garantizar la seguridad absoluta de los datos, aunque nos comprometemos a notificar a los usuarios afectados en caso de una brecha de seguridad significativa.
       </p>
     </section>
 
-    <!-- 12. Data Retention -->
+    <!-- 14. Data Retention -->
     <section class="legal-section" id="data-retention">
-      <h2><span class="section-number">12</span> Retencion de Datos</h2>
+      <h2><span class="section-number">14</span> Retencion de Datos</h2>
       <ul>
         <li><strong>Datos de cuenta:</strong> Se conservan mientras la cuenta permanezca activa.</li>
         <li><strong>Contactos y plantillas:</strong> Se mantienen mientras la cuenta este activa. El usuario puede eliminarlos manualmente en cualquier momento.</li>
         <li><strong>Estadisticas y metadatos:</strong> Se conservan por un periodo maximo de 12 meses con fines analiticos.</li>
         <li><strong>Al cancelar la cuenta:</strong> Todos los datos personales, contactos, plantillas y metadatos asociados se eliminan dentro de un plazo de 30 dias habiles.</li>
         <li><strong>Datos de sesion:</strong> Los datos temporales de sesion de WhatsApp se eliminan automaticamente al desconectarse o tras un periodo de inactividad.</li>
+        <li><strong>Mensajes de bandeja de entrada:</strong> Los mensajes entrantes se conservan hasta que el Usuario los elimine manualmente. El Usuario puede eliminar conversaciones individuales o todo el historial.</li>
+        <li><strong>Conversaciones de chatbot:</strong> Los estados de conversacion del chatbot se reinician automaticamente tras periodos de inactividad configurables.</li>
+        <li><strong>Claves de API de IA:</strong> Se conservan cifradas mientras la funcion de IA este habilitada. Se eliminan al desactivar la integracion de IA o al cancelar la cuenta.</li>
       </ul>
     </section>
 
-    <!-- 13. Cookies -->
+    <!-- 15. Inbox -->
+    <section class="legal-section" id="inbox">
+      <h2><span class="section-number">15</span> Bandeja de Entrada y Mensajes Recibidos</h2>
+      <p>
+        La Plataforma almacena los mensajes entrantes recibidos de los contactos de WhatsApp del Usuario para proporcionar la funcionalidad de bandeja de entrada.
+      </p>
+
+      <h3>15.1 Almacenamiento de Mensajes</h3>
+      <ul>
+        <li>Los mensajes entrantes (texto, tipo de mensaje y metadatos basicos) se almacenan en nuestra base de datos asociados a la cuenta del Usuario.</li>
+        <li>Los mensajes enviados como respuesta desde la bandeja de entrada tambien se registran en el historial de la conversacion.</li>
+        <li>Las respuestas automaticas del chatbot se identifican claramente como tales en el historial.</li>
+      </ul>
+
+      <h3>15.2 Control del Usuario</h3>
+      <ul>
+        <li>El Usuario puede <strong>eliminar conversaciones completas</strong> de un contacto en cualquier momento, lo cual borra todos los mensajes asociados de nuestra base de datos.</li>
+        <li>El Usuario puede marcar mensajes como leidos y gestionar las conversaciones desde la interfaz de bandeja de entrada.</li>
+        <li>La eliminacion de mensajes de nuestra base de datos <strong>no afecta</strong> los mensajes en la aplicacion de WhatsApp del Usuario ni del contacto.</li>
+      </ul>
+
+      <h3>15.3 Privacidad de los Mensajes</h3>
+      <ul>
+        <li>WhatsApp Sender Pro <strong>no comparte el contenido de los mensajes</strong> con terceros, excepto cuando se utiliza la funcion de IA del chatbot (en cuyo caso los mensajes se envian al proveedor de IA seleccionado por el Usuario).</li>
+        <li>El acceso a los mensajes esta restringido unicamente al Usuario propietario de la cuenta.</li>
+        <li>Los mensajes se almacenan en servidores protegidos con las mismas medidas de seguridad descritas en la seccion de Seguridad de los Datos.</li>
+      </ul>
+
+      <div class="highlight-box">
+        <strong>Nota:</strong> La funcionalidad de bandeja de entrada requiere que WhatsApp este conectado. Los mensajes recibidos mientras WhatsApp esta desconectado no se capturan en la bandeja de entrada de la Plataforma.
+      </div>
+    </section>
+
+    <!-- 16. Cookies -->
     <section class="legal-section" id="cookies">
-      <h2><span class="section-number">13</span> Cookies</h2>
+      <h2><span class="section-number">16</span> Cookies</h2>
       <p>
         WhatsApp Sender Pro utiliza un <strong>uso minimo de cookies y almacenamiento local</strong>:
       </p>
@@ -764,9 +885,9 @@
       </div>
     </section>
 
-    <!-- 14. User Rights -->
+    <!-- 17. User Rights -->
     <section class="legal-section" id="user-rights">
-      <h2><span class="section-number">14</span> Derechos del Usuario</h2>
+      <h2><span class="section-number">17</span> Derechos del Usuario</h2>
       <p>
         En cumplimiento con las leyes de proteccion de datos aplicables, el Usuario tiene los siguientes derechos:
       </p>

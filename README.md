@@ -15,13 +15,41 @@ Sistema profesional de envío masivo de mensajes por WhatsApp con arquitectura m
 - **Sistema de cola** con procesamiento ordenado y reintentos automáticos
 - **Limpieza automática** de archivos de audio después del envío
 
+### 🤖 **Chatbot y Respuestas Automáticas**
+- **Editor visual de flujos** con nodos configurables (mensajes, preguntas, condiciones)
+- **Horarios inteligentes** de activación (días y horas configurables)
+- **Cooldown por contacto** para evitar envío excesivo
+- **Integración con IA** (OpenAI y otros proveedores) para respuestas inteligentes
+- **Prompt del sistema personalizable** para controlar el comportamiento de la IA
+- **Claves de API cifradas** (AES-256) almacenadas de forma segura
+- **Pausar/reanudar bot** por contacto individual desde la bandeja de entrada
+
+### 📥 **Bandeja de Entrada (Inbox)**
+- **Visualización de mensajes entrantes** agrupados por contacto
+- **Respuestas directas** desde la interfaz web
+- **Contador de mensajes no leídos** con notificaciones
+- **Historial completo** de conversaciones (mensajes enviados, recibidos y bot)
+- **Eliminación de conversaciones** individuales
+- **Integración con chatbot**: pausar bot al responder manualmente
+
+### 📊 **Campañas y Respuestas**
+- **Historial de campañas** con estadísticas detalladas
+- **Respuestas de campañas**: ver mensajes recibidos de contactos después del envío
+- **Intervalos de envío configurables** (3s, 5s, 8s, 12s, 15s)
+
+### 🔑 **API Pública**
+- **API REST v1** con autenticación por API Key + Bearer token JWT
+- **Envío individual y masivo** programático
+- **Webhooks** para notificaciones de eventos (mensaje enviado, error, entregado, campaña completada)
+- **Documentación OpenAPI** integrada en el panel
+
 ### 🔧 **Arquitectura Técnica**
 - **Backend**: Node.js 20+ con Express
 - **WhatsApp Integration**: @whiskeysockets/baileys (socket-based)
 - **Base de datos**: PostgreSQL 16 con persistencia Longhorn (K8s)
 - **Caché/Colas**: Redis 7.2 con BullMQ
 - **Almacenamiento**: MinIO/S3 para archivos multimedia
-- **Autenticación**: Keycloak con bypass para desarrollo
+- **Autenticación**: Firebase Auth con bypass para desarrollo
 - **Frontend**: Bootstrap con emoji picker y actualizaciones en tiempo real
 - **Containerización**: Docker con multi-stage builds
 - **CI/CD**: GitHub Actions para deployment automático
@@ -61,10 +89,11 @@ AUTHORIZED_PHONES=595992756462,595976947110
 FILE_RETENTION_HOURS=24
 MESSAGE_DELAY_MS=2000
 
-# Keycloak (obligatorio en producción)
-KEYCLOAK_URL=https://auth.mindtechpy.net
-KEYCLOAK_REALM=message-sender
-KEYCLOAK_AUDIENCE=message-sender-api
+# Firebase Auth (obligatorio en producción)
+# Option A: base64-encoded service-account JSON (recommended for containers)
+# FIREBASE_SERVICE_ACCOUNT=eyJ0eXBlIjoic2VydmljZV9hY2NvdW50Ii...
+# Option B: path to service-account JSON file
+# GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 # PostgreSQL (persistencia principal)
 POSTGRES_HOST=localhost
@@ -89,6 +118,9 @@ MINIO_ENDPOINT=s3.mindtechpy.net
 MINIO_ACCESS_KEY=...
 MINIO_SECRET_KEY=...
 MINIO_BUCKET=sender
+
+# Chatbot / AI Integration
+# CHATBOT_ENCRYPTION_KEY=   # 32-byte hex key for AES-256 encryption of AI API keys
 
 # Logs (opcional)
 # LOG_LEVEL=info
@@ -164,7 +196,10 @@ open http://localhost:3000
 - ✅ **Selector de destinatarios**: búsqueda y paginación por contactos en "Enviar"
 - ✅ **Edición UX**: modal de edición de contacto (sin `prompt()`)
 - ✅ **Error Handling**: Manejo elegante de errores con alertas
-- ✅ **Keycloak Integration**: Autenticación empresarial opcional
+- ✅ **Firebase Integration**: Autenticación con Firebase Auth
+- ✅ **Chatbot Editor**: Editor visual de flujos conversacionales
+- ✅ **Inbox**: Bandeja de entrada con historial de conversaciones
+- ✅ **Plans & API**: Sistema de planes y API pública con documentación OpenAPI
 
 ## 📁 Estructura de Archivos CSV
 
@@ -192,11 +227,14 @@ numero,tratamiento,nombre,grupo
 ### Arquitectura funcional
 ```mermaid
 flowchart LR
-  UI["Frontend (Keycloak + Dashboard)"] --> API["Express API"]
+  UI["Frontend (Firebase Auth + Dashboard)"] --> API["Express API"]
   API --> Q["BullMQ/Redis Queue"]
-  API --> PG["PostgreSQL<br/>(Contactos/Campañas)"]
+  API --> PG["PostgreSQL<br/>(Contactos/Campañas/Chatbot)"]
   API --> R["Redis<br/>(Sesiones/Caché)"]
   Q --> WA["Baileys WhatsApp"]
+  WA --> CB["Chatbot Engine"]
+  CB --> AI["AI Provider<br/>(OpenAI, etc.)"]
+  CB --> PG
   Q --> PG
   PG --> UI
 ```
@@ -278,11 +316,38 @@ pie title Mensajes por grupo (ejemplo)
 - `GET /dashboard/monthly` tendencia mensual
 
 ### Campañas
+- `GET /campaigns` listar campañas con paginación y estadísticas
 - `GET /campaigns/:id` detalle de campaña
+- `GET /campaigns/:id/responses` respuestas de contactos a una campaña
 - `POST /cancel-campaign` cancelar campaña activa
 
+### Chatbot
+- `GET /chatbot/config` obtener configuración del chatbot
+- `POST /chatbot/config` crear configuración del chatbot
+- `PUT /chatbot/config` actualizar configuración del chatbot
+- `GET /chatbot/nodes` obtener nodos del flujo
+- `POST /chatbot/nodes` crear/reemplazar nodos del flujo (batch)
+- `DELETE /chatbot/nodes/:nodeId` eliminar un nodo
+- `GET /chatbot/conversations` listar conversaciones activas
+- `PUT /chatbot/conversations/:phone/deactivate` desactivar bot para contacto
+- `DELETE /chatbot/conversations/:phone` reiniciar conversación
+
+### Bandeja de Entrada
+- `GET /messages/inbox` listar conversaciones paginadas
+- `GET /messages/inbox/unread` conteo de conversaciones no leídas
+- `GET /messages/inbox/:phone` historial de mensajes con un contacto
+- `POST /messages/inbox/:phone/reply` enviar respuesta
+- `GET /messages/inbox/:phone/bot-status` estado del bot para contacto
+- `PUT /messages/inbox/:phone/pause-bot` pausar bot para contacto
+- `PUT /messages/inbox/:phone/resume-bot` reanudar bot para contacto
+- `DELETE /messages/inbox/:phone` eliminar historial de chat
+
+### Teléfono y País
+- `GET /phone/countries` listar países disponibles
+- `PUT /user/country` configurar país del usuario
+
 ### Cache
-- `DELETE /cache/user` **NUEVO** - Limpiar caché Redis del usuario actual
+- `DELETE /cache/user` limpiar caché Redis del usuario actual
 
 ## ⚡ Rendimiento y Límites
 
@@ -316,12 +381,13 @@ docker compose logs audio-sender
 
 ## 🔒 Seguridad
 
-- 🔐 **Keycloak Authentication**: Autenticación empresarial obligatoria en producción
+- 🔐 **Firebase Authentication**: Autenticación obligatoria en producción
 - 🛡️ **CORS Protection**: Orígenes permitidos configurables
 - 📝 **Input Validation**: Validación de archivos y números de teléfono
 - 🧹 **Auto Cleanup**: Limpieza automática de archivos sensibles
 - 🔄 **Session Management**: Manejo seguro de sesiones WhatsApp
 - 🚫 **Rate Limiting**: Protección contra abuso (configurable)
+- 🔑 **API Key Encryption**: Claves de API de IA cifradas con AES-256-CBC
 
 ## 🐛 Solución de Problemas
 

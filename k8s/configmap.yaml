@@ -19,3 +19,4 @@ data:
   LOG_LEVEL: "info"
   # S3 variables se configuran vía Secret
   # Firebase credentials are provided via Secret (FIREBASE_SERVICE_ACCOUNT)
+  # CHATBOT_ENCRYPTION_KEY is provided via Secret (for AI API key encryption)
