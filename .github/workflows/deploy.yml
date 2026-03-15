@@ -172,32 +172,55 @@ jobs:
     - name: Deploy backend
       run: |
         echo "🔧 Deploying backend..."
-        
+
         # Eliminar HPA antiguo si existe (KEDA lo reemplaza)
         kubectl delete hpa sender-backend-hpa -n ${{ env.NAMESPACE }} --ignore-not-found=true
-        
+
+        # Pause KEDA scaling during deploy to prevent scale-to-zero interference
+        echo "⏸️ Pausing KEDA ScaledObject during deploy..."
+        kubectl patch scaledobject sender-backend-scaledobject -n ${{ env.NAMESPACE }} \
+          --type=merge -p '{"metadata":{"annotations":{"autoscaling.keda.sh/paused":"true"}}}' || true
+
+        # Ensure at least 1 replica during deploy
+        kubectl scale deployment/sender-backend -n ${{ env.NAMESPACE }} --replicas=1 || true
+
         kubectl apply -f k8s/backend-deployment.yaml
         kubectl apply -f k8s/pdb.yaml
-        
-        echo "📊 Aplicando KEDA ScaledObject para auto-scaling a 0..."
-        kubectl apply -f k8s/keda-scaledobject.yaml
-        
-        echo "� Forzando actualización a la imagen del commit..."
+
+        echo "🚀 Forzando actualización a la imagen del commit..."
         kubectl set image deployment/sender-backend \
           sender-backend=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${SHORT_SHA} \
           -n ${{ env.NAMESPACE }}
-        kubectl rollout status deployment/sender-backend -n ${{ env.NAMESPACE }} --timeout=300s
+        kubectl rollout status deployment/sender-backend -n ${{ env.NAMESPACE }} --timeout=600s
+
+        # Resume KEDA scaling after successful deploy
+        echo "▶️ Resuming KEDA ScaledObject..."
+        kubectl apply -f k8s/keda-scaledobject.yaml
+        kubectl patch scaledobject sender-backend-scaledobject -n ${{ env.NAMESPACE }} \
+          --type=merge -p '{"metadata":{"annotations":{"autoscaling.keda.sh/paused":"false"}}}' || true
 
     - name: Debug rollout failure
       if: failure()
       run: |
         echo "🔎 Debugging rollout failure..."
-        kubectl describe deployment/sender-backend -n ${{ env.NAMESPACE }} || true
-        POD=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=sender-backend -o jsonpath='{.items[0].metadata.name}')
-        echo "📄 Pod: $POD"
-        kubectl describe pod "$POD" -n ${{ env.NAMESPACE }} || true
-        echo "📜 Last 200 log lines"
-        kubectl logs "$POD" -n ${{ env.NAMESPACE }} --tail=200 || true
+        echo "📋 All pods:"
+        kubectl get pods -n ${{ env.NAMESPACE }} -l app=sender-backend -o wide || true
+        echo ""
+        echo "📋 Deployment status:"
+        kubectl describe deployment/sender-backend -n ${{ env.NAMESPACE }} | tail -30 || true
+        echo ""
+        # Get the NEWEST pod (most recently created)
+        NEWPOD=$(kubectl get pods -n ${{ env.NAMESPACE }} -l app=sender-backend --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1:].metadata.name}')
+        echo "📄 Newest Pod: $NEWPOD"
+        kubectl describe pod "$NEWPOD" -n ${{ env.NAMESPACE }} | grep -A5 "State\|Reason\|Message\|Events" || true
+        echo ""
+        echo "📜 Newest pod logs (last 100 lines):"
+        kubectl logs "$NEWPOD" -n ${{ env.NAMESPACE }} --tail=100 || true
+        echo ""
+        # Resume KEDA on failure too
+        echo "▶️ Resuming KEDA after failure..."
+        kubectl patch scaledobject sender-backend-scaledobject -n ${{ env.NAMESPACE }} \
+          --type=merge -p '{"metadata":{"annotations":{"autoscaling.keda.sh/paused":"false"}}}' || true
 
     - name: Apply backend ingress
       run: |
