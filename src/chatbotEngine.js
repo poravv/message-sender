@@ -368,7 +368,7 @@ async function resetConversation(userId, contactPhone) {
   await pg.query(
     `UPDATE chatbot_conversations
      SET current_node_id = NULL, context = '{}', responses_today = 0,
-         is_active = true, updated_at = NOW()
+         last_response_at = NULL, is_active = true, updated_at = NOW()
      WHERE user_id = $1 AND contact_phone = $2`,
     [userId, contactPhone]
   );
