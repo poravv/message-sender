@@ -25,7 +25,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Setup theme
   setupThemeToggle();
-  
+
+  // Setup scrollable tabs
+  setupTabsScroll();
+
   // Setup tab navigation
   setupTabNavigation();
   

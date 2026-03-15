@@ -469,17 +469,61 @@ body {
 }
 
 /* ========== Tabs Navigation ========== */
-.tabs-nav {
-  display: flex;
-  gap: var(--space-sm);
-  background: var(--bg-secondary);
-  padding: var(--space-sm);
-  border-radius: var(--radius-lg);
+.tabs-nav-wrapper {
+  position: relative;
   margin-bottom: var(--space-xl);
 }
 
+/* Gradient fade indicators for scroll */
+.tabs-nav-wrapper::before,
+.tabs-nav-wrapper::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 32px;
+  z-index: 2;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.tabs-nav-wrapper::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg-secondary), transparent);
+  border-radius: var(--radius-lg) 0 0 var(--radius-lg);
+}
+
+.tabs-nav-wrapper::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg-secondary), transparent);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+}
+
+.tabs-nav-wrapper.can-scroll-left::before {
+  opacity: 1;
+}
+
+.tabs-nav-wrapper.can-scroll-right::after {
+  opacity: 1;
+}
+
+.tabs-nav {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-secondary);
+  padding: var(--space-sm);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -webkit-overflow-scrolling: touch;
+}
+
+.tabs-nav::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}
+
 .tab-btn {
-  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -493,6 +537,8 @@ body {
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: var(--transition);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .tab-btn:hover {
@@ -512,6 +558,15 @@ body {
 
 .tab-btn i {
   font-size: 1.125rem;
+}
+
+/* Group dividers */
+.tab-divider {
+  width: 1px;
+  background: var(--border-color);
+  margin: 8px 4px;
+  flex-shrink: 0;
+  opacity: 0.5;
 }
 
 /* ========== Tab Panes ========== */
@@ -2494,6 +2549,16 @@ a.btn-link:hover {
 
 /* ========== Responsive ========== */
 @media (max-width: 1200px) {
+  .tab-btn {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    gap: 4px;
+  }
+
+  .tab-btn i {
+    font-size: 1rem;
+  }
+
   .dash-stats-grid {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -2519,20 +2584,24 @@ a.btn-link:hover {
 
 @media (max-width: 768px) {
   .tabs-nav {
-    flex-wrap: wrap;
+    gap: 2px;
+    padding: var(--space-xs) var(--space-sm);
   }
 
   .tab-btn {
-    flex: 1 0 calc(50% - var(--space-sm));
-    padding: var(--space-sm) var(--space-md);
+    padding: 8px 12px;
   }
 
-  .tab-btn span {
+  .tab-btn .tab-label {
     display: none;
   }
 
   .tab-btn i {
     font-size: 1.25rem;
+  }
+
+  .tab-divider {
+    margin: 6px 2px;
   }
 
   .dash-stats-grid {

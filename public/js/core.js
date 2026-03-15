@@ -439,17 +439,46 @@ function setupThemeToggle() {
   });
 }
 
+// Tab scroll indicators
+function setupTabsScroll() {
+  var nav = document.querySelector('.tabs-nav');
+  var wrapper = document.querySelector('.tabs-nav-wrapper');
+  if (!nav || !wrapper) return;
+
+  function updateScrollIndicators() {
+    var scrollLeft = nav.scrollLeft;
+    var maxScroll = nav.scrollWidth - nav.clientWidth;
+
+    wrapper.classList.toggle('can-scroll-left', scrollLeft > 4);
+    wrapper.classList.toggle('can-scroll-right', scrollLeft < maxScroll - 4);
+  }
+
+  nav.addEventListener('scroll', updateScrollIndicators, { passive: true });
+  window.addEventListener('resize', updateScrollIndicators);
+
+  // Initial check
+  setTimeout(updateScrollIndicators, 100);
+}
+
 // Tab Navigation
 function showTab(tabId) {
   // Update buttons
+  var activeBtn = null;
   document.querySelectorAll('.tab-btn').forEach(function(btn) {
-    btn.classList.toggle('active', btn.dataset.tab === tabId);
+    var isActive = btn.dataset.tab === tabId;
+    btn.classList.toggle('active', isActive);
+    if (isActive) activeBtn = btn;
   });
 
   // Update panes
   document.querySelectorAll('.tab-pane').forEach(function(pane) {
     pane.classList.toggle('active', pane.id === tabId);
   });
+
+  // Auto-scroll active tab into view
+  if (activeBtn) {
+    activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }
 
   // Update hash
   history.replaceState(null, '', '#' + tabId);
@@ -617,6 +646,7 @@ function showAccountBlockedModal(type, message) {
 window.authFetch = authFetch;
 window.showAlert = showAlert;
 window.showTab = showTab;
+window.setupTabsScroll = setupTabsScroll;
 window.buildQuery = buildQuery;
 window.getChartTextColor = getChartTextColor;
 window.logout = logout;
