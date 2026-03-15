@@ -637,6 +637,8 @@ class WhatsAppManager {
             const contactName = msg.pushName || '';
             const userId = this._getScopedUserId();
 
+            logger.info({ userId, contactPhone, text: text?.substring(0, 50), messageType }, 'Incoming message received');
+
             // Lazy-load chatbot engine to avoid circular deps
             const chatbotEngine = require('./chatbotEngine');
             const sock = this.sock;
@@ -649,7 +651,9 @@ class WhatsAppManager {
               contactPhone,
               contactName,
               (jid, content) => sock.sendMessage(jid, content)
-            ).catch(err => {
+            ).then(result => {
+              logger.info({ userId, contactPhone, result }, 'Chatbot response');
+            }).catch(err => {
               logger.error({ err: err?.message, userId, contactPhone }, 'Chatbot handleIncomingMessage error');
             });
           } catch (err) {

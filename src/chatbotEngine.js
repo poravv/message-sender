@@ -131,6 +131,20 @@ async function getCachedConfig(userId) {
     [userId]
   );
   const config = result.rows[0] || null;
+  // Attach user's country for timezone-aware checks
+  if (config) {
+    try {
+      const { db } = require('./firebaseAdmin');
+      if (db) {
+        const snap = await db.collection('users').doc(userId).get();
+        config._userCountry = snap.exists ? (snap.data().country || 'PY') : 'PY';
+      } else {
+        config._userCountry = 'PY';
+      }
+    } catch {
+      config._userCountry = 'PY';
+    }
+  }
   configCache.set(userId, { config, expiresAt: Date.now() + CONFIG_CACHE_TTL });
   return config;
 }
@@ -173,11 +187,26 @@ function replaceVariables(text, contactData) {
 
 // ─── Smart activation checks ────────────────────────────────────────────────
 function isWithinActiveHours(config) {
+  // Get local time using the user's country timezone
+  const COUNTRY_TZ = {
+    PY: 'America/Asuncion', AR: 'America/Buenos_Aires', BR: 'America/Sao_Paulo',
+    CL: 'America/Santiago', UY: 'America/Montevideo', CO: 'America/Bogota',
+    PE: 'America/Lima', EC: 'America/Guayaquil', BO: 'America/La_Paz',
+    VE: 'America/Caracas', MX: 'America/Mexico_City', US: 'America/New_York',
+    ES: 'Europe/Madrid'
+  };
+  const tz = COUNTRY_TZ[config._userCountry] || 'America/Asuncion';
   const now = new Date();
-  // Use timezone offset or default to UTC-4 (Paraguay)
-  const offset = -4;
-  const localHours = (now.getUTCHours() + offset + 24) % 24;
-  const localMinutes = now.getUTCMinutes();
+  let localHours, localMinutes;
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(now);
+    localHours = parseInt(parts.find(p => p.type === 'hour')?.value) || 0;
+    localMinutes = parseInt(parts.find(p => p.type === 'minute')?.value) || 0;
+  } catch {
+    // Fallback to UTC-3 (Paraguay summer)
+    localHours = (now.getUTCHours() - 3 + 24) % 24;
+    localMinutes = now.getUTCMinutes();
+  }
   const currentTime = localHours * 60 + localMinutes;
 
   const [startH, startM] = (config.active_hours_start || '08:00').split(':').map(Number);
@@ -193,9 +222,23 @@ function isWithinActiveHours(config) {
 }
 
 function isActiveDay(config) {
+  const COUNTRY_TZ = {
+    PY: 'America/Asuncion', AR: 'America/Buenos_Aires', BR: 'America/Sao_Paulo',
+    CL: 'America/Santiago', UY: 'America/Montevideo', CO: 'America/Bogota',
+    PE: 'America/Lima', EC: 'America/Guayaquil', BO: 'America/La_Paz',
+    VE: 'America/Caracas', MX: 'America/Mexico_City', US: 'America/New_York',
+    ES: 'Europe/Madrid'
+  };
+  const tz = COUNTRY_TZ[config._userCountry] || 'America/Asuncion';
   const now = new Date();
-  // JavaScript: 0=Sun, 1=Mon...6=Sat → convert to 1=Mon...7=Sun
-  const jsDay = now.getDay();
+  let jsDay;
+  try {
+    const dayStr = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now);
+    const dayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    jsDay = dayMap[dayStr] ?? now.getDay();
+  } catch {
+    jsDay = now.getDay();
+  }
   const isoDay = jsDay === 0 ? 7 : jsDay;
   const activeDays = config.active_days || [1, 2, 3, 4, 5];
   return activeDays.includes(isoDay);
