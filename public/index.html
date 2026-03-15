@@ -1206,7 +1206,13 @@
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Mensaje al salir del menú</label>
             <textarea class="form-control" id="cb-exit-message" rows="2" placeholder="Has salido del menú. Escribe *menu* cuando quieras volver a empezar."></textarea>
-            <small class="text-muted">Se muestra cuando el contacto elige "Salir" o escribe palabras de salida</small>
+            <small class="text-muted">Se muestra cuando el contacto elige "Salir" dentro del menú (salida amigable, puede volver)</small>
+          </div>
+
+          <div class="cb-form-group" style="margin-top: var(--space-md);">
+            <label>Mensaje al desactivar el bot</label>
+            <textarea class="form-control" id="cb-deactivation-message" rows="2" placeholder="Un agente te atenderá pronto. Gracias por tu paciencia."></textarea>
+            <small class="text-muted">Se muestra cuando el contacto escribe "agente", "humano", etc. fuera del menú (desactiva el bot hasta que escriba "hola" de nuevo)</small>
           </div>
 
           <button class="btn-primary" onclick="saveChatbotConfig()" style="margin-top: var(--space-lg);">

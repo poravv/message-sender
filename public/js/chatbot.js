@@ -90,6 +90,7 @@ function renderConfigForm(config) {
   setVal('cb-welcome', c.welcome_message || '');
   setVal('cb-fallback', c.fallback_message || 'No reconozco esa opción. Por favor elige un número del menú:');
   setVal('cb-exit-message', c.exit_message || 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.');
+  setVal('cb-deactivation-message', c.deactivation_message || 'Un agente te atenderá pronto. Gracias por tu paciencia.');
 
   var onlyKnown = document.getElementById('cb-only-known');
   if (onlyKnown) onlyKnown.checked = c.only_known_contacts !== false;
@@ -176,7 +177,8 @@ async function saveChatbotConfig() {
     max_responses_per_contact: parseInt(getVal('cb-max-responses')) || 5,
     welcome_message: getVal('cb-welcome'),
     fallback_message: getVal('cb-fallback'),
-    exit_message: getVal('cb-exit-message')
+    exit_message: getVal('cb-exit-message'),
+    deactivation_message: getVal('cb-deactivation-message')
   };
 
   try {

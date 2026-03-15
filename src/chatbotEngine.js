@@ -58,6 +58,7 @@ const ensureChatbotTables = (() => {
         welcome_message TEXT,
         fallback_message TEXT DEFAULT 'No reconozco esa opción. Por favor elige un número del menú:',
         exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.',
+        deactivation_message TEXT DEFAULT 'Un agente te atenderá pronto. Gracias por tu paciencia.',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -114,6 +115,7 @@ const ensureChatbotTables = (() => {
       -- Add columns for existing databases
       ALTER TABLE chatbot_conversations ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN DEFAULT false;
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.';
+      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS deactivation_message TEXT DEFAULT 'Un agente te atenderá pronto. Gracias por tu paciencia.';
     `);
     created = true;
     logger.info('Chatbot tables ensured');
@@ -696,22 +698,36 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
     // 5. Get or create conversation
     const conversation = await getOrCreateConversation(userId, contactPhone);
 
-    // 6. Check deactivation keywords (accent-insensitive)
-    if (messageInfo.text) {
+    // 6. Check deactivation keywords — ONLY when no active flow
+    // When in a flow (current_node_id set), let the menu handle "salir" as a friendly exit
+    if (messageInfo.text && !conversation.current_node_id) {
       const normalizedInput = normalizeText(messageInfo.text);
       if (DEACTIVATION_KEYWORDS.some(kw => normalizedInput === normalizeText(kw) || normalizedInput.includes(normalizeText(kw)))) {
         await deactivateConversation(userId, contactPhone);
-        const deactivationMsg = 'Un agente te atenderá pronto. Gracias por tu paciencia.';
+        const deactivationMsg = config.deactivation_message || 'Un agente te atenderá pronto. Gracias por tu paciencia.';
         const jid = `${contactPhone}@s.whatsapp.net`;
-        await sendFn(jid, { text: deactivationMsg });
+        await sendFn(jid, { text: replaceVariables(deactivationMsg, contactData) });
         await logMessage(userId, contactPhone, contactName, deactivationMsg, 'text', false, true, null);
         return { responded: true, response: deactivationMsg, reason: 'deactivated_by_keyword' };
       }
     }
 
-    // 7. Check if conversation is active
+    // 7. Check if conversation is active — reactivate if activation keyword
     if (!conversation.is_active) {
-      return { responded: false, reason: 'conversation_inactive' };
+      if (messageInfo.text && isActivationMessage(messageInfo.text)) {
+        // Reactivate conversation on activation keyword
+        await pg.query(
+          `UPDATE chatbot_conversations SET is_active = true, current_node_id = NULL,
+           context = '{}', responses_today = 0, last_response_at = NULL, bot_paused = false, updated_at = NOW()
+           WHERE id = $1`, [conversation.id]
+        );
+        conversation.is_active = true;
+        conversation.current_node_id = null;
+        conversation.bot_paused = false;
+        logger.info({ userId, contactPhone }, 'Conversation reactivated by activation keyword');
+      } else {
+        return { responded: false, reason: 'conversation_inactive' };
+      }
     }
 
     // 8. Check if bot is explicitly paused for this contact
