@@ -561,15 +561,28 @@ async function executeNode(node, messageText, config, contactData, conversationC
       const menuText = replaceVariables(content.text || '', contactData);
       const options = content.options || [];
 
-      // Build the menu display text
+      // Build the menu display text with auto "Salir" option
+      const exitOptionNum = options.length + 1;
       let menuDisplay = menuText + '\n';
       options.forEach((opt, idx) => {
         menuDisplay += `\n${idx + 1}. ${opt.label}`;
       });
+      menuDisplay += `\n${exitOptionNum}. Salir`;
 
       if (messageText) {
-        // Try to match user input to a menu option by number or label (accent-insensitive)
         const input = normalizeText(messageText);
+
+        // Check if user wants to exit (by number, keyword, or label)
+        const exitKeywords = ['salir', 'exit', 'cancelar', 'no', 'chau', 'adios', 'bye', 'stop', 'parar'];
+        if (input === String(exitOptionNum) || exitKeywords.includes(input)) {
+          return {
+            text: 'Has salido del menú. Escribe *hola* cuando quieras volver a empezar.',
+            nextNodeId: null,
+            resetConversation: true,
+          };
+        }
+
+        // Try to match user input to a menu option by number or label (accent-insensitive)
         const match = options.find((opt, idx) => {
           const optNum = String(idx + 1);
           const optLabel = normalizeText(opt.label || '');
@@ -580,9 +593,12 @@ async function executeNode(node, messageText, config, contactData, conversationC
           return { text: null, nextNodeId: match.trigger || match.next || null };
         }
 
-        // No match found — send fallback + re-display menu, stay on same node
-        const fallback = config.fallback_message || 'No entendí tu respuesta.';
-        return { text: fallback + '\n\n' + menuDisplay, nextNodeId: null, stayOnNode: true };
+        // No match found — re-display menu with hint
+        return {
+          text: 'No reconozco esa opción. Por favor elige un número del menú:\n\n' + menuDisplay,
+          nextNodeId: null,
+          stayOnNode: true,
+        };
       }
 
       // No user input — just show the menu (first time display)
