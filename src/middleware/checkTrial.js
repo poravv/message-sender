@@ -42,8 +42,9 @@ async function checkTrial(req, res, next) {
       return next();
     }
 
-    // Paid/active user
-    if (profile.plan === 'active') {
+    // Paid/active user (any paid plan passes through)
+    const paidPlans = ['active', 'basico', 'profesional', 'premium', 'enterprise'];
+    if (paidPlans.includes(profile.plan)) {
       return next();
     }
 

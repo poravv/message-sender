@@ -26,6 +26,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load user profile (trial status, role, etc.)
   await loadUserProfile();
 
+  // Load plan features (for feature gating)
+  await loadPlanFeatures();
+
   // Load country configs (for phone formatting/placeholders)
   await getCountryConfigs().catch(function() {});
 

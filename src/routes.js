@@ -16,6 +16,7 @@ const { checkTrial } = require('./middleware/checkTrial');
 const { sessionGuard, createSession, clearSession } = require('./middleware/sessionGuard');
 const { ensureEmailVerified } = require('./middleware/ensureEmailVerified');
 const { admin, db, auth } = require('./firebaseAdmin');
+const { requireFeature, requireLimit, getPlanFeatures, PLAN_FEATURES } = require('./middleware/planGate');
 
 // Map para rastrear operaciones de refresh-qr en progreso por usuario
 const qrRefreshInProgress = new Map();
@@ -305,7 +306,7 @@ function buildRoutes() {
     }
   });
 
-  router.post('/send-messages', conditionalAuth, conditionalRole('sender_api'), upload.fields([
+  router.post('/send-messages', conditionalAuth, conditionalRole('sender_api'), requireLimit('send'), upload.fields([
     { name: 'csvFile', maxCount: 1 },
     { name: 'images', maxCount: 10 },
     { name: 'singleImage', maxCount: 1 },
@@ -488,6 +489,27 @@ function buildRoutes() {
         source
       }, 'Procesando envío con templates múltiples');
 
+      // Check monthly send limit
+      if (req.planLimit && req.planLimit !== -1) {
+        try {
+          const monthData = await metricsStore.dashboardCurrentMonth(userId);
+          const sentThisMonth = (monthData && (monthData.sent || monthData.totalSent || 0)) || 0;
+          if (sentThisMonth + numbers.length > req.planLimit) {
+            const remaining = Math.max(0, req.planLimit - sentThisMonth);
+            return res.status(403).json({
+              error: 'plan_limit_reached',
+              feature: 'send',
+              message: `Límite mensual de envíos alcanzado. Tu plan permite ${req.planLimit} mensajes/mes. Enviados: ${sentThisMonth}. Restantes: ${remaining}.`,
+              limit: req.planLimit,
+              used: sentThisMonth,
+              remaining
+            });
+          }
+        } catch (limitErr) {
+          logger.warn({ err: limitErr.message, userId }, 'Could not check send limit, allowing');
+        }
+      }
+
       // Crear campaña persistente
       const campaign = await metricsStore.createCampaign(userId, {
         name: campaignName || `Campaña ${new Date().toLocaleString()}`,
@@ -603,9 +625,29 @@ function buildRoutes() {
     }
   });
 
-  router.post('/contacts', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.post('/contacts', conditionalAuth, conditionalRole('sender_api'), requireLimit('contacts'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
+
+      // Check contacts limit
+      if (req.planLimit && req.planLimit !== -1) {
+        try {
+          const contactData = await metricsStore.listContacts(userId, { page: 1, pageSize: 1 });
+          const totalContacts = contactData.total || 0;
+          if (totalContacts >= req.planLimit) {
+            return res.status(403).json({
+              error: 'plan_limit_reached',
+              feature: 'contacts',
+              message: `Límite de contactos alcanzado. Tu plan permite ${req.planLimit} contactos. Actuales: ${totalContacts}.`,
+              limit: req.planLimit,
+              used: totalContacts
+            });
+          }
+        } catch (limitErr) {
+          logger.warn({ err: limitErr.message, userId }, 'Could not check contacts limit, allowing');
+        }
+      }
+
       const { phone, nombre, tratamiento, sustantivo, grupo } = req.body || {};
       const userCountry = req.userProfile?.country || 'PY';
       const phoneResult = normalizeNumber(phone, userCountry);
@@ -666,7 +708,7 @@ function buildRoutes() {
   // ---------------------------
   // Importar contactos desde CSV
   // ---------------------------
-  router.post('/contacts/import', conditionalAuth, conditionalRole('sender_api'), upload.single('csvFile'), async (req, res) => {
+  router.post('/contacts/import', conditionalAuth, conditionalRole('sender_api'), requireLimit('contacts'), upload.single('csvFile'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
       
@@ -809,7 +851,7 @@ function buildRoutes() {
   });
 
   // GET /campaigns — paginated list with stats
-  router.get('/campaigns', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/campaigns', conditionalAuth, conditionalRole('sender_api'), requireFeature('campaigns'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
       const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -826,7 +868,7 @@ function buildRoutes() {
     }
   });
 
-  router.get('/campaigns/:id', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/campaigns/:id', conditionalAuth, conditionalRole('sender_api'), requireFeature('campaigns'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
       const detail = await metricsStore.getCampaignDetail(userId, req.params.id);
@@ -839,7 +881,7 @@ function buildRoutes() {
   });
 
   // GET /campaigns/:id/responses — incoming messages from campaign contacts after campaign date
-  router.get('/campaigns/:id/responses', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/campaigns/:id/responses', conditionalAuth, conditionalRole('sender_api'), requireFeature('campaigns'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
       const pgClient = require('./postgresClient');
@@ -1445,18 +1487,59 @@ function buildRoutes() {
   });
 
   // ---------------------------
+  // User: Plan features (for frontend feature gating)
+  // ---------------------------
+  router.get('/user/plan-features', conditionalAuthNoTrial, async (req, res) => {
+    try {
+      const profile = req.userProfile;
+      if (!profile) {
+        return res.status(404).json({ error: 'Profile not found' });
+      }
+
+      const plan = profile.plan || 'expired';
+      const role = profile.role;
+      const features = getPlanFeatures(plan, role);
+
+      // Gather usage stats
+      const userId = req.auth?.uid || 'default';
+      let usage = { sendThisMonth: 0, contactsTotal: 0, templatesTotal: 0 };
+
+      try {
+        const monthData = await metricsStore.dashboardCurrentMonth(userId);
+        usage.sendThisMonth = (monthData && (monthData.sent || monthData.totalSent || 0)) || 0;
+      } catch (e) {
+        logger.warn({ err: e.message, userId }, 'Could not fetch monthly send count for plan-features');
+      }
+
+      try {
+        const contactData = await metricsStore.listContacts(userId, { page: 1, pageSize: 1 });
+        usage.contactsTotal = contactData.total || 0;
+      } catch (e) {
+        logger.warn({ err: e.message, userId }, 'Could not fetch contact count for plan-features');
+      }
+
+      try {
+        const pg = require('./postgresClient');
+        const countResult = await pg.query('SELECT COUNT(*)::int AS cnt FROM templates WHERE user_id = $1', [userId]);
+        usage.templatesTotal = countResult.rows[0]?.cnt || 0;
+      } catch (e) {
+        logger.warn({ err: e.message, userId }, 'Could not fetch template count for plan-features');
+      }
+
+      return res.json({ plan, role: role || 'user', features, usage });
+    } catch (error) {
+      logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error en GET /user/plan-features');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ---------------------------
   // User: API Key management (Professional/Enterprise only)
   // ---------------------------
-  router.post('/user/api-key', conditionalAuth, async (req, res) => {
+  router.post('/user/api-key', conditionalAuth, requireFeature('api'), async (req, res) => {
     try {
       const uid = req.auth?.uid;
       if (!uid) return res.status(401).json({ error: 'Unauthenticated' });
-
-      const profile = req.userProfile;
-      // Only active plans or admins can generate API keys
-      if (profile && profile.role !== 'admin' && profile.plan !== 'active') {
-        return res.status(403).json({ error: 'API key generation requires Professional or Enterprise plan' });
-      }
 
       const crypto = require('crypto');
       const apiKey = crypto.randomUUID();
@@ -1566,9 +1649,9 @@ function buildRoutes() {
       const { userId } = req.params;
       const { plan, trialEndsAt } = req.body || {};
 
-      const validPlans = ['active', 'trial', 'expired'];
+      const validPlans = ['active', 'trial', 'expired', 'basico', 'profesional', 'premium', 'enterprise'];
       if (!plan || !validPlans.includes(plan)) {
-        return res.status(400).json({ error: 'Invalid plan. Must be one of: active, trial, expired' });
+        return res.status(400).json({ error: 'Invalid plan. Must be one of: ' + validPlans.join(', ') });
       }
 
       const updateData = { plan };
@@ -2072,10 +2155,31 @@ function buildRoutes() {
   });
 
   // POST /templates — create a new template
-  router.post('/templates', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.post('/templates', conditionalAuth, conditionalRole('sender_api'), requireLimit('templates'), async (req, res) => {
     try {
       await ensureTemplatesTable();
       const userId = req.auth?.uid || 'default';
+
+      // Check templates limit
+      if (req.planLimit && req.planLimit !== -1) {
+        try {
+          const pg = require('./postgresClient');
+          const countResult = await pg.query('SELECT COUNT(*)::int AS cnt FROM templates WHERE user_id = $1', [userId]);
+          const totalTemplates = countResult.rows[0]?.cnt || 0;
+          if (totalTemplates >= req.planLimit) {
+            return res.status(403).json({
+              error: 'plan_limit_reached',
+              feature: 'templates',
+              message: `Límite de plantillas alcanzado. Tu plan permite ${req.planLimit} plantillas. Actuales: ${totalTemplates}.`,
+              limit: req.planLimit,
+              used: totalTemplates
+            });
+          }
+        } catch (limitErr) {
+          logger.warn({ err: limitErr.message, userId }, 'Could not check templates limit, allowing');
+        }
+      }
+
       const { name, content, category, variables } = req.body || {};
 
       if (!name || !content) {
@@ -2159,7 +2263,7 @@ function buildRoutes() {
   const chatbotEngine = require('./chatbotEngine');
 
   // GET /chatbot/config — get user's chatbot config
-  router.get('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2187,7 +2291,7 @@ function buildRoutes() {
   });
 
   // POST /chatbot/config — create initial config
-  router.post('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.post('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2253,7 +2357,7 @@ function buildRoutes() {
   });
 
   // PUT /chatbot/config — update config
-  router.put('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.put('/chatbot/config', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2338,7 +2442,7 @@ function buildRoutes() {
   // ── Flow nodes ──
 
   // GET /chatbot/nodes — get all nodes for user's chatbot
-  router.get('/chatbot/nodes', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/chatbot/nodes', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2366,7 +2470,7 @@ function buildRoutes() {
   });
 
   // POST /chatbot/nodes — create/update nodes (batch — send entire flow)
-  router.post('/chatbot/nodes', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.post('/chatbot/nodes', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2420,7 +2524,7 @@ function buildRoutes() {
   });
 
   // DELETE /chatbot/nodes/:nodeId — delete a single node
-  router.delete('/chatbot/nodes/:nodeId', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.delete('/chatbot/nodes/:nodeId', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2456,7 +2560,7 @@ function buildRoutes() {
   // ── Conversations ──
 
   // GET /chatbot/conversations — list active conversations
-  router.get('/chatbot/conversations', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/chatbot/conversations', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2478,7 +2582,7 @@ function buildRoutes() {
   });
 
   // PUT /chatbot/conversations/:phone/deactivate — manually deactivate bot for a contact
-  router.put('/chatbot/conversations/:phone/deactivate', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.put('/chatbot/conversations/:phone/deactivate', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2493,7 +2597,7 @@ function buildRoutes() {
   });
 
   // DELETE /chatbot/conversations/:phone — reset conversation
-  router.delete('/chatbot/conversations/:phone', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.delete('/chatbot/conversations/:phone', conditionalAuth, conditionalRole('sender_api'), requireFeature('chatbot'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2512,7 +2616,7 @@ function buildRoutes() {
   // ══════════════════════════════════════════════════════
 
   // GET /messages/inbox — paginated conversations grouped by contact
-  router.get('/messages/inbox', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/messages/inbox', conditionalAuth, conditionalRole('sender_api'), requireFeature('inbox'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2561,7 +2665,7 @@ function buildRoutes() {
   });
 
   // GET /messages/inbox/unread — count of unread conversations
-  router.get('/messages/inbox/unread', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/messages/inbox/unread', conditionalAuth, conditionalRole('sender_api'), requireFeature('inbox'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2586,7 +2690,7 @@ function buildRoutes() {
   });
 
   // GET /messages/inbox/:phone — messages with a specific contact
-  router.get('/messages/inbox/:phone', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/messages/inbox/:phone', conditionalAuth, conditionalRole('sender_api'), requireFeature('inbox'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2619,7 +2723,7 @@ function buildRoutes() {
   });
 
   // POST /messages/inbox/:phone/reply — send reply (marks as human intervention)
-  router.post('/messages/inbox/:phone/reply', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.post('/messages/inbox/:phone/reply', conditionalAuth, conditionalRole('sender_api'), requireFeature('inbox'), async (req, res) => {
     try {
       await chatbotEngine.ensureChatbotTables();
       const userId = req.auth?.uid || 'default';
@@ -2651,7 +2755,7 @@ function buildRoutes() {
   });
 
   // GET /messages/inbox/:phone/bot-status — get bot status for a contact
-  router.get('/messages/inbox/:phone/bot-status', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.get('/messages/inbox/:phone/bot-status', conditionalAuth, conditionalRole('sender_api'), requireFeature('inbox'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
       const { phone } = req.params;
@@ -2664,7 +2768,7 @@ function buildRoutes() {
   });
 
   // PUT /messages/inbox/:phone/pause-bot — pause bot for a contact
-  router.put('/messages/inbox/:phone/pause-bot', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.put('/messages/inbox/:phone/pause-bot', conditionalAuth, conditionalRole('sender_api'), requireFeature('inbox'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
       const { phone } = req.params;
@@ -2677,7 +2781,7 @@ function buildRoutes() {
   });
 
   // PUT /messages/inbox/:phone/resume-bot — resume bot for a contact
-  router.put('/messages/inbox/:phone/resume-bot', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.put('/messages/inbox/:phone/resume-bot', conditionalAuth, conditionalRole('sender_api'), requireFeature('inbox'), async (req, res) => {
     try {
       const userId = req.auth?.uid || 'default';
       const { phone } = req.params;
@@ -2690,7 +2794,7 @@ function buildRoutes() {
   });
 
   // DELETE /messages/inbox/:phone — delete chat history from DB (not from WhatsApp)
-  router.delete('/messages/inbox/:phone', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+  router.delete('/messages/inbox/:phone', conditionalAuth, conditionalRole('sender_api'), requireFeature('inbox'), async (req, res) => {
     try {
       const userId = req.auth.uid;
       const phone = req.params.phone;

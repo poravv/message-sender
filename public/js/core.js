@@ -115,6 +115,8 @@ async function authFetch(url, options) {
         showAccountBlockedModal('suspended', body.message);
       } else if (body.error === 'account_disabled') {
         showAccountBlockedModal('disabled', body.message);
+      } else if (body.error === 'plan_restricted' || body.error === 'plan_limit_reached') {
+        showPlanUpgradeModal(body.feature, body.message, body.currentPlan);
       }
     } catch (e) {
       // ignore parse errors
@@ -483,6 +485,15 @@ function setupMoreMenu() {
 
 // Tab Navigation
 function showTab(tabId) {
+  // Check plan restrictions for gated tabs
+  var gatedTabs = { inbox: 'inbox', chatbot: 'chatbot', campaigns: 'campaigns', api: 'api' };
+  if (gatedTabs[tabId] && window.planFeatures && window.planFeatures.features) {
+    if (!window.planFeatures.features[gatedTabs[tabId]]) {
+      showPlanUpgradeModal(gatedTabs[tabId], null, window.planFeatures.plan);
+      return;
+    }
+  }
+
   // Determine if tab is in the dropdown
   var isDropdownTab = false;
   var dropdownItem = document.querySelector('.tab-more-item[data-tab="' + tabId + '"]');
@@ -593,8 +604,16 @@ function updateTrialBadge(profile) {
     return;
   }
 
-  if (profile.plan === 'active') {
-    badge.innerHTML = '<i class="bi bi-check-circle"></i> Plan Activo';
+  var paidPlanNames = {
+    'active': 'Plan Activo',
+    'basico': 'Basico',
+    'profesional': 'Profesional',
+    'premium': 'Premium',
+    'enterprise': 'Enterprise'
+  };
+
+  if (paidPlanNames[profile.plan]) {
+    badge.innerHTML = '<i class="bi bi-check-circle"></i> ' + paidPlanNames[profile.plan];
     badge.className = 'trial-badge badge-active';
     badge.classList.remove('d-none');
     return;
@@ -1066,8 +1085,9 @@ function updateProfileDropdown() {
     if (profile.role === 'admin') {
       planBadge.textContent = 'Admin';
       planBadge.className = 'profile-plan-badge plan-admin';
-    } else if (profile.plan === 'active' || profile.plan === 'pro' || profile.plan === 'professional') {
-      planBadge.textContent = 'Plan Activo';
+    } else if (['active', 'basico', 'profesional', 'premium', 'enterprise'].indexOf(profile.plan) !== -1) {
+      var dropdownPlanNames = { active: 'Plan Activo', basico: 'Basico', profesional: 'Profesional', premium: 'Premium', enterprise: 'Enterprise' };
+      planBadge.textContent = dropdownPlanNames[profile.plan] || 'Plan Activo';
       planBadge.className = 'profile-plan-badge plan-active';
     } else if (profile.plan === 'trial') {
       var days = profile.trialDaysLeft || 0;
@@ -1185,6 +1205,202 @@ function updatePhonePlaceholders() {
   });
 }
 
+// ========== Plan Feature Gating ==========
+
+var planFeatures = null;
+
+/**
+ * Load the user's plan features from the backend.
+ * Call after loadUserProfile().
+ */
+function loadPlanFeatures() {
+  return authFetch('/user/plan-features')
+    .then(function(res) {
+      if (!res || !res.ok) return null;
+      return res.json();
+    })
+    .then(function(data) {
+      if (!data) return;
+      planFeatures = data;
+      window.planFeatures = data;
+      applyPlanRestrictions(data);
+      return data;
+    })
+    .catch(function(err) {
+      console.error('Failed to load plan features:', err);
+    });
+}
+
+/**
+ * Check if a boolean feature is available in the current plan.
+ * @param {string} featureName - e.g. 'chatbot', 'inbox', 'api', 'campaigns'
+ * @returns {boolean}
+ */
+function checkFeature(featureName) {
+  if (!planFeatures || !planFeatures.features) return true; // fail open
+  return !!planFeatures.features[featureName];
+}
+
+/**
+ * Check a numeric limit feature.
+ * @param {string} limitName - e.g. 'send', 'contacts', 'templates'
+ * @returns {{ limit: number, used: number, remaining: number, unlimited: boolean }}
+ */
+function checkLimit(limitName) {
+  if (!planFeatures || !planFeatures.features) return { limit: -1, used: 0, remaining: -1, unlimited: true };
+  var limit = planFeatures.features[limitName];
+  var usageMap = { send: 'sendThisMonth', contacts: 'contactsTotal', templates: 'templatesTotal' };
+  var used = (planFeatures.usage && planFeatures.usage[usageMap[limitName]]) || 0;
+  if (limit === -1) return { limit: -1, used: used, remaining: -1, unlimited: true };
+  return { limit: limit, used: used, remaining: Math.max(0, limit - used), unlimited: false };
+}
+
+/**
+ * Apply plan restrictions to the UI — hide/disable tabs and show lock icons.
+ */
+function applyPlanRestrictions(data) {
+  if (!data || !data.features) return;
+  var features = data.features;
+
+  // Map tab IDs to feature names
+  var tabFeatureMap = {
+    'inbox': 'inbox',
+    'chatbot': 'chatbot',
+    'campaigns': 'campaigns',
+    'api': 'api'
+  };
+
+  Object.keys(tabFeatureMap).forEach(function(tabId) {
+    var featureName = tabFeatureMap[tabId];
+    var isAvailable = !!features[featureName];
+
+    // Primary tab buttons
+    var tabBtn = document.querySelector('.tab-btn[data-tab="' + tabId + '"]');
+    if (tabBtn) {
+      if (!isAvailable) {
+        tabBtn.classList.add('tab-locked');
+        // Add lock icon if not already present
+        if (!tabBtn.querySelector('.lock-icon')) {
+          var lock = document.createElement('i');
+          lock.className = 'bi bi-lock-fill lock-icon';
+          lock.style.cssText = 'font-size:0.65rem;margin-left:4px;opacity:0.6;';
+          tabBtn.appendChild(lock);
+        }
+      } else {
+        tabBtn.classList.remove('tab-locked');
+        var existingLock = tabBtn.querySelector('.lock-icon');
+        if (existingLock) existingLock.remove();
+      }
+    }
+
+    // Dropdown items
+    var dropdownItem = document.querySelector('.tab-more-item[data-tab="' + tabId + '"]');
+    if (dropdownItem) {
+      if (!isAvailable) {
+        dropdownItem.classList.add('tab-locked');
+        if (!dropdownItem.querySelector('.lock-icon')) {
+          var lock2 = document.createElement('i');
+          lock2.className = 'bi bi-lock-fill lock-icon';
+          lock2.style.cssText = 'font-size:0.65rem;margin-left:4px;opacity:0.6;';
+          dropdownItem.appendChild(lock2);
+        }
+      } else {
+        dropdownItem.classList.remove('tab-locked');
+        var existingLock2 = dropdownItem.querySelector('.lock-icon');
+        if (existingLock2) existingLock2.remove();
+      }
+    }
+  });
+
+  // Update plan badge with actual plan name
+  updatePlanBadge(data.plan, data.role);
+}
+
+/**
+ * Update the trial badge to show the actual plan name.
+ */
+function updatePlanBadge(plan, role) {
+  var badge = document.getElementById('trial-badge');
+  if (!badge) return;
+
+  if (role === 'admin') return; // admin badge already handled
+
+  var planNames = {
+    'basico': 'Basico',
+    'profesional': 'Profesional',
+    'premium': 'Premium',
+    'enterprise': 'Enterprise',
+    'active': 'Plan Activo'
+  };
+
+  if (planNames[plan]) {
+    badge.innerHTML = '<i class="bi bi-check-circle"></i> ' + planNames[plan];
+    badge.className = 'trial-badge badge-active';
+    badge.classList.remove('d-none');
+  }
+}
+
+/**
+ * Show upgrade modal when a restricted feature is accessed.
+ */
+function showPlanUpgradeModal(feature, message, currentPlan) {
+  var existing = document.getElementById('plan-upgrade-modal');
+  if (existing) existing.remove();
+
+  var featureNames = {
+    chatbot: 'Chatbot',
+    chatbotAi: 'Chatbot con IA',
+    inbox: 'Bandeja de entrada',
+    api: 'API v1',
+    campaigns: 'Historial de campanas',
+    send: 'Envio de mensajes',
+    contacts: 'Contactos',
+    templates: 'Plantillas'
+  };
+
+  var featureLabel = featureNames[feature] || feature || 'esta funcion';
+  var displayMessage = message || ('La funcion "' + featureLabel + '" no esta disponible en tu plan actual.');
+
+  var planLabels = {
+    expired: 'Expirado',
+    trial: 'Prueba',
+    basico: 'Basico',
+    profesional: 'Profesional',
+    premium: 'Premium',
+    enterprise: 'Enterprise'
+  };
+
+  var currentPlanLabel = planLabels[currentPlan] || currentPlan || '';
+
+  var modal = document.createElement('div');
+  modal.id = 'plan-upgrade-modal';
+  modal.className = 'trial-modal-overlay';
+  modal.innerHTML =
+    '<div class="trial-modal-card" style="max-width: 440px;">' +
+      '<div class="trial-modal-icon"><i class="bi bi-lock-fill" style="color:#f59e0b;font-size:2.5rem;"></i></div>' +
+      '<h2>Funcion restringida</h2>' +
+      '<p>' + displayMessage + '</p>' +
+      (currentPlanLabel ? '<p style="font-size:0.85rem;color:var(--text-secondary);">Plan actual: <strong>' + currentPlanLabel + '</strong></p>' : '') +
+      '<div class="trial-modal-actions" style="display:flex;gap:0.5rem;justify-content:center;">' +
+        '<button class="btn-primary" id="upgradeGoPlansBtn">Ver planes</button>' +
+        '<button class="btn-primary" id="upgradeCloseBtn" style="background:var(--bg-tertiary,#242b33);color:var(--text-primary,#e7e9ea);">Cerrar</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  document.getElementById('upgradeGoPlansBtn').addEventListener('click', function() {
+    var m = document.getElementById('plan-upgrade-modal');
+    if (m) m.remove();
+    showTab('plans');
+  });
+
+  document.getElementById('upgradeCloseBtn').addEventListener('click', function() {
+    var m = document.getElementById('plan-upgrade-modal');
+    if (m) m.remove();
+  });
+}
+
 // Global exports
 window.authFetch = authFetch;
 window.showAlert = showAlert;
@@ -1212,3 +1428,9 @@ window.getUserCountry = getUserCountry;
 window.getCountryDialCode = getCountryDialCode;
 window.formatPhoneForDisplay = formatPhoneForDisplay;
 window.updatePhonePlaceholders = updatePhonePlaceholders;
+window.loadPlanFeatures = loadPlanFeatures;
+window.checkFeature = checkFeature;
+window.checkLimit = checkLimit;
+window.planFeatures = planFeatures;
+window.showPlanUpgradeModal = showPlanUpgradeModal;
+window.applyPlanRestrictions = applyPlanRestrictions;
