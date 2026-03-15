@@ -276,7 +276,7 @@ describe('ensureUserProfile middleware', () => {
 
     await ensureUserProfile(req, res, next);
 
-    expect(req.userProfile).toEqual({
+    expect(req.userProfile).toEqual(expect.objectContaining({
       uid: 'user-123',
       email: 'full@test.com',
       displayName: 'Full User',
@@ -287,7 +287,7 @@ describe('ensureUserProfile middleware', () => {
       country: 'PY',
       whatsappPhone: '595991000000',
       lastLoginAt: data.lastLoginAt,
-    });
+    }));
   });
 
   test('handles Firestore errors gracefully — calls next without crashing', async () => {

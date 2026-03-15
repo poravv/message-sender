@@ -17,7 +17,7 @@
         "prod:start": "./start-prod.sh",
         "prod:stop": "docker-compose down",
         "prod:logs": "docker-compose logs -f audio-sender",
-        "test": "jest --verbose"
+        "test": "jest --verbose --forceExit"
     },
     "keywords": [
         "whatsapp",

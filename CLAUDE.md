@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-WhatsApp bulk message sender with multi-tenant support. Node.js 20+ Express backend with Baileys WebSocket library, PostgreSQL 16, Redis 7.2 + BullMQ queues, Keycloak JWT auth, and a vanilla JS frontend. Deployed to Kubernetes via GitHub Actions CI/CD.
+WhatsApp bulk message sender with multi-tenant support. Node.js 20+ Express backend with Baileys WebSocket library, PostgreSQL 16, Redis 7.2 + BullMQ queues, Firebase Auth, and a vanilla JS frontend. Deployed to Kubernetes via GitHub Actions CI/CD.
 
 ## Commands
 
@@ -35,7 +35,7 @@ No automated test suite exists. Manual testing via `test-audio.js` and scripts i
 | `manager.js` | `WhatsAppManager` — Baileys socket, QR generation, reconnection, rate limiting (15 msgs/min) |
 | `sessionManager.js` | Per-user WhatsApp session lifecycle, multi-pod owner heartbeat via Redis |
 | `queueRedis.js` | BullMQ worker (`ms:messages` queue), message processing with retries, campaign progress tracking |
-| `auth.js` | Keycloak JWT validation via `jose` JWKS. Bypassed in development (mock user) |
+| `auth.js` | Firebase ID token verification via `firebase-admin`. Bypassed in development (mock user) |
 | `metricsStore.js` | Auto-selects PostgreSQL (`metricsStorePostgres.js`) or Redis fallback based on `POSTGRES_HOST` |
 | `postgresClient.js` | Connection pool (size 10), slow query logging (>1s) |
 | `redisClient.js` | ioredis singleton via `getRedis()` |
@@ -78,4 +78,4 @@ PostgreSQL tables: `contacts` (unique per user+phone), `campaigns`, `campaign_re
 
 ## Key Environment Variables
 
-Core: `PORT`, `NODE_ENV`. Auth: `KEYCLOAK_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_AUDIENCE`. Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (or `REDIS_URL`). PostgreSQL: `POSTGRES_HOST/PORT/USER/PASSWORD/DB`. S3/MinIO: `MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY/BUCKET`. See `.env.example` for full list.
+Core: `PORT`, `NODE_ENV`. Auth: `FIREBASE_SERVICE_ACCOUNT` (base64-encoded service-account JSON) or `GOOGLE_APPLICATION_CREDENTIALS` (file path). Redis: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` (or `REDIS_URL`). PostgreSQL: `POSTGRES_HOST/PORT/USER/PASSWORD/DB`. S3/MinIO: `MINIO_ENDPOINT/ACCESS_KEY/SECRET_KEY/BUCKET`. See `.env.example` for full list.

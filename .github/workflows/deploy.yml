@@ -110,9 +110,7 @@ jobs:
           --namespace=${{ env.NAMESPACE }} \
           --from-literal=PORT="3010" \
           --from-literal=NODE_ENV="${{ secrets.NODE_ENV }}" \
-          --from-literal=KEYCLOAK_URL="${{ secrets.KEYCLOAK_URL }}" \
-          --from-literal=KEYCLOAK_REALM="${{ secrets.KEYCLOAK_REALM }}" \
-          --from-literal=KEYCLOAK_AUDIENCE="${{ secrets.KEYCLOAK_AUDIENCE }}" \
+          --from-literal=FIREBASE_SERVICE_ACCOUNT="${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" \
           --from-literal=SESSION_STORE="${{ secrets.SESSION_STORE }}" \
           --from-literal=AUTHORIZED_PHONES="${{ secrets.AUTHORIZED_PHONES }}" \
           --from-literal=FILE_RETENTION_HOURS="${{ secrets.FILE_RETENTION_HOURS }}" \
