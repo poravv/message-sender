@@ -189,6 +189,23 @@ function buildRoutes() {
     }
   });
 
+  // Intervalos de envío disponibles para el usuario
+  router.get('/config/intervals', conditionalAuth, (req, res) => {
+    const userRole = req.userProfile?.role;
+    const userPlan = req.userProfile?.plan;
+    const canUseFast = userRole === 'admin' || userPlan === 'pro' || userPlan === 'professional';
+
+    const intervals = [
+      { value: 3,  label: 'Rapido (3s)', badge: '\u26A0\uFE0F', color: 'warning', restricted: true,  available: canUseFast },
+      { value: 5,  label: 'Normal (5s)', badge: '\u2713',       color: 'success', restricted: false, available: true, default: true },
+      { value: 8,  label: 'Seguro (8s)', badge: '\u2713\u2713',       color: 'info',    restricted: false, available: true },
+      { value: 12, label: 'Muy seguro (12s)', badge: '\u2713\u2713\u2713',   color: 'info',    restricted: false, available: true },
+      { value: 15, label: 'Ultra seguro (15s)', badge: '',       color: 'secondary', restricted: false, available: true },
+    ];
+
+    res.json({ intervals, defaultInterval: 5 });
+  });
+
   // Estado de la sesión del usuario autenticado
   router.get('/connection-status', conditionalAuth, async (req, res) => {
     try {
@@ -292,7 +309,24 @@ function buildRoutes() {
       }
 
       const userId = req.auth?.uid || 'default';
-      const { recipientSource, contactIds, groupName, templates: templatesJson, message, campaignName } = req.body;
+      const { recipientSource, contactIds, groupName, templates: templatesJson, message, campaignName, messageInterval: rawInterval } = req.body;
+
+      // Validate message interval
+      const allowedIntervals = redisQueue.ALLOWED_INTERVALS || [3, 5, 8, 12, 15];
+      const defaultInterval = redisQueue.DEFAULT_INTERVAL || 5;
+      let messageInterval = Number(rawInterval) || defaultInterval;
+      if (!allowedIntervals.includes(messageInterval)) {
+        messageInterval = defaultInterval;
+      }
+      // 3s interval restricted to admin or pro plan users
+      if (messageInterval === 3) {
+        const userRole = req.userProfile?.role;
+        const userPlan = req.userProfile?.plan;
+        const isAllowed = userRole === 'admin' || userPlan === 'pro' || userPlan === 'professional';
+        if (!isAllowed) {
+          messageInterval = defaultInterval;
+        }
+      }
       
       let numbers = [];
       let source = recipientSource || 'csv';
@@ -480,7 +514,7 @@ function buildRoutes() {
 
       const useRedisQueue = (process.env.MESSAGE_QUEUE_BACKEND || 'redis').toLowerCase() === 'redis';
       if (useRedisQueue) {
-        await redisQueue.enqueueCampaign(userId, numbers, templates, images, singleImage, audioFile, { campaignId: campaign.id });
+        await redisQueue.enqueueCampaign(userId, numbers, templates, images, singleImage, audioFile, { campaignId: campaign.id, messageInterval });
         // Primer heartbeat tras encolar (para detectar refresh)
         if (typeof redisQueue.touchHeartbeat === 'function') {
           try { await redisQueue.touchHeartbeat(userId); } catch { }
@@ -496,6 +530,7 @@ function buildRoutes() {
         totalNumbers: numbers.length,
         templateCount: templates.length,
         campaignId: campaign.id,
+        messageInterval,
         importSummary,
         duplicatesRemoved: duplicates,
         invalidNumbers: invalidCount,

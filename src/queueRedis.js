@@ -245,10 +245,25 @@ function parseKeepPolicy(val, defaultVal) {
 const REMOVE_ON_COMPLETE = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_COMPLETE, true);
 const REMOVE_ON_FAIL = parseKeepPolicy(process.env.QUEUE_REMOVE_ON_FAIL, { age: 3600 });
 
+// Allowed message interval values (seconds)
+const ALLOWED_INTERVALS = [3, 5, 8, 12, 15];
+const DEFAULT_INTERVAL = 5;
+
+function getValidInterval(value) {
+  const num = Number(value);
+  return ALLOWED_INTERVALS.includes(num) ? num : DEFAULT_INTERVAL;
+}
+
 // Public API: enqueue campaign
 async function enqueueCampaign(userId, numbers, templates, images, singleImage, audio, meta = {}) {
+  const messageInterval = getValidInterval(meta?.messageInterval);
   await resetStatus(userId, numbers.length);
   await saveList(userId, numbers);
+  // Store interval in Redis status so ETA can use it
+  try {
+    const r = getRedis();
+    await r.hset(statusKey(userId), { messageInterval: String(messageInterval * 1000) });
+  } catch { }
   const job = await queue.add('campaign', {
     userId,
     numbers,
@@ -257,6 +272,7 @@ async function enqueueCampaign(userId, numbers, templates, images, singleImage, 
     singleImage,
     audio,
     campaignId: meta?.campaignId || null,
+    messageInterval: messageInterval * 1000, // store as ms in job data
   }, { removeOnComplete: REMOVE_ON_COMPLETE, removeOnFail: REMOVE_ON_FAIL });
   try {
     const r = getRedis();
@@ -476,7 +492,9 @@ async function getStatusDetailed(userId) {
   };
   const qi = await getQueueInfo(userId);
   const remaining = Math.max(0, base.total - base.sent - base.errors);
-  const eta = remaining * Math.ceil(SEND_BETWEEN_MS / 1000);
+  // Use per-campaign interval from Redis if available, otherwise fall back to global
+  const campaignIntervalMs = data.messageInterval ? Number(data.messageInterval) : SEND_BETWEEN_MS;
+  const eta = remaining * Math.ceil(campaignIntervalMs / 1000);
   const state = base.canceled ? 'canceled' : (base.completed ? 'completed' : ((base.progress && base.progress.status === 'sending') || qi.activeForUser ? 'running' : (qi.queuedForUser > 0 && !qi.activeForUser ? 'queued' : 'idle')));
   // Mapear eventos recientes a filas de tabla
   const evLimit = Math.max(10, Number(process.env.EVENTS_UI_LIMIT || 100));
@@ -604,7 +622,9 @@ async function ensureConvertedAudio(userId, audio) {
 }
 
 async function processCampaign(job) {
-  const { userId, numbers, templates, images, singleImage, audio, campaignId } = job.data;
+  const { userId, numbers, templates, images, singleImage, audio, campaignId, messageInterval: jobInterval } = job.data;
+  // Per-campaign interval (ms). Falls back to global SEND_BETWEEN_MS if not set.
+  const sendBetween = (typeof jobInterval === 'number' && jobInterval >= 1000) ? jobInterval : SEND_BETWEEN_MS;
   // Exclusión por usuario para permitir concurrencia entre usuarios
   const ttlSec = Math.max(300, Number(process.env.REDIS_CAMPAIGN_LOCK_TTL || 3600));
   const { unlock } = await acquireLock(campaignLockKey(userId), ttlSec, { timeoutMs: 15000 });
@@ -819,7 +839,7 @@ async function processCampaign(job) {
             // PTT requiere solo audio y ptt:true, sin mimetype ni fileName
             await client.sendMessage(jid, { audio: buf, ptt: true });
             if (processedMessage) {
-              await sleep(SEND_BETWEEN_MS);
+              await sleep(sendBetween);
               await client.sendMessage(jid, { text: processedMessage });
             }
           } else if (singleImage) {
@@ -830,7 +850,7 @@ async function processCampaign(job) {
               const img = images[k];
               const buf = await getImageBufferCached(imageCache, img);
               await client.sendMessage(jid, { image: buf, caption: k === 0 ? (processedMessage || '') : '' });
-              if (k < images.length - 1) await sleep(SEND_BETWEEN_MS);
+              if (k < images.length - 1) await sleep(sendBetween);
             }
           } else if (processedMessage) {
             await client.sendMessage(jid, { text: processedMessage });
@@ -890,7 +910,7 @@ async function processCampaign(job) {
         }
       }
 
-      await sleep(SEND_BETWEEN_MS);
+      await sleep(sendBetween);
     }
 
     if (await isCanceled(userId)) {
@@ -1162,6 +1182,8 @@ async function getRedisKeyStats() {
 }
 
 module.exports = {
+  ALLOWED_INTERVALS,
+  DEFAULT_INTERVAL,
   enqueueCampaign,
   getStatus,
   getStatusDetailed,

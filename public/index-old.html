@@ -333,7 +333,7 @@
                           <div class="example">
                             <strong>Con tratamiento:</strong>
                             <code>595992756462,Sr</code>
-                            <small>→ Solo {sustantivo} será reemplazado</small>
+                            <small>→ Solo {tratamiento} será reemplazado</small>
                           </div>
                           <div class="example">
                             <strong>Con tratamiento y nombre:</strong>
@@ -348,7 +348,7 @@
                         </div>
                         <p class="variables-note">
                           <i class="bi bi-lightbulb text-warning"></i>
-                          Usa <code>{sustantivo}</code>, <code>{nombre}</code> y <code>{grupo}</code> en tu mensaje. Las variables sin datos se eliminarán automáticamente.
+                          Usa <code>{tratamiento}</code>, <code>{nombre}</code> y <code>{grupo}</code> en tu mensaje. Las variables sin datos se eliminarán automáticamente.
                         </p>
                       </div>
                     </div>
@@ -515,8 +515,8 @@
                       <strong>Variables disponibles:</strong>
                     </div>
                     <div class="variables-list">
-                      <button type="button" class="variable-btn" data-variable="{sustantivo}">
-                        <code>{sustantivo}</code>
+                      <button type="button" class="variable-btn" data-variable="{tratamiento}">
+                        <code>{tratamiento}</code>
                         <span>Tratamiento (Sr, Sra, Dr)</span>
                       </button>
                       <button type="button" class="variable-btn" data-variable="{nombre}">
@@ -875,8 +875,8 @@
                       <input type="text" class="form-control" id="manualNombre" placeholder="Nombre completo">
                     </div>
                     <div class="form-group">
-                      <label>Sustantivo</label>
-                      <input type="text" class="form-control" id="manualSustantivo" placeholder="Sr, Sra, Dr">
+                      <label>Tratamiento</label>
+                      <input type="text" class="form-control" id="manualTratamiento" placeholder="Sr, Sra, Dr">
                     </div>
                     <div class="form-group">
                       <label>Grupo</label>
@@ -914,7 +914,7 @@
                       <tr>
                         <th>Número</th>
                         <th>Nombre</th>
-                        <th>Sustantivo</th>
+                        <th>Tratamiento</th>
                         <th>Grupo</th>
                         <th>Origen</th>
                         <th>Acciones</th>

@@ -299,7 +299,7 @@ erDiagram
         varchar user_id
         varchar phone UK
         varchar nombre
-        varchar sustantivo
+        varchar sustantivo "tratamiento in API"
         varchar grupo
         varchar source
         timestamp created_at

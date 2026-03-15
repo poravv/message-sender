@@ -425,37 +425,43 @@
             <div class="send-step-header">
               <span class="send-step-num">1</span>
               <span class="send-step-title">Destinatarios</span>
-              <span class="send-step-badge" id="recipientCountBadge"></span>
+              <span class="send-step-badge" id="recipientCountBadge">0 destinatarios seleccionados</span>
             </div>
             <div class="send-step-body">
-              <!-- Compact source tabs -->
-              <div class="recipient-compact-tabs">
-                <button type="button" class="rc-tab active" data-source="contacts">
-                  <i class="bi bi-person-check"></i> Contactos
+              <!-- Source pill tabs -->
+              <div class="recipient-pill-tabs">
+                <button type="button" class="rp-tab active" data-source="contacts">
+                  <i class="bi bi-person-check"></i>
+                  <span>Contactos</span>
                 </button>
-                <button type="button" class="rc-tab" data-source="group">
-                  <i class="bi bi-people"></i> Grupo
+                <button type="button" class="rp-tab" data-source="group">
+                  <i class="bi bi-people"></i>
+                  <span>Grupo</span>
                 </button>
-                <button type="button" class="rc-tab" data-source="csv">
-                  <i class="bi bi-file-earmark-spreadsheet"></i> CSV
+                <button type="button" class="rp-tab" data-source="csv">
+                  <i class="bi bi-file-earmark-spreadsheet"></i>
+                  <span>CSV</span>
                 </button>
               </div>
               <input type="hidden" id="recipientSource" name="recipientSource" value="contacts">
 
               <!-- Contacts Source -->
-              <div id="contactsSourceSection" class="source-section">
+              <div id="contactsSourceSection" class="source-section source-section-animate">
                 <div class="contacts-selector">
-                  <div class="selector-header">
-                    <div class="search-box">
+                  <div class="selector-toolbar">
+                    <div class="selector-search">
                       <i class="bi bi-search"></i>
-                      <input type="text" id="contactSelectorSearch" placeholder="Buscar contactos...">
+                      <input type="text" id="contactSelectorSearch" placeholder="Buscar por nombre, telefono o grupo...">
+                      <span class="selector-search-clear d-none" id="contactSearchClear"><i class="bi bi-x-lg"></i></span>
                     </div>
                     <div class="selector-actions">
-                      <button type="button" class="btn-sm" id="selectAllContactsBtn">
-                        <i class="bi bi-check-all"></i> Todos
+                      <button type="button" class="selector-action-btn" id="selectAllContactsBtn" title="Seleccionar todos">
+                        <i class="bi bi-check-all"></i>
+                        <span>Todos</span>
                       </button>
-                      <button type="button" class="btn-sm" id="clearSelectedContactsBtn">
-                        <i class="bi bi-x-lg"></i> Limpiar
+                      <button type="button" class="selector-action-btn selector-action-clear" id="clearSelectedContactsBtn" title="Limpiar seleccion">
+                        <i class="bi bi-x-circle"></i>
+                        <span>Limpiar</span>
                       </button>
                     </div>
                   </div>
@@ -465,24 +471,24 @@
                       <span>Cargando contactos...</span>
                     </div>
                   </div>
-                  <div class="contacts-status-bar">
-                    <div class="contacts-total">
-                      <i class="bi bi-people"></i>
-                      <span id="totalContactsCount">0</span> disponibles
+                  <div class="contacts-footer">
+                    <div class="contacts-status-bar">
+                      <div class="contacts-total">
+                        <i class="bi bi-people"></i>
+                        <span id="totalContactsCount">0</span> disponibles
+                      </div>
+                      <div class="selected-count-pill">
+                        <i class="bi bi-person-check-fill"></i>
+                        <span id="selectedContactsCount">0</span> seleccionados
+                      </div>
                     </div>
-                    <div class="selected-count-badge">
-                      <i class="bi bi-person-check"></i>
-                      <span id="selectedContactsCount">0</span> seleccionados
-                    </div>
-                  </div>
-                  <div class="pagination-bar compact">
-                    <div class="pagination-controls">
-                      <button type="button" class="btn-secondary" id="contactSelectorPrevBtn">
-                        <i class="bi bi-chevron-left"></i> Anterior
+                    <div class="contacts-pagination">
+                      <button type="button" class="pg-btn" id="contactSelectorPrevBtn" disabled>
+                        <i class="bi bi-chevron-left"></i>
                       </button>
-                      <span class="pagination-info" id="contactSelectorPageInfo">Pagina 1 de 1</span>
-                      <button type="button" class="btn-secondary" id="contactSelectorNextBtn">
-                        Siguiente <i class="bi bi-chevron-right"></i>
+                      <span class="pg-info" id="contactSelectorPageInfo">1 / 1</span>
+                      <button type="button" class="pg-btn" id="contactSelectorNextBtn" disabled>
+                        <i class="bi bi-chevron-right"></i>
                       </button>
                     </div>
                   </div>
@@ -490,28 +496,41 @@
               </div>
 
               <!-- Group Source -->
-              <div id="groupSourceSection" class="source-section d-none">
-                <div class="group-selector">
-                  <select id="groupSelect" name="groupName" class="form-control">
+              <div id="groupSourceSection" class="source-section source-section-animate d-none">
+                <div class="group-selector-card">
+                  <div class="group-selector-icon">
+                    <i class="bi bi-people-fill"></i>
+                  </div>
+                  <select id="groupSelect" name="groupName" class="group-dropdown">
                     <option value="">-- Seleccionar grupo --</option>
                   </select>
-                  <div class="help-text" id="groupContactsCount">
-                    <i class="bi bi-people"></i>
+                  <div class="group-count-info" id="groupContactsCount">
+                    <i class="bi bi-info-circle"></i>
                     <span id="groupContactsCountText">Selecciona un grupo para ver los contactos</span>
                   </div>
                 </div>
               </div>
 
               <!-- CSV Source -->
-              <div id="csvSourceSection" class="source-section d-none">
-                <div class="csv-compact-upload">
+              <div id="csvSourceSection" class="source-section source-section-animate d-none">
+                <div class="csv-drop-zone" id="csvDropZone">
                   <input type="file" id="csvFile" name="csvFile" accept=".csv,.txt">
-                  <label for="csvFile" class="csv-compact-label">
-                    <i class="bi bi-cloud-upload"></i>
-                    <span>Arrastra o selecciona CSV/TXT</span>
-                    <small>Columnas: numero, tratamiento, nombre, grupo</small>
-                  </label>
-                  <div id="csvFileInfo" class="file-info"></div>
+                  <div class="csv-drop-content">
+                    <div class="csv-drop-icon">
+                      <i class="bi bi-cloud-arrow-up"></i>
+                    </div>
+                    <span class="csv-drop-title">Arrastra un archivo aqui</span>
+                    <span class="csv-drop-subtitle">o haz clic para seleccionar</span>
+                    <small class="csv-drop-hint">Formatos: CSV, TXT &mdash; Columnas: numero, tratamiento, nombre, grupo</small>
+                  </div>
+                  <div id="csvFileInfo" class="csv-file-result d-none">
+                    <div class="csv-file-icon"><i class="bi bi-file-earmark-check-fill"></i></div>
+                    <div class="csv-file-details">
+                      <span class="csv-file-name" id="csvFileName"></span>
+                      <span class="csv-file-count" id="csvFileCount"></span>
+                    </div>
+                    <button type="button" class="csv-file-remove" id="csvFileRemove"><i class="bi bi-x-lg"></i></button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -615,6 +634,25 @@
                   <div id="audioFileInfo" class="file-info"></div>
                   <button type="button" class="media-clear-btn" data-clear="audio"><i class="bi bi-x-lg"></i></button>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Message Interval Selector -->
+          <div class="send-step" style="margin-bottom: var(--space-md);">
+            <div class="send-step-header">
+              <div class="send-step-num"><i class="bi bi-speedometer2"></i></div>
+              <span class="send-step-title">Velocidad de envio</span>
+              <span class="send-step-optional">Intervalo entre mensajes</span>
+            </div>
+            <div class="send-step-body" style="padding: var(--space-md) var(--space-lg);">
+              <div id="intervalSelector" class="interval-pills">
+                <!-- Populated dynamically by messages.js -->
+              </div>
+              <input type="hidden" id="messageInterval" name="messageInterval" value="5">
+              <div id="intervalWarning" class="interval-warning d-none">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <span>Intervalo rapido: mayor riesgo de deteccion de spam por WhatsApp</span>
               </div>
             </div>
           </div>

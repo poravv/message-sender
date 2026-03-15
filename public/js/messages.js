@@ -22,6 +22,10 @@ const emojiCategories = {
 let extraTemplateCount = 0;
 const MAX_EXTRA_TEMPLATES = 4;
 
+// Message interval state
+let availableIntervals = [];
+let selectedInterval = 5;
+
 // ========== Setup: Message Form ==========
 function setupMessageForm() {
   const form = document.getElementById('messageForm');
@@ -37,6 +41,97 @@ function setupMessageForm() {
 
     await sendMessages();
   });
+}
+
+// ========== Setup: Interval Selector ==========
+async function loadIntervals() {
+  try {
+    var res = await authFetch('/config/intervals');
+    if (!res.ok) return;
+    var data = await res.json();
+    availableIntervals = data.intervals || [];
+    selectedInterval = data.defaultInterval || 5;
+    renderIntervalPills();
+  } catch (e) {
+    // Fallback: render default intervals without server data
+    availableIntervals = [
+      { value: 3,  label: 'Rapido (3s)', badge: '\u26A0\uFE0F', color: 'warning', restricted: true, available: false },
+      { value: 5,  label: 'Normal (5s)', badge: '\u2713', color: 'success', restricted: false, available: true, default: true },
+      { value: 8,  label: 'Seguro (8s)', badge: '\u2713\u2713', color: 'info', restricted: false, available: true },
+      { value: 12, label: 'Muy seguro (12s)', badge: '\u2713\u2713\u2713', color: 'info', restricted: false, available: true },
+      { value: 15, label: 'Ultra seguro (15s)', badge: '', color: 'secondary', restricted: false, available: true },
+    ];
+    selectedInterval = 5;
+    renderIntervalPills();
+  }
+}
+
+function renderIntervalPills() {
+  var container = document.getElementById('intervalSelector');
+  if (!container) return;
+  container.innerHTML = '';
+
+  availableIntervals.forEach(function(opt) {
+    var pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'interval-pill';
+    pill.dataset.value = opt.value;
+
+    // Color class
+    pill.classList.add('interval-' + opt.color);
+
+    // Selected state
+    if (opt.value === selectedInterval) {
+      pill.classList.add('active');
+    }
+
+    // Disabled state for restricted options
+    if (!opt.available) {
+      pill.classList.add('disabled');
+      pill.disabled = true;
+    }
+
+    // Build pill content
+    var labelText = opt.label;
+    if (opt.default) {
+      labelText += ' <span class="interval-recommended">Recomendado</span>';
+    }
+    if (!opt.available && opt.restricted) {
+      pill.innerHTML = '<i class="bi bi-lock-fill"></i> ' + labelText;
+      pill.title = 'Disponible en plan Pro';
+    } else {
+      pill.innerHTML = labelText;
+    }
+
+    pill.addEventListener('click', function() {
+      if (!opt.available) return;
+      selectInterval(opt.value);
+    });
+
+    container.appendChild(pill);
+  });
+}
+
+function selectInterval(value) {
+  selectedInterval = value;
+  var hidden = document.getElementById('messageInterval');
+  if (hidden) hidden.value = value;
+
+  // Update active states
+  var pills = document.querySelectorAll('.interval-pill');
+  pills.forEach(function(p) {
+    p.classList.toggle('active', Number(p.dataset.value) === value);
+  });
+
+  // Show/hide warning for fast interval
+  var warning = document.getElementById('intervalWarning');
+  if (warning) {
+    if (value === 3) {
+      warning.classList.remove('d-none');
+    } else {
+      warning.classList.add('d-none');
+    }
+  }
 }
 
 // ========== Setup: Media Chips ==========
@@ -92,8 +187,8 @@ function setupMediaChips() {
 
 // ========== Setup: File Inputs ==========
 function setupFileInputs() {
+  // CSV is handled by setupCsvDropZone, only media inputs here
   const inputs = [
-    { id: 'csvFile', infoId: 'csvFileInfo' },
     { id: 'singleImage', infoId: 'singleImageInfo' },
     { id: 'images', infoId: 'multipleImagesInfo' },
     { id: 'audioFile', infoId: 'audioFileInfo' }
@@ -111,12 +206,9 @@ function setupFileInputs() {
         const totalSize = files.reduce((sum, f) => sum + f.size, 0);
         info.innerHTML = '<i class="bi bi-file-earmark-check"></i> ' + names + ' (' + formatFileSize(totalSize) + ')';
         info.classList.add('has-file');
-        // Update recipient badge for CSV
-        if (id === 'csvFile') updateRecipientBadge();
       } else {
         info.innerHTML = '';
         info.classList.remove('has-file');
-        if (id === 'csvFile') updateRecipientBadge();
       }
     });
   });
@@ -487,6 +579,9 @@ async function sendMessages() {
   formData.set('templates', JSON.stringify(templates));
   formData.set('message', templates[0]);
 
+  // Include message interval
+  formData.set('messageInterval', String(selectedInterval));
+
   submitBtn.classList.add('loading');
   submitBtn.disabled = true;
 
@@ -640,9 +735,10 @@ const contactSelectorState = {
   search: ''
 };
 let contactSelectorSearchTimer = null;
+let csvParsedCount = 0;
 
 function setupRecipientSourceTabs() {
-  var tabs = document.querySelectorAll('.rc-tab');
+  var tabs = document.querySelectorAll('.rp-tab');
   var sourceInput = document.getElementById('recipientSource');
   var sections = {
     csv: document.getElementById('csvSourceSection'),
@@ -663,11 +759,19 @@ function setupRecipientSourceTabs() {
       // Update hidden input
       sourceInput.value = source;
 
-      // Show/hide sections
+      // Show/hide sections with animation
       Object.entries(sections).forEach(function(entry) {
         var key = entry[0], section = entry[1];
         if (section) {
-          section.classList.toggle('d-none', key !== source);
+          if (key === source) {
+            section.classList.remove('d-none');
+            // Re-trigger animation
+            section.classList.remove('source-section-animate');
+            void section.offsetWidth; // force reflow
+            section.classList.add('source-section-animate');
+          } else {
+            section.classList.add('d-none');
+          }
         }
       });
 
@@ -688,6 +792,8 @@ function setupRecipientSourceTabs() {
   setupContactsSearch();
   setupContactsSelectAll();
   setupContactSelectorPagination();
+  setupCsvDropZone();
+  setupCsvFileRemove();
 }
 
 function updateRecipientBadge() {
@@ -696,29 +802,35 @@ function updateRecipientBadge() {
 
   var source = document.getElementById('recipientSource')?.value || 'contacts';
   var count = 0;
+  var label = '';
 
   if (source === 'contacts') {
     count = selectedContactIds.size;
+    label = count + ' destinatario' + (count !== 1 ? 's' : '') + ' seleccionado' + (count !== 1 ? 's' : '');
   } else if (source === 'group') {
     var countText = document.getElementById('groupContactsCountText')?.textContent || '';
     var match = countText.match(/(\d+)/);
     if (match) count = parseInt(match[1]);
+    label = count + ' contacto' + (count !== 1 ? 's' : '') + ' en grupo';
   } else if (source === 'csv') {
-    var csvFile = document.getElementById('csvFile');
-    count = csvFile?.files?.length ? 1 : 0;
-    if (count) {
-      badge.textContent = 'CSV cargado';
-      badge.classList.add('visible');
-      return;
+    if (csvParsedCount > 0) {
+      count = csvParsedCount;
+      label = count + ' numero' + (count !== 1 ? 's' : '') + ' desde CSV';
+    } else {
+      var csvFile = document.getElementById('csvFile');
+      if (csvFile?.files?.length) {
+        label = 'CSV cargado';
+        count = 1;
+      }
     }
   }
 
   if (count > 0) {
-    badge.textContent = count + ' ' + (source === 'contacts' ? 'seleccionados' : 'contactos');
-    badge.classList.add('visible');
+    badge.textContent = label;
+    badge.classList.add('has-recipients');
   } else {
-    badge.textContent = '';
-    badge.classList.remove('visible');
+    badge.textContent = '0 destinatarios seleccionados';
+    badge.classList.remove('has-recipients');
   }
 }
 
@@ -764,12 +876,18 @@ async function loadContactsForSelector(page) {
     updateContactSelectorPagination();
     updateSelectedCount();
 
+    // Update search clear button
+    var clearBtn = document.getElementById('contactSearchClear');
+    if (clearBtn) {
+      clearBtn.classList.toggle('d-none', !search);
+    }
+
     if (contactSelectorState.total === 0) {
       container.innerHTML =
         '<div class="no-contacts-message">' +
           '<i class="bi bi-person-x"></i>' +
-          '<p>No tienes contactos guardados</p>' +
-          '<small>Ve a la seccion Contactos para agregar o importar</small>' +
+          '<p>' + (search ? 'Sin resultados para "' + search + '"' : 'No tienes contactos guardados') + '</p>' +
+          '<small>' + (search ? 'Intenta con otro termino de busqueda' : 'Ve a la seccion Contactos para agregar o importar') + '</small>' +
         '</div>';
       return;
     }
@@ -781,6 +899,16 @@ async function loadContactsForSelector(page) {
   }
 }
 
+function formatPhoneDisplay(phone) {
+  if (!phone) return '';
+  var s = String(phone).replace(/\D/g, '');
+  // Format 595XXXXXXXXX as +595 XXX XXX XXX
+  if (s.length === 12 && s.startsWith('595')) {
+    return '+' + s.slice(0, 3) + ' ' + s.slice(3, 6) + ' ' + s.slice(6, 9) + ' ' + s.slice(9);
+  }
+  return phone;
+}
+
 function renderContactsCheckList(contacts) {
   var container = document.getElementById('contactsList');
   if (!container) return;
@@ -788,13 +916,18 @@ function renderContactsCheckList(contacts) {
   container.innerHTML = '';
 
   contacts.forEach(function(contact) {
+    var isChecked = selectedContactIds.has(contact.id);
     var item = document.createElement('label');
-    item.className = 'contact-checkbox-item';
+    item.className = 'contact-checkbox-item' + (isChecked ? ' checked' : '');
+
+    var hasName = contact.nombre && contact.nombre !== contact.phone;
+    var phoneFormatted = formatPhoneDisplay(contact.phone);
+
     item.innerHTML =
-      '<input type="checkbox" value="' + contact.id + '" ' + (selectedContactIds.has(contact.id) ? 'checked' : '') + '>' +
+      '<input type="checkbox" value="' + contact.id + '" ' + (isChecked ? 'checked' : '') + '>' +
       '<div class="contact-info">' +
-        '<span class="contact-name">' + (contact.nombre || contact.phone) + '</span>' +
-        '<span class="contact-number">' + contact.phone + '</span>' +
+        '<span class="contact-phone">' + phoneFormatted + '</span>' +
+        (hasName ? '<span class="contact-separator">&middot;</span><span class="contact-name">' + contact.nombre + '</span>' : '') +
       '</div>' +
       (contact.grupo ? '<span class="contact-group-badge">' + contact.grupo + '</span>' : '');
 
@@ -802,8 +935,10 @@ function renderContactsCheckList(contacts) {
     checkbox.addEventListener('change', function() {
       if (checkbox.checked) {
         selectedContactIds.add(contact.id);
+        item.classList.add('checked');
       } else {
         selectedContactIds.delete(contact.id);
+        item.classList.remove('checked');
       }
       updateSelectedCount();
       updateRecipientBadge();
@@ -815,13 +950,18 @@ function renderContactsCheckList(contacts) {
 
 function updateSelectedCount() {
   var countEl = document.getElementById('selectedContactsCount');
+  var pill = countEl?.closest('.selected-count-pill');
   if (countEl) {
     countEl.textContent = selectedContactIds.size;
+  }
+  if (pill) {
+    pill.classList.toggle('has-selection', selectedContactIds.size > 0);
   }
 }
 
 function setupContactsSearch() {
   var searchInput = document.getElementById('contactSelectorSearch');
+  var clearBtn = document.getElementById('contactSearchClear');
   if (!searchInput) return;
 
   if (searchInput.dataset.bound === '1') return;
@@ -829,10 +969,23 @@ function setupContactsSearch() {
 
   searchInput.addEventListener('input', function() {
     if (contactSelectorSearchTimer) clearTimeout(contactSelectorSearchTimer);
+    // Show/hide clear button
+    if (clearBtn) clearBtn.classList.toggle('d-none', !searchInput.value);
     contactSelectorSearchTimer = setTimeout(function() {
       loadContactsForSelector(1);
     }, 250);
   });
+
+  // Clear button
+  if (clearBtn && clearBtn.dataset.bound !== '1') {
+    clearBtn.dataset.bound = '1';
+    clearBtn.addEventListener('click', function() {
+      searchInput.value = '';
+      clearBtn.classList.add('d-none');
+      loadContactsForSelector(1);
+      searchInput.focus();
+    });
+  }
 }
 
 function setupContactsSelectAll() {
@@ -889,16 +1042,121 @@ function updateContactSelectorPagination() {
   var nextBtn = document.getElementById('contactSelectorNextBtn');
 
   if (pageInfo) {
-    pageInfo.textContent = 'Pagina ' + contactSelectorState.page + ' de ' + contactSelectorState.totalPages;
+    pageInfo.textContent = contactSelectorState.page + ' / ' + contactSelectorState.totalPages;
   }
   if (prevBtn) prevBtn.disabled = contactSelectorState.page <= 1;
   if (nextBtn) nextBtn.disabled = contactSelectorState.page >= contactSelectorState.totalPages;
 }
 
-// Load groups for dropdown
+// ========== CSV Drop Zone ==========
+function setupCsvDropZone() {
+  var zone = document.getElementById('csvDropZone');
+  var fileInput = document.getElementById('csvFile');
+  if (!zone || !fileInput) return;
+
+  // Drag events
+  ['dragenter', 'dragover'].forEach(function(evt) {
+    zone.addEventListener(evt, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.add('drag-over');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(function(evt) {
+    zone.addEventListener(evt, function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      zone.classList.remove('drag-over');
+    });
+  });
+
+  zone.addEventListener('drop', function(e) {
+    var files = e.dataTransfer?.files;
+    if (files && files.length > 0) {
+      fileInput.files = files;
+      fileInput.dispatchEvent(new Event('change'));
+    }
+  });
+
+  // File change handler
+  fileInput.addEventListener('change', function() {
+    if (fileInput.files.length > 0) {
+      var file = fileInput.files[0];
+      handleCsvFileSelected(file);
+    }
+  });
+}
+
+function handleCsvFileSelected(file) {
+  var zone = document.getElementById('csvDropZone');
+  var content = zone?.querySelector('.csv-drop-content');
+  var result = document.getElementById('csvFileInfo');
+  var nameEl = document.getElementById('csvFileName');
+  var countEl = document.getElementById('csvFileCount');
+
+  if (!zone || !result) return;
+
+  zone.classList.add('has-file');
+  if (content) content.style.display = 'none';
+  result.classList.remove('d-none');
+  if (nameEl) nameEl.textContent = file.name + ' (' + formatFileSize(file.size) + ')';
+
+  // Parse CSV to count valid numbers
+  csvParsedCount = 0;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var text = e.target.result || '';
+    var lines = text.split(/\r?\n/).filter(function(l) { return l.trim(); });
+    // Skip header if present
+    var start = 0;
+    if (lines.length > 0) {
+      var first = lines[0].toLowerCase();
+      if (first.indexOf('numero') !== -1 || first.indexOf('phone') !== -1 || first.indexOf('telefono') !== -1) {
+        start = 1;
+      }
+    }
+    var validCount = 0;
+    for (var i = start; i < lines.length; i++) {
+      var cols = lines[i].split(/[,;\t]/);
+      var num = (cols[0] || '').replace(/\D/g, '');
+      if (num.length >= 8) validCount++;
+    }
+    csvParsedCount = validCount;
+    if (countEl) countEl.textContent = validCount + ' numero' + (validCount !== 1 ? 's' : '') + ' valido' + (validCount !== 1 ? 's' : '');
+    updateRecipientBadge();
+  };
+  reader.readAsText(file);
+}
+
+function setupCsvFileRemove() {
+  var removeBtn = document.getElementById('csvFileRemove');
+  if (!removeBtn) return;
+
+  removeBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    var fileInput = document.getElementById('csvFile');
+    var zone = document.getElementById('csvDropZone');
+    var content = zone?.querySelector('.csv-drop-content');
+    var result = document.getElementById('csvFileInfo');
+
+    if (fileInput) fileInput.value = '';
+    if (zone) zone.classList.remove('has-file');
+    if (content) content.style.display = '';
+    if (result) result.classList.add('d-none');
+    csvParsedCount = 0;
+    updateRecipientBadge();
+  });
+}
+
+// ========== Group Selector ==========
 async function loadGroupsForSelector() {
   var select = document.getElementById('groupSelect');
   if (!select) return;
+
+  // Avoid re-binding change listener on repeat loads
+  if (select.dataset.loaded === '1') return;
 
   select.innerHTML = '<option value="">-- Cargando grupos --</option>';
 
@@ -914,16 +1172,39 @@ async function loadGroupsForSelector() {
       return;
     }
 
+    // Fetch counts for all groups in parallel
+    var countPromises = groups.map(function(g) {
+      return authFetch('/contacts' + buildQuery({ group: g, page: 1, pageSize: 1 }))
+        .then(function(r) { return r.json(); })
+        .then(function(d) { return { name: g, count: Number(d.total || 0) }; })
+        .catch(function() { return { name: g, count: 0 }; });
+    });
+    var groupCounts = await Promise.all(countPromises);
+
     select.innerHTML = '<option value="">-- Selecciona un grupo --</option>';
-    groups.forEach(function(g) {
+    groupCounts.forEach(function(gc) {
       var option = document.createElement('option');
-      option.value = g;
-      option.textContent = g;
+      option.value = gc.name;
+      option.textContent = gc.name + ' (' + gc.count + ' contacto' + (gc.count !== 1 ? 's' : '') + ')';
+      option.dataset.count = gc.count;
       select.appendChild(option);
     });
 
+    select.dataset.loaded = '1';
+
     select.addEventListener('change', function() {
-      loadGroupContactsCount();
+      var selected = select.options[select.selectedIndex];
+      var countEl = document.getElementById('groupContactsCount');
+      var countText = document.getElementById('groupContactsCountText');
+
+      if (!select.value) {
+        if (countText) countText.textContent = 'Selecciona un grupo para ver los contactos';
+        if (countEl) countEl.classList.remove('has-count');
+      } else {
+        var cnt = selected?.dataset?.count || '0';
+        if (countText) countText.textContent = cnt + ' contacto' + (cnt !== '1' ? 's' : '') + ' recibiran el mensaje';
+        if (countEl) countEl.classList.add('has-count');
+      }
       updateRecipientBadge();
     });
 
@@ -934,32 +1215,7 @@ async function loadGroupsForSelector() {
 }
 
 async function loadGroupContactsCount() {
-  var select = document.getElementById('groupSelect');
-  var countEl = document.getElementById('groupContactsCount');
-  var countText = document.getElementById('groupContactsCountText');
-
-  if (!select || !countEl || !countText) return;
-
-  var groupName = select.value;
-
-  if (!groupName) {
-    countText.textContent = 'Selecciona un grupo para ver los contactos';
-    return;
-  }
-
-  try {
-    var res = await authFetch('/contacts' + buildQuery({ group: groupName, page: 1, pageSize: 1 }));
-    if (!res.ok) throw new Error('Error');
-
-    var data = await res.json();
-    var total = Number(data.total || 0);
-
-    countText.textContent = total + ' contactos';
-    countEl.classList.remove('d-none');
-
-  } catch (error) {
-    countText.textContent = 'Error al cargar';
-  }
+  // Now handled inline via the select change handler above
 }
 
 // ========== WhatsApp Preview Modal ==========
@@ -1034,12 +1290,17 @@ function openWaPreview(singleTemplateNum) {
 
   // Check media type
   var mediaType = document.getElementById('messageTypeHidden')?.value || 'none';
-  var hasImage = (mediaType === 'single' || mediaType === 'multiple');
-  var hasAudio = (mediaType === 'audio');
 
   // Get current time
   var now = new Date();
   var timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+
+  // Get image count for multiple images
+  var multiImageCount = 0;
+  if (mediaType === 'multiple') {
+    var multiInput = document.getElementById('images');
+    multiImageCount = multiInput?.files?.length || 4;
+  }
 
   // Build chat messages
   chat.innerHTML = '';
@@ -1060,20 +1321,88 @@ function openWaPreview(singleTemplateNum) {
 
     var content = '';
 
-    // Image placeholder (only for first message or single preview)
-    if (hasImage && idx === 0) {
+    // --- Audio: voice message bubble (no text inside, separate bubble) ---
+    if (mediaType === 'audio' && idx === 0) {
+      var waveformBars = '';
+      for (var b = 0; b < 28; b++) {
+        var h = [4,7,3,8,5,10,6,12,4,9,7,14,5,11,8,6,13,4,10,7,5,12,8,3,9,6,11,5][b];
+        waveformBars += '<span class="wa-waveform-bar" style="height:' + h + 'px"></span>';
+      }
+      var audioContent =
+        '<div class="wa-voice-msg">' +
+          '<div class="wa-voice-avatar"><i class="bi bi-person-fill"></i></div>' +
+          '<button class="wa-voice-play"><i class="bi bi-play-fill"></i></button>' +
+          '<div class="wa-voice-track">' +
+            '<div class="wa-waveform">' + waveformBars + '</div>' +
+            '<div class="wa-voice-info">' +
+              '<span class="wa-voice-duration">0:15</span>' +
+              '<span class="wa-voice-mic"><i class="bi bi-mic-fill"></i></span>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="wa-msg-meta"><span class="wa-msg-time">' + timeStr + '</span><span class="wa-msg-checks"><i class="bi bi-check-all"></i></span></div>';
+
+      bubble.innerHTML = '<div class="wa-msg-bubble wa-msg-sent">' + audioContent + '</div>';
+
+      // If there's also text, add it as a separate bubble below
+      if (safeText.trim()) {
+        var textBubble = document.createElement('div');
+        textBubble.className = 'wa-msg-wrapper';
+        textBubble.style.marginTop = '4px';
+        textBubble.innerHTML =
+          '<div class="wa-msg-bubble wa-msg-sent">' +
+            '<div class="wa-msg-text">' + safeText + '</div>' +
+            '<div class="wa-msg-meta"><span class="wa-msg-time">' + timeStr + '</span><span class="wa-msg-checks"><i class="bi bi-check-all"></i></span></div>' +
+          '</div>';
+
+        // Add template label if multiple templates
+        if (templates.length > 1) {
+          var label = document.createElement('div');
+          label.className = 'wa-msg-label';
+          label.textContent = 'Mensaje ' + (singleTemplateNum || (idx + 1));
+          bubble.insertBefore(label, bubble.firstChild);
+        }
+
+        chat.appendChild(bubble);
+        chat.appendChild(textBubble);
+        return; // skip default append
+      }
+    }
+    // --- Multiple images: grid/collage ---
+    else if (mediaType === 'multiple' && idx === 0) {
+      var imgCount = Math.max(multiImageCount, 2);
+      var displayCount = Math.min(imgCount, 4);
+      var gridClass = 'wa-multi-images wa-multi-grid-' + displayCount;
+
+      var gridItems = '';
+      for (var g = 0; g < displayCount; g++) {
+        var isLast = (g === displayCount - 1) && (imgCount > 4);
+        gridItems += '<div class="wa-multi-img-item">' +
+          '<i class="bi bi-image"></i>' +
+          (isLast ? '<span class="wa-multi-img-badge">+' + (imgCount - 3) + '</span>' : '') +
+        '</div>';
+      }
+
+      content += '<div class="' + gridClass + '">' + gridItems + '</div>';
+      // Caption on last image
+      content += '<div class="wa-msg-text">' + safeText + '</div>';
+      content += '<div class="wa-msg-meta"><span class="wa-msg-time">' + timeStr + '</span><span class="wa-msg-checks"><i class="bi bi-check-all"></i></span></div>';
+    }
+    // --- Single image with caption ---
+    else if (mediaType === 'single' && idx === 0) {
       content += '<div class="wa-msg-image"><i class="bi bi-image"></i><span>Imagen adjunta</span></div>';
+      content += '<div class="wa-msg-text">' + safeText + '</div>';
+      content += '<div class="wa-msg-meta"><span class="wa-msg-time">' + timeStr + '</span><span class="wa-msg-checks"><i class="bi bi-check-all"></i></span></div>';
+    }
+    // --- Text only ---
+    else {
+      content += '<div class="wa-msg-text">' + safeText + '</div>';
+      content += '<div class="wa-msg-meta"><span class="wa-msg-time">' + timeStr + '</span><span class="wa-msg-checks"><i class="bi bi-check-all"></i></span></div>';
     }
 
-    // Audio placeholder
-    if (hasAudio && idx === 0) {
-      content += '<div class="wa-msg-audio"><i class="bi bi-mic-fill"></i><div class="wa-msg-audio-wave"></div><span>0:12</span></div>';
+    if (!bubble.innerHTML) {
+      bubble.innerHTML = '<div class="wa-msg-bubble wa-msg-sent">' + content + '</div>';
     }
-
-    content += '<div class="wa-msg-text">' + safeText + '</div>';
-    content += '<div class="wa-msg-meta"><span class="wa-msg-time">' + timeStr + '</span><span class="wa-msg-checks"><i class="bi bi-check-all"></i></span></div>';
-
-    bubble.innerHTML = '<div class="wa-msg-bubble wa-msg-sent">' + content + '</div>';
 
     // Add template number label if multiple
     if (templates.length > 1) {
@@ -1134,6 +1463,7 @@ function initMessages() {
   setupVariables();
   setupPreview();
   setupRecipientSourceTabs();
+  loadIntervals();
 
   // Cancel button
   var cancelBtn = document.getElementById('cancelBtn');

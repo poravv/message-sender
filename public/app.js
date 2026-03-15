@@ -1727,9 +1727,9 @@ function generateTemplateFields(count) {
           id="template${i}" 
           name="templates[]"
           class="message-textarea"
-          placeholder="Escribe el template ${i}... Puedes usar {sustantivo}, {nombre} y {grupo}
+          placeholder="Escribe el template ${i}... Puedes usar {tratamiento}, {nombre} y {grupo}
 
-Ejemplo: 'Buen día {sustantivo} {nombre} del grupo {grupo}, le escribo para...'
+Ejemplo: 'Buen día {tratamiento} {nombre} del grupo {grupo}, le escribo para...'
 
 Este template se usará con las líneas ${lineText} del CSV"
           rows="4"
@@ -2468,7 +2468,7 @@ function renderContactsTable(items = []) {
     tr.innerHTML = `
       <td><code>${c.phone || '—'}</code></td>
       <td>${c.nombre || '—'}</td>
-      <td>${c.sustantivo || '—'}</td>
+      <td>${c.tratamiento || '—'}</td>
       <td>${c.grupo || '<span class="text-muted">Sin grupo</span>'}</td>
       <td>${sourceBadge}</td>
       <td class="text-center">${statsBadge}</td>
@@ -2497,7 +2497,7 @@ async function createManualContact(event) {
   event.preventDefault();
   const phone = document.getElementById('manualPhone')?.value?.trim();
   const nombre = document.getElementById('manualNombre')?.value?.trim();
-  const sustantivo = document.getElementById('manualSustantivo')?.value?.trim();
+  const tratamiento = document.getElementById('manualTratamiento')?.value?.trim();
   const grupo = document.getElementById('manualGrupo')?.value?.trim();
   if (!phone) {
     showAlert('El número es obligatorio', 'warning');
@@ -2507,7 +2507,7 @@ async function createManualContact(event) {
     const res = await authFetch('/contacts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, nombre, sustantivo, grupo }),
+      body: JSON.stringify({ phone, nombre, tratamiento, grupo }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -2552,19 +2552,19 @@ async function handleContactsTableClick(event) {
     if (!row) return;
     const currentPhone = row.children[0]?.textContent?.trim() || '';
     const currentNombre = row.children[1]?.textContent?.trim() || '';
-    const currentSustantivo = row.children[2]?.textContent?.trim() || '';
+    const currentTratamiento = row.children[2]?.textContent?.trim() || '';
     const currentGrupo = row.children[3]?.textContent?.trim() || '';
 
     const phone = prompt('Número (595...):', currentPhone);
     if (!phone) return;
     const nombre = prompt('Nombre:', currentNombre === '—' ? '' : currentNombre);
-    const sustantivo = prompt('Sustantivo:', currentSustantivo === '—' ? '' : currentSustantivo);
+    const tratamiento = prompt('Tratamiento:', currentTratamiento === '—' ? '' : currentTratamiento);
     const grupo = prompt('Grupo:', (currentGrupo === '—' || currentGrupo === 'Sin grupo') ? '' : currentGrupo);
     try {
       const res = await authFetch(`/contacts/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, nombre, sustantivo, grupo }),
+        body: JSON.stringify({ phone, nombre, tratamiento, grupo }),
       });
       const data = await res.json();
       if (!res.ok) {

@@ -8,7 +8,7 @@ Proyecto: `message-sender`
 Agregar un flujo donde el CSV no solo dispare envios, sino que tambien:
 
 1. Registre contactos en base de datos (persistente) desde CSV y tambien manualmente.
-2. Guarde atributos del contacto: `nombre`, `sustantivo`, `grupo`.
+2. Guarde atributos del contacto: `nombre`, `tratamiento`, `grupo`.
 3. Relacione toda la actividad al usuario autenticado por Keycloak (`req.auth.sub`).
 4. Permita medir por usuario:
    - cuantos mensajes se enviaron,
@@ -26,7 +26,7 @@ Agregar un flujo donde el CSV no solo dispare envios, sino que tambien:
 - El CSV se parsea en `loadNumbersFromCSV()` (`src/utils.js:99`).
 - El parser ya lee:
   - columna 1: numero,
-  - columna 2: `sustantivo`,
+  - columna 2: `tratamiento`,
   - columna 3: `nombre`.
   (ver `src/utils.js:118` a `src/utils.js:126`).
 - No existe persistencia historica en una DB relacional; hoy se usa Redis para estado de cola/progreso (`src/queueRedis.js`).
@@ -86,7 +86,7 @@ Por que PostgreSQL:
 - `user_id` (fk app_user.id, index)
 - `phone_e164` (text)                <-- ej. `595992756462`
 - `nombre` (text null)
-- `sustantivo` (text null)
+- `tratamiento` (text null)
 - `source` (text, default `csv`, valores: `csv` | `manual`)
 - `created_at`, `updated_at`, `last_seen_at`
 - unique: (`user_id`, `phone_e164`)
@@ -155,9 +155,9 @@ Por que PostgreSQL:
 Soportar dos modos:
 
 1. Sin headers (compatibilidad con lo actual):  
-   `numero,sustantivo,nombre,grupo`
+   `numero,tratamiento,nombre,grupo`
 2. Con headers (recomendado):  
-   `numero,nombre,sustantivo,grupo`
+   `numero,nombre,tratamiento,grupo`
 
 Reglas:
 
@@ -168,7 +168,7 @@ Reglas:
 Ejemplo recomendado:
 
 ```csv
-numero,nombre,sustantivo,grupo
+numero,nombre,tratamiento,grupo
 595992756462,Carlos,Senor,Premium
 595976947110,Ana,Senora,Reactivacion
 595984123456,Jose,Doctor,Premium
@@ -335,7 +335,7 @@ Payload recomendado de contacto:
 
 - `phone`
 - `nombre`
-- `sustantivo`
+- `tratamiento`
 - `grupo`
 
 ## 8) Consideraciones de seguridad y multi-tenant

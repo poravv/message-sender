@@ -6,7 +6,7 @@ Sistema profesional de envío masivo de mensajes por WhatsApp con arquitectura m
 
 ### 📨 **Envío de Mensajes**
 - **Envío masivo** desde archivos CSV con orden preservado
-- **Importación de contactos desde CSV** con `nombre`, `sustantivo` y `grupo`
+- **Importación de contactos desde CSV** con `nombre`, `tratamiento` y `grupo`
 - **Gestión manual de contactos** (alta/edición/eliminación)
 - **Mensajes de texto** con soporte para emojis
 - **Imágenes individuales** con caption personalizado
@@ -177,7 +177,7 @@ open http://localhost:3000
 
 ### Formato recomendado (con personalización)
 ```csv
-numero,sustantivo,nombre,grupo
+numero,tratamiento,nombre,grupo
 595992756462,Sr,Carlos Gómez,Premium
 595976947110,Sra,Ana Benítez,Reactivacion
 595984123456,Dr,José Acosta,VIP
@@ -185,7 +185,7 @@ numero,sustantivo,nombre,grupo
 
 - **Formato**: número obligatorio, columnas adicionales opcionales.
 - **Prefijo**: se normaliza a código de país Paraguay (`595`).
-- **Variables disponibles**: `{sustantivo}`, `{nombre}`, `{grupo}`.
+- **Variables disponibles**: `{tratamiento}`, `{nombre}`, `{grupo}`.
 
 ## 📈 Gráficos en Markdown (Mermaid)
 
