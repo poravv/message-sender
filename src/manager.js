@@ -564,34 +564,56 @@ class WhatsAppManager {
 
       // ── Chatbot: listen for incoming messages ──
       this.sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
-        // Log ALL upsert events for debugging
-        logger.info({ type, count: msgs?.length, jids: msgs?.map(m => m.key?.remoteJid).slice(0, 3) }, 'messages.upsert event');
-
         if (type !== 'notify') return;
         for (const msg of msgs) {
           try {
             const jid = msg.key?.remoteJid || '';
             const fromMe = msg.key?.fromMe;
 
-            // Skip messages from self, status broadcasts, and protocol messages
+            // Skip messages from self, status broadcasts
             if (fromMe) continue;
             if (jid === 'status@broadcast') continue;
             if (!msg.message) continue;
 
-            // Only handle individual chats on s.whatsapp.net (not groups, not LIDs)
+            // Skip groups
             if (jid.endsWith('@g.us')) continue;
-            if (jid.endsWith('@lid')) {
-              logger.debug({ jid }, 'Skipping LID message');
-              continue;
+
+            // Resolve phone number from JID
+            let contactPhone = null;
+
+            if (jid.endsWith('@s.whatsapp.net')) {
+              // Normal JID — extract phone directly
+              contactPhone = jid.split('@')[0].split(':')[0];
+            } else if (jid.endsWith('@lid')) {
+              // LID (Linked ID) — resolve to real phone using Baileys lidMapping
+              try {
+                const sock = this.sock;
+                if (sock?.signalRepository?.lidMapping?.getPNForLID) {
+                  const pn = await sock.signalRepository.lidMapping.getPNForLID(jid);
+                  if (pn) {
+                    contactPhone = pn.split('@')[0].split(':')[0];
+                    logger.info({ lid: jid, resolved: contactPhone }, 'Resolved LID to phone');
+                  }
+                }
+                if (!contactPhone) {
+                  // Fallback: check msg.key.participant
+                  const participant = msg.key.participant;
+                  if (participant && participant.endsWith('@s.whatsapp.net')) {
+                    contactPhone = participant.split('@')[0].split(':')[0];
+                    logger.info({ lid: jid, participant: contactPhone }, 'Resolved LID via participant');
+                  }
+                }
+              } catch (lidErr) {
+                logger.warn({ lid: jid, err: lidErr?.message }, 'Failed to resolve LID');
+              }
             }
-            if (!jid.endsWith('@s.whatsapp.net')) {
-              logger.debug({ jid }, 'Skipping non-s.whatsapp.net message');
+
+            if (!contactPhone || contactPhone.length < 8) {
+              logger.debug({ jid, contactPhone }, 'Skipping message: could not resolve phone');
               continue;
             }
 
-            // Extract phone from JID
-            const contactPhone = msg.key.remoteJid.split('@')[0].split(':')[0]; // Remove device suffix if present
-            if (!contactPhone || contactPhone.length < 8) continue;
+            logger.info({ jid, contactPhone, fromMe }, 'Processing incoming message');
 
             // Extract message content — unwrap common Baileys containers
             let messageContent = msg.message;
