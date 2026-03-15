@@ -669,6 +669,407 @@ function showAccountBlockedModal(type, message) {
   document.body.appendChild(modal);
 }
 
+// ========== Country Selector ==========
+
+var COUNTRY_FLAGS = {
+  PY: '\u{1F1F5}\u{1F1FE}', AR: '\u{1F1E6}\u{1F1F7}', BR: '\u{1F1E7}\u{1F1F7}',
+  CL: '\u{1F1E8}\u{1F1F1}', UY: '\u{1F1FA}\u{1F1FE}', CO: '\u{1F1E8}\u{1F1F4}',
+  PE: '\u{1F1F5}\u{1F1EA}', EC: '\u{1F1EA}\u{1F1E8}', BO: '\u{1F1E7}\u{1F1F4}',
+  VE: '\u{1F1FB}\u{1F1EA}', MX: '\u{1F1F2}\u{1F1FD}', US: '\u{1F1FA}\u{1F1F8}',
+  ES: '\u{1F1EA}\u{1F1F8}'
+};
+
+/**
+ * Check if country selection is needed and show modal if so.
+ * Returns a promise that resolves when country is confirmed.
+ */
+function checkCountrySelection() {
+  return new Promise(function(resolve) {
+    var confirmed = localStorage.getItem('countryConfirmed');
+    if (confirmed) {
+      updateCountryIndicator();
+      resolve();
+      return;
+    }
+    showCountrySelectorModal(resolve);
+  });
+}
+
+/**
+ * Show blocking country selector modal.
+ */
+function showCountrySelectorModal(onConfirm) {
+  // Remove existing if present
+  var existing = document.getElementById('country-selector-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'country-selector-modal';
+  modal.className = 'trial-modal-overlay';
+
+  modal.innerHTML =
+    '<div class="trial-modal-card country-selector-card">' +
+      '<div class="trial-modal-icon" style="color: var(--accent);">' +
+        '<i class="bi bi-globe-americas"></i>' +
+      '</div>' +
+      '<h2>Selecciona tu pais</h2>' +
+      '<p>El pais determina como se validan los numeros de telefono</p>' +
+      '<div class="country-select-wrapper">' +
+        '<select id="countrySelectDropdown" class="country-select">' +
+          '<option value="" disabled selected>-- Elige un pais --</option>' +
+        '</select>' +
+      '</div>' +
+      '<div id="countrySelectError" class="country-select-error"></div>' +
+      '<div class="trial-modal-actions">' +
+        '<button class="btn-primary" id="confirmCountryBtn" disabled>Confirmar</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  // Fetch countries and populate dropdown
+  authFetch('/phone/countries')
+    .then(function(res) { return res.json(); })
+    .then(function(countries) {
+      var select = document.getElementById('countrySelectDropdown');
+      if (!select) return;
+
+      var currentCountry = (window.userProfile && window.userProfile.country) || '';
+
+      Object.keys(countries).forEach(function(code) {
+        var c = countries[code];
+        var flag = COUNTRY_FLAGS[code] || '';
+        var option = document.createElement('option');
+        option.value = code;
+        option.textContent = flag + ' ' + c.name + ' (+' + c.code + ')';
+        if (code === currentCountry) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+
+      // Enable confirm button when selection changes
+      select.addEventListener('change', function() {
+        var btn = document.getElementById('confirmCountryBtn');
+        if (btn) btn.disabled = !select.value;
+      });
+
+      // If current country was pre-selected, enable button
+      if (select.value) {
+        var btn = document.getElementById('confirmCountryBtn');
+        if (btn) btn.disabled = false;
+      }
+    })
+    .catch(function() {
+      var errEl = document.getElementById('countrySelectError');
+      if (errEl) errEl.textContent = 'Error al cargar paises. Recarga la pagina.';
+    });
+
+  // Confirm button handler
+  document.getElementById('confirmCountryBtn').addEventListener('click', function() {
+    var select = document.getElementById('countrySelectDropdown');
+    var selectedCode = select ? select.value : '';
+    if (!selectedCode) return;
+
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+
+    authFetch('/user/country', {
+      method: 'PUT',
+      body: JSON.stringify({ country: selectedCode })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.success) {
+        localStorage.setItem('countryConfirmed', selectedCode);
+        if (window.userProfile) {
+          window.userProfile.country = selectedCode;
+          userProfile = window.userProfile;
+        }
+        updateCountryIndicator();
+        var m = document.getElementById('country-selector-modal');
+        if (m) m.remove();
+        if (typeof onConfirm === 'function') onConfirm();
+      } else {
+        throw new Error(data.error || 'Error al guardar');
+      }
+    })
+    .catch(function(err) {
+      btn.disabled = false;
+      btn.textContent = 'Confirmar';
+      var errEl = document.getElementById('countrySelectError');
+      if (errEl) errEl.textContent = err.message || 'Error al guardar pais';
+    });
+  });
+}
+
+/**
+ * Show country change modal (non-blocking, from settings/navbar).
+ */
+function showCountryChangeModal() {
+  var existing = document.getElementById('country-change-modal');
+  if (existing) existing.remove();
+
+  var modal = document.createElement('div');
+  modal.id = 'country-change-modal';
+  modal.className = 'trial-modal-overlay';
+
+  modal.innerHTML =
+    '<div class="trial-modal-card country-selector-card">' +
+      '<div class="trial-modal-icon" style="color: var(--accent);">' +
+        '<i class="bi bi-globe-americas"></i>' +
+      '</div>' +
+      '<h2>Cambiar pais</h2>' +
+      '<p class="country-change-warning">' +
+        '<i class="bi bi-exclamation-triangle"></i> ' +
+        'Cambiar el pais afectara la validacion de numeros de telefono' +
+      '</p>' +
+      '<div class="country-select-wrapper">' +
+        '<select id="countryChangeDropdown" class="country-select">' +
+          '<option value="" disabled>-- Elige un pais --</option>' +
+        '</select>' +
+      '</div>' +
+      '<div id="countryChangeError" class="country-select-error"></div>' +
+      '<div class="trial-modal-actions" style="display:flex; gap:0.5rem; justify-content:center;">' +
+        '<button class="btn-primary" id="confirmCountryChangeBtn" disabled>Guardar</button>' +
+        '<button class="btn-primary" id="cancelCountryChangeBtn" ' +
+          'style="background:var(--bg-tertiary,#242b33); color:var(--text-primary,#e7e9ea);">' +
+          'Cancelar</button>' +
+      '</div>' +
+    '</div>';
+
+  document.body.appendChild(modal);
+
+  // Fetch countries
+  authFetch('/phone/countries')
+    .then(function(res) { return res.json(); })
+    .then(function(countries) {
+      var select = document.getElementById('countryChangeDropdown');
+      if (!select) return;
+
+      var currentCountry = (window.userProfile && window.userProfile.country) || 'PY';
+
+      Object.keys(countries).forEach(function(code) {
+        var c = countries[code];
+        var flag = COUNTRY_FLAGS[code] || '';
+        var option = document.createElement('option');
+        option.value = code;
+        option.textContent = flag + ' ' + c.name + ' (+' + c.code + ')';
+        if (code === currentCountry) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+
+      select.addEventListener('change', function() {
+        var btn = document.getElementById('confirmCountryChangeBtn');
+        if (btn) btn.disabled = !select.value || select.value === currentCountry;
+      });
+    })
+    .catch(function() {
+      var errEl = document.getElementById('countryChangeError');
+      if (errEl) errEl.textContent = 'Error al cargar paises.';
+    });
+
+  // Save
+  document.getElementById('confirmCountryChangeBtn').addEventListener('click', function() {
+    var select = document.getElementById('countryChangeDropdown');
+    var selectedCode = select ? select.value : '';
+    if (!selectedCode) return;
+
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = 'Guardando...';
+
+    authFetch('/user/country', {
+      method: 'PUT',
+      body: JSON.stringify({ country: selectedCode })
+    })
+    .then(function(res) { return res.json(); })
+    .then(function(data) {
+      if (data.success) {
+        localStorage.setItem('countryConfirmed', selectedCode);
+        if (window.userProfile) {
+          window.userProfile.country = selectedCode;
+          userProfile = window.userProfile;
+        }
+        updateCountryIndicator();
+        updateCountryInfoBadges();
+        var m = document.getElementById('country-change-modal');
+        if (m) m.remove();
+        showAlert('Pais actualizado a ' + (COUNTRY_FLAGS[selectedCode] || '') + ' ' + selectedCode, 'success');
+      } else {
+        throw new Error(data.error || 'Error al guardar');
+      }
+    })
+    .catch(function(err) {
+      btn.disabled = false;
+      btn.textContent = 'Guardar';
+      var errEl = document.getElementById('countryChangeError');
+      if (errEl) errEl.textContent = err.message || 'Error al guardar pais';
+    });
+  });
+
+  // Cancel
+  document.getElementById('cancelCountryChangeBtn').addEventListener('click', function() {
+    var m = document.getElementById('country-change-modal');
+    if (m) m.remove();
+  });
+}
+
+/**
+ * Update the country indicator in the navbar.
+ */
+function updateCountryIndicator() {
+  var country = (window.userProfile && window.userProfile.country) || 'PY';
+  var flag = COUNTRY_FLAGS[country] || '';
+
+  var flagEl = document.getElementById('country-flag');
+  var codeEl = document.getElementById('country-code-label');
+  var indicator = document.getElementById('country-indicator');
+
+  if (flagEl) flagEl.textContent = flag;
+  if (codeEl) codeEl.textContent = country;
+  if (indicator) {
+    indicator.title = 'Pais: ' + country + ' — Click para cambiar';
+    indicator.classList.remove('d-none');
+  }
+
+  // Also update profile dropdown country display
+  var profileFlag = document.getElementById('profile-country-flag');
+  var profileName = document.getElementById('profile-country-name');
+  if (profileFlag) profileFlag.textContent = flag;
+  if (profileName) profileName.textContent = country;
+
+  updateCountryInfoBadges();
+}
+
+/**
+ * Update country info badges in contacts and send tabs.
+ */
+function updateCountryInfoBadges() {
+  var country = (window.userProfile && window.userProfile.country) || 'PY';
+  var flag = COUNTRY_FLAGS[country] || '';
+
+  // Fetch country details for prefix
+  authFetch('/phone/countries')
+    .then(function(res) { return res.json(); })
+    .then(function(countries) {
+      var config = countries[country];
+      if (!config) return;
+
+      // Send tab badge
+      var sendBadge = document.getElementById('send-country-info');
+      var sendFlag = document.getElementById('send-country-flag');
+      var sendPrefix = document.getElementById('send-country-prefix');
+      if (sendBadge) {
+        sendBadge.classList.remove('d-none');
+        if (sendFlag) sendFlag.textContent = flag;
+        if (sendPrefix) sendPrefix.textContent = 'Prefijo: +' + config.code;
+      }
+
+      // Contacts tab badge
+      var contactsBadge = document.getElementById('contacts-country-info');
+      var contactsFlag = document.getElementById('contacts-country-flag');
+      var contactsText = document.getElementById('contacts-country-text');
+      if (contactsBadge) {
+        contactsBadge.classList.remove('d-none');
+        if (contactsFlag) contactsFlag.textContent = flag;
+        if (contactsText) contactsText.textContent = 'Validacion: ' + config.name + ' (+' + config.code + ')';
+      }
+    })
+    .catch(function() {
+      // Silently fail — non-critical UI update
+    });
+}
+
+// ========== Profile Menu ==========
+
+/**
+ * Setup profile dropdown menu — toggle on click, close on outside click.
+ */
+function setupProfileMenu() {
+  var wrapper = document.querySelector('.profile-menu-wrapper');
+  var trigger = document.getElementById('profile-menu-trigger');
+  var dropdown = document.getElementById('profile-dropdown');
+  if (!wrapper || !trigger || !dropdown) return;
+
+  // Toggle dropdown
+  trigger.addEventListener('click', function(e) {
+    e.stopPropagation();
+    wrapper.classList.toggle('open');
+    if (wrapper.classList.contains('open')) {
+      updateProfileDropdown();
+    }
+  });
+
+  // Close on outside click
+  document.addEventListener('click', function(e) {
+    if (!wrapper.contains(e.target)) {
+      wrapper.classList.remove('open');
+    }
+  });
+
+  // Country change button
+  var countryBtn = document.getElementById('profile-change-country');
+  if (countryBtn) {
+    countryBtn.addEventListener('click', function() {
+      wrapper.classList.remove('open');
+      showCountryChangeModal();
+    });
+  }
+
+  // Logout button
+  var logoutBtn = document.getElementById('profile-logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', function() {
+      wrapper.classList.remove('open');
+      logout();
+    });
+  }
+}
+
+/**
+ * Update profile dropdown content with current user data.
+ */
+function updateProfileDropdown() {
+  var profile = window.userProfile;
+  var user = currentUser;
+
+  // Name and email
+  var nameEl = document.getElementById('profile-display-name');
+  var emailEl = document.getElementById('profile-display-email');
+  if (nameEl) nameEl.textContent = (user && user.displayName) || (profile && profile.name) || 'Usuario';
+  if (emailEl) emailEl.textContent = (user && user.email) || '';
+
+  // Country
+  var country = (profile && profile.country) || '';
+  var flagEl = document.getElementById('profile-country-flag');
+  var nameCountryEl = document.getElementById('profile-country-name');
+  if (flagEl) flagEl.textContent = country ? (COUNTRY_FLAGS[country] || '') : '';
+  if (nameCountryEl) nameCountryEl.textContent = country || 'No configurado';
+
+  // Plan badge
+  var planBadge = document.getElementById('profile-plan-badge');
+  if (planBadge && profile) {
+    if (profile.role === 'admin') {
+      planBadge.textContent = 'Admin';
+      planBadge.className = 'profile-plan-badge plan-admin';
+    } else if (profile.plan === 'active' || profile.plan === 'pro' || profile.plan === 'professional') {
+      planBadge.textContent = 'Plan Activo';
+      planBadge.className = 'profile-plan-badge plan-active';
+    } else if (profile.plan === 'trial') {
+      var days = profile.trialDaysLeft || 0;
+      planBadge.textContent = 'Prueba: ' + days + ' dias';
+      planBadge.className = 'profile-plan-badge plan-trial';
+    } else {
+      planBadge.textContent = 'Expirado';
+      planBadge.className = 'profile-plan-badge plan-expired';
+    }
+  }
+}
+
 // Global exports
 window.authFetch = authFetch;
 window.showAlert = showAlert;
@@ -683,4 +1084,11 @@ window.showTrialExpiredModal = showTrialExpiredModal;
 window.createAppSession = createAppSession;
 window.showSessionConflictModal = showSessionConflictModal;
 window.showAccountBlockedModal = showAccountBlockedModal;
+window.checkCountrySelection = checkCountrySelection;
+window.showCountryChangeModal = showCountryChangeModal;
+window.updateCountryIndicator = updateCountryIndicator;
+window.updateCountryInfoBadges = updateCountryInfoBadges;
+window.COUNTRY_FLAGS = COUNTRY_FLAGS;
 window.userProfile = userProfile;
+window.setupProfileMenu = setupProfileMenu;
+window.updateProfileDropdown = updateProfileDropdown;

@@ -35,10 +35,45 @@
       <div class="navbar-end">
         <div id="trial-badge" class="trial-badge d-none"></div>
         <div id="user-info" class="user-info d-none">
-          <span id="user-name">Usuario</span>
-          <button id="logout-btn" class="btn-icon" title="Cerrar sesion">
-            <i class="bi bi-box-arrow-right"></i>
+          <button id="country-indicator" class="country-indicator" title="Cambiar pais">
+            <span id="country-flag"></span>
+            <span id="country-code-label"></span>
           </button>
+          <div class="profile-menu-wrapper">
+            <button id="profile-menu-trigger" class="profile-menu-trigger" title="Perfil y configuracion">
+              <span id="user-name">Usuario</span>
+              <i class="bi bi-chevron-down profile-chevron"></i>
+            </button>
+            <div id="profile-dropdown" class="profile-dropdown">
+              <div class="profile-dropdown-header">
+                <div class="profile-dropdown-avatar">
+                  <i class="bi bi-person-circle"></i>
+                </div>
+                <div class="profile-dropdown-info">
+                  <span id="profile-display-name" class="profile-dropdown-name">Usuario</span>
+                  <span id="profile-display-email" class="profile-dropdown-email"></span>
+                </div>
+              </div>
+              <div class="profile-dropdown-divider"></div>
+              <div class="profile-dropdown-section">
+                <label class="profile-dropdown-label">Pais</label>
+                <button id="profile-change-country" class="profile-dropdown-country">
+                  <span id="profile-country-flag"></span>
+                  <span id="profile-country-name">Paraguay</span>
+                  <i class="bi bi-pencil-square"></i>
+                </button>
+              </div>
+              <div class="profile-dropdown-section">
+                <label class="profile-dropdown-label">Plan</label>
+                <span id="profile-plan-badge" class="profile-plan-badge">-</span>
+              </div>
+              <div class="profile-dropdown-divider"></div>
+              <button id="profile-logout-btn" class="profile-dropdown-item profile-dropdown-logout">
+                <i class="bi bi-box-arrow-right"></i>
+                Cerrar sesion
+              </button>
+            </div>
+          </div>
         </div>
         
         <div id="connection-status" class="connection-badge disconnected">
@@ -436,6 +471,10 @@
         <header class="section-header">
           <h1>Enviar Mensajes</h1>
           <p>Configura y envia mensajes masivos</p>
+          <div id="send-country-info" class="country-info-badge d-none">
+            <span id="send-country-flag"></span>
+            <span id="send-country-prefix"></span>
+          </div>
         </header>
 
         <form id="messageForm" enctype="multipart/form-data">
@@ -986,6 +1025,10 @@
         <header class="section-header">
           <h1>Contactos</h1>
           <p>Gestiona tu lista de contactos</p>
+          <div id="contacts-country-info" class="country-info-badge d-none">
+            <span id="contacts-country-flag"></span>
+            <span id="contacts-country-text"></span>
+          </div>
         </header>
 
         <div class="card">

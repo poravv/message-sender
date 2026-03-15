@@ -520,6 +520,19 @@ async function sendMessages() {
 
   if (!form || !submitBtn) return;
 
+  // Block sending if country not confirmed
+  var countryConfirmed = localStorage.getItem('countryConfirmed');
+  var profileCountry = window.userProfile && window.userProfile.country;
+  if (!profileCountry || !countryConfirmed) {
+    showAlert('Debes seleccionar tu pais antes de enviar mensajes', 'warning');
+    if (typeof showCountryChangeModal === 'function') {
+      showCountryChangeModal();
+    } else if (typeof showCountrySelectorModal === 'function') {
+      showCountrySelectorModal();
+    }
+    return;
+  }
+
   // Get recipient source
   var recipientSource = document.getElementById('recipientSource')?.value || 'contacts';
 

@@ -308,6 +308,14 @@ function buildRoutes() {
         });
       }
 
+      // Validate country is configured
+      if (!req.userProfile?.country) {
+        return res.status(400).json({
+          error: 'country_required',
+          message: 'Debes configurar tu país antes de enviar mensajes'
+        });
+      }
+
       const userId = req.auth?.uid || 'default';
       const { recipientSource, contactIds, groupName, templates: templatesJson, message, campaignName, messageInterval: rawInterval } = req.body;
 

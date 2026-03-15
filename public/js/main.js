@@ -23,8 +23,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load user profile (trial status, role, etc.)
   await loadUserProfile();
 
+  // Check country selection (blocking modal on first login)
+  await checkCountrySelection();
+
+  // Setup country indicator click handler
+  var countryIndicator = document.getElementById('country-indicator');
+  if (countryIndicator) {
+    countryIndicator.addEventListener('click', function() {
+      showCountryChangeModal();
+    });
+  }
+
   // Setup theme
   setupThemeToggle();
+
+  // Setup profile dropdown menu
+  setupProfileMenu();
 
   // Setup more dropdown menu
   setupMoreMenu();
@@ -50,11 +64,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (typeof initChatbot === 'function') initChatbot();
   if (typeof initAdmin === 'function') initAdmin();
 
-  // Setup logout
-  const logoutBtn = document.getElementById('logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', logout);
-  }
+  // Logout is now handled by setupProfileMenu() via #profile-logout-btn
   
   // Initial tab from hash or default to dashboard
   const hash = window.location.hash.substring(1);
