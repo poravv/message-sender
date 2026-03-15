@@ -840,33 +840,42 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
       const isFirstMessage = !conversation.current_node_id && isActivationMessage(messageInfo.text, config);
       const isContinuingAI = conversation.current_node_id === 'ai_mode';
 
+      // Auto-expire AI conversations after 30 min of inactivity (saves tokens)
+      if (isContinuingAI && conversation.last_response_at) {
+        const inactiveMs = Date.now() - new Date(conversation.last_response_at).getTime();
+        if (inactiveMs > 30 * 60_000) {
+          // Session expired — reset, require activation keyword again
+          await resetConversation(userId, contactPhone);
+          if (!isActivationMessage(messageInfo.text, config)) {
+            return { responded: false, reason: 'ai_session_expired' };
+          }
+          // Treat as first message (fresh start)
+          logger.info({ userId, contactPhone, inactiveMin: Math.round(inactiveMs / 60_000) }, 'AI session expired, starting fresh');
+        }
+      }
+
       if (!isFirstMessage && !isContinuingAI) {
-        // Not an activation keyword and no active AI conversation
         logger.info({ userId, contactPhone, text: messageInfo.text?.substring(0, 50) }, 'AI mode: message ignored — not an activation keyword');
         return { responded: false, reason: 'not_activation_keyword' };
       }
 
-      // Build conversation history from recent messages (fetch 11, skip latest which is current msg)
-      const recentMsgs = await getRecentMessages(userId, contactPhone, 11);
-      // Remove the last message if it matches the current incoming (already logged at step 4)
+      // Build conversation history — limit to last 6 messages to save tokens
+      const recentMsgs = await getRecentMessages(userId, contactPhone, 7);
       if (recentMsgs.length > 0) {
         const last = recentMsgs[recentMsgs.length - 1];
         if (last.is_from_contact && last.message_text === messageInfo.text) {
           recentMsgs.pop();
         }
       }
-      const conversationHistory = recentMsgs.slice(-10).map(m => ({
+      const conversationHistory = recentMsgs.slice(-6).map(m => ({
         role: m.is_from_contact ? 'user' : 'assistant',
         content: m.message_text
       }));
 
-      // In AI mode, let the AI handle greetings naturally (no manual welcome prefix)
-      // The system prompt should instruct the AI how to greet
-
       // Call AI with system prompt + conversation history
       const aiResponse = await callAI(
         config,
-        { prompt: config.ai_system_prompt, max_tokens: 500 },
+        { prompt: config.ai_system_prompt, max_tokens: 300 },
         messageInfo.text,
         { messages: conversationHistory }
       );
