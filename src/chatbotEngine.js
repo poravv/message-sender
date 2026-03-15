@@ -56,7 +56,8 @@ const ensureChatbotTables = (() => {
         ai_model VARCHAR(100),
         ai_system_prompt TEXT,
         welcome_message TEXT,
-        fallback_message TEXT DEFAULT 'No entendí tu mensaje. Escribí "menu" para ver las opciones.',
+        fallback_message TEXT DEFAULT 'No reconozco esa opción. Por favor elige un número del menú:',
+        exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -110,8 +111,9 @@ const ensureChatbotTables = (() => {
       CREATE INDEX IF NOT EXISTS idx_incoming_user_date ON incoming_messages(user_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_incoming_unread ON incoming_messages(user_id, read, created_at DESC);
 
-      -- Add bot_paused column for existing databases
+      -- Add columns for existing databases
       ALTER TABLE chatbot_conversations ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN DEFAULT false;
+      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.';
     `);
     created = true;
     logger.info('Chatbot tables ensured');
@@ -575,8 +577,9 @@ async function executeNode(node, messageText, config, contactData, conversationC
         // Check if user wants to exit (by number, keyword, or label)
         const exitKeywords = ['salir', 'exit', 'cancelar', 'no', 'chau', 'adios', 'bye', 'stop', 'parar'];
         if (input === String(exitOptionNum) || exitKeywords.includes(input)) {
+          const exitMsg = config.exit_message || 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.';
           return {
-            text: 'Has salido del menú. Escribe *hola* cuando quieras volver a empezar.',
+            text: replaceVariables(exitMsg, contactData),
             nextNodeId: null,
             resetConversation: true,
           };
@@ -593,9 +596,10 @@ async function executeNode(node, messageText, config, contactData, conversationC
           return { text: null, nextNodeId: match.trigger || match.next || null };
         }
 
-        // No match found — re-display menu with hint
+        // No match found — use config fallback + re-display menu
+        const fallback = config.fallback_message || 'No reconozco esa opción. Por favor elige un número del menú:';
         return {
-          text: 'No reconozco esa opción. Por favor elige un número del menú:\n\n' + menuDisplay,
+          text: fallback + '\n\n' + menuDisplay,
           nextNodeId: null,
           stayOnNode: true,
         };

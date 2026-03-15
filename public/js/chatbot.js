@@ -88,7 +88,8 @@ function renderConfigForm(config) {
   setVal('cb-cooldown', c.cooldown_minutes != null ? c.cooldown_minutes : 30);
   setVal('cb-max-responses', c.max_responses_per_contact != null ? c.max_responses_per_contact : 5);
   setVal('cb-welcome', c.welcome_message || '');
-  setVal('cb-fallback', c.fallback_message || 'No entendi tu mensaje. Escribi "menu" para ver las opciones.');
+  setVal('cb-fallback', c.fallback_message || 'No reconozco esa opción. Por favor elige un número del menú:');
+  setVal('cb-exit-message', c.exit_message || 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.');
 
   var onlyKnown = document.getElementById('cb-only-known');
   if (onlyKnown) onlyKnown.checked = c.only_known_contacts !== false;
@@ -174,7 +175,8 @@ async function saveChatbotConfig() {
     only_known_contacts: document.getElementById('cb-only-known').checked,
     max_responses_per_contact: parseInt(getVal('cb-max-responses')) || 5,
     welcome_message: getVal('cb-welcome'),
-    fallback_message: getVal('cb-fallback')
+    fallback_message: getVal('cb-fallback'),
+    exit_message: getVal('cb-exit-message')
   };
 
   try {
