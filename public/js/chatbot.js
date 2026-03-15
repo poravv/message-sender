@@ -92,6 +92,9 @@ function renderConfigForm(config) {
   setVal('cb-exit-message', c.exit_message || 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.');
   setVal('cb-deactivation-message', c.deactivation_message || 'Un agente te atenderá pronto. Gracias por tu paciencia.');
 
+  // Start node selector — populate after nodes are loaded
+  chatbotConfig._pendingStartNode = c.start_node_id || '';
+
   var onlyKnown = document.getElementById('cb-only-known');
   if (onlyKnown) onlyKnown.checked = c.only_known_contacts !== false;
 
@@ -178,7 +181,8 @@ async function saveChatbotConfig() {
     welcome_message: getVal('cb-welcome'),
     fallback_message: getVal('cb-fallback'),
     exit_message: getVal('cb-exit-message'),
-    deactivation_message: getVal('cb-deactivation-message')
+    deactivation_message: getVal('cb-deactivation-message'),
+    start_node_id: getVal('cb-start-node') || null
   };
 
   try {
@@ -246,11 +250,25 @@ async function loadChatbotNodes() {
     chatbotConfigId = data.config_id;
     renderFlowBuilder();
     renderFlowPreview();
+    populateStartNodeSelector();
   } catch (err) {
     console.error('loadChatbotNodes error:', err);
     chatbotNodes = [];
     renderFlowBuilder();
   }
+}
+
+function populateStartNodeSelector() {
+  var select = document.getElementById('cb-start-node');
+  if (!select) return;
+  var current = (chatbotConfig && chatbotConfig._pendingStartNode) || '';
+  var html = '<option value="">Automático (primer menú encontrado)</option>';
+  chatbotNodes.forEach(function(n) {
+    var label = n.node_id + ' (' + n.type + ')';
+    if (n.content && n.content.text) label += ' — ' + (n.content.text || '').substring(0, 40);
+    html += '<option value="' + n.node_id + '"' + (n.node_id === current ? ' selected' : '') + '>' + label + '</option>';
+  });
+  select.innerHTML = html;
 }
 
 function renderFlowBuilder() {

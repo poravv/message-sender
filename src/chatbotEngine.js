@@ -59,6 +59,7 @@ const ensureChatbotTables = (() => {
         fallback_message TEXT DEFAULT 'No reconozco esa opción. Por favor elige un número del menú:',
         exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.',
         deactivation_message TEXT DEFAULT 'Un agente te atenderá pronto. Gracias por tu paciencia.',
+        start_node_id VARCHAR(100),
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW()
       );
@@ -116,6 +117,7 @@ const ensureChatbotTables = (() => {
       ALTER TABLE chatbot_conversations ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN DEFAULT false;
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS exit_message TEXT DEFAULT 'Has salido del menú. Escribe *menu* cuando quieras volver a empezar.';
       ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS deactivation_message TEXT DEFAULT 'Un agente te atenderá pronto. Gracias por tu paciencia.';
+      ALTER TABLE chatbot_configs ADD COLUMN IF NOT EXISTS start_node_id VARCHAR(100);
     `);
     created = true;
     logger.info('Chatbot tables ensured');
@@ -784,8 +786,9 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
       // First interaction — send welcome message + first node (e.g. menu)
       const welcomeText = config.welcome_message ? replaceVariables(config.welcome_message, contactData) : null;
 
-      // Find first node (look for 'welcome' or 'start' or first menu node)
-      const firstNode = findNode(nodes, 'welcome') || findNode(nodes, 'start') || nodes.find(n => n.type === 'menu');
+      // Find first node: use configured start_node_id, fallback to 'welcome'/'start'/first menu
+      const firstNode = (config.start_node_id && findNode(nodes, config.start_node_id))
+        || findNode(nodes, 'welcome') || findNode(nodes, 'start') || nodes.find(n => n.type === 'menu');
 
       if (firstNode) {
         // Execute the first node to get its content (e.g. the menu text)
