@@ -6656,6 +6656,85 @@ a.btn-link:hover {
   font-weight: 600;
   font-size: 0.9375rem;
   color: var(--text-primary);
+  flex: 1;
+}
+
+.inbox-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  margin-left: auto;
+}
+
+/* Bot toggle button */
+.inbox-bot-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: var(--transition);
+  border: 1px solid transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.inbox-bot-toggle-btn.bot-active {
+  background: rgba(37, 211, 102, 0.1);
+  color: var(--accent);
+  border-color: rgba(37, 211, 102, 0.3);
+}
+
+.inbox-bot-toggle-btn.bot-active:hover {
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.inbox-bot-toggle-btn.bot-paused {
+  background: rgba(248, 113, 113, 0.1);
+  color: var(--danger);
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.inbox-bot-toggle-btn.bot-paused:hover {
+  background: rgba(37, 211, 102, 0.1);
+  color: var(--accent);
+  border-color: rgba(37, 211, 102, 0.3);
+}
+
+.inbox-bot-toggle-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.inbox-bot-toggle-label {
+  display: none;
+}
+
+@media (min-width: 576px) {
+  .inbox-bot-toggle-label {
+    display: inline;
+  }
+}
+
+/* Bot paused banner */
+.inbox-bot-paused-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 6px var(--space-md);
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--warning);
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-bottom: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.inbox-bot-paused-banner i {
+  font-size: 1rem;
 }
 
 /* Messages area */

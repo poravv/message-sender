@@ -11,6 +11,7 @@ var inboxState = {
   searchTerm: '',
   isMobileView: false,
   showingChat: false,
+  botPaused: false,
   _lastConvJson: '',
   _lastMsgJson: ''
 };
@@ -145,6 +146,10 @@ async function sendReply(phone, message) {
     // Clear input
     if (input) input.value = '';
 
+    // Auto-pause bot (backend already does this, update UI)
+    inboxState.botPaused = true;
+    updateBotPausedUI(true);
+
     // Refresh messages
     await fetchMessages(phone, true);
   } catch (e) {
@@ -159,6 +164,7 @@ function openChat(phone) {
   inboxState.activePhone = phone;
   inboxState.showingChat = true;
   fetchMessages(phone);
+  fetchBotStatus(phone);
   renderInboxLayout();
 
   // Highlight active conversation
@@ -171,6 +177,8 @@ function closeChat() {
   inboxState.showingChat = false;
   inboxState.activePhone = null;
   inboxState.messages = [];
+  inboxState.botPaused = false;
+  updateBotPausedUI(false);
   renderInboxLayout();
 }
 
@@ -377,6 +385,77 @@ function handleSendClick() {
   }
 }
 
+// ─── Bot pause/resume ──────────────────────────────────────────────────────
+
+async function fetchBotStatus(phone) {
+  try {
+    var res = await authFetch('/messages/inbox/' + encodeURIComponent(phone) + '/bot-status');
+    if (!res || !res.ok) return;
+    var data = await res.json();
+    inboxState.botPaused = data.bot_paused || data.human_intervention;
+    updateBotPausedUI(inboxState.botPaused);
+  } catch (e) {
+    // silent
+  }
+}
+
+function updateBotPausedUI(paused) {
+  var toggleBtn = document.getElementById('inbox-bot-toggle-btn');
+  var toggleLabel = document.getElementById('inbox-bot-toggle-label');
+  var banner = document.getElementById('inbox-bot-paused-banner');
+
+  if (toggleBtn) {
+    toggleBtn.style.display = inboxState.activePhone ? '' : 'none';
+    if (paused) {
+      toggleBtn.classList.add('bot-paused');
+      toggleBtn.classList.remove('bot-active');
+      toggleBtn.title = 'Reactivar Bot';
+    } else {
+      toggleBtn.classList.remove('bot-paused');
+      toggleBtn.classList.add('bot-active');
+      toggleBtn.title = 'Pausar Bot';
+    }
+  }
+  if (toggleLabel) {
+    toggleLabel.textContent = paused ? 'Reactivar Bot' : 'Pausar Bot';
+  }
+  if (banner) {
+    if (paused) {
+      banner.classList.remove('d-none');
+    } else {
+      banner.classList.add('d-none');
+    }
+  }
+}
+
+async function toggleBotPause() {
+  if (!inboxState.activePhone) return;
+
+  var toggleBtn = document.getElementById('inbox-bot-toggle-btn');
+  if (toggleBtn) toggleBtn.disabled = true;
+
+  try {
+    var endpoint = inboxState.botPaused ? 'resume-bot' : 'pause-bot';
+    var res = await authFetch('/messages/inbox/' + encodeURIComponent(inboxState.activePhone) + '/' + endpoint, {
+      method: 'PUT'
+    });
+
+    if (!res || !res.ok) {
+      showAlert('Error al cambiar estado del bot', 'danger');
+      return;
+    }
+
+    var data = await res.json();
+    inboxState.botPaused = data.bot_paused;
+    updateBotPausedUI(inboxState.botPaused);
+    showAlert(inboxState.botPaused ? 'Bot pausado para este contacto' : 'Bot reactivado para este contacto', 'success');
+  } catch (e) {
+    showAlert('Error al cambiar estado del bot', 'danger');
+  } finally {
+    if (toggleBtn) toggleBtn.disabled = false;
+  }
+}
+
 // Exports
 window.initInbox = initInbox;
 window.loadInbox = loadInbox;
@@ -386,3 +465,5 @@ window.closeChat = closeChat;
 window.handleInboxSearch = handleInboxSearch;
 window.handleReplyKeypress = handleReplyKeypress;
 window.handleSendClick = handleSendClick;
+window.toggleBotPause = toggleBotPause;
+window.fetchBotStatus = fetchBotStatus;

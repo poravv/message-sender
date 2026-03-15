@@ -1493,9 +1493,18 @@
               </button>
               <div class="inbox-chat-avatar"><i class="bi bi-person-circle"></i></div>
               <span class="inbox-chat-name" id="inbox-chat-name">Selecciona una conversacion</span>
-              <button class="btn-icon inbox-delete-chat-btn" id="inbox-delete-chat-btn" onclick="deleteInboxChat()" title="Borrar conversacion">
-                <i class="bi bi-trash3"></i>
-              </button>
+              <div class="inbox-header-actions">
+                <button class="btn-icon inbox-bot-toggle-btn" id="inbox-bot-toggle-btn" onclick="toggleBotPause()" title="Pausar/Reactivar Bot" style="display:none;">
+                  <i class="bi bi-robot"></i>
+                  <span class="inbox-bot-toggle-label" id="inbox-bot-toggle-label">Pausar Bot</span>
+                </button>
+                <button class="btn-icon inbox-delete-chat-btn" id="inbox-delete-chat-btn" onclick="deleteInboxChat()" title="Borrar conversacion">
+                  <i class="bi bi-trash3"></i>
+                </button>
+              </div>
+            </div>
+            <div class="inbox-bot-paused-banner d-none" id="inbox-bot-paused-banner">
+              <i class="bi bi-robot"></i> Bot pausado — estas respondiendo manualmente
             </div>
             <div class="inbox-messages" id="inbox-messages">
               <div class="inbox-empty">

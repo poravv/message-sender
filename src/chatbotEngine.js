@@ -84,6 +84,7 @@ const ensureChatbotTables = (() => {
         responses_today INTEGER DEFAULT 0,
         last_response_at TIMESTAMPTZ,
         last_human_intervention_at TIMESTAMPTZ,
+        bot_paused BOOLEAN DEFAULT false,
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
@@ -108,6 +109,9 @@ const ensureChatbotTables = (() => {
       CREATE INDEX IF NOT EXISTS idx_incoming_user_phone ON incoming_messages(user_id, contact_phone, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_incoming_user_date ON incoming_messages(user_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_incoming_unread ON incoming_messages(user_id, read, created_at DESC);
+
+      -- Add bot_paused column for existing databases
+      ALTER TABLE chatbot_conversations ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN DEFAULT false;
     `);
     created = true;
     logger.info('Chatbot tables ensured');
@@ -120,8 +124,25 @@ function normalizeText(str) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
 }
 
-// ─── Deactivation keywords ───────────────────────────────────────────────────
-const DEACTIVATION_KEYWORDS = ['salir', 'hablar con persona', 'agente', 'humano', 'operador'];
+// ─── Activation keywords (triggers bot when no active flow) ─────────────────
+const ACTIVATION_KEYWORDS = [
+  'hola', 'hi', 'hello', 'hey', 'buenos dias', 'buenas tardes', 'buenas noches',
+  'buen dia', 'buenas', 'ola', 'hla', 'holaa', 'menu', 'menú', 'inicio',
+  'info', 'informacion', 'información', 'ayuda', 'help', 'start'
+];
+
+// ─── Deactivation keywords (stops bot anytime mid-flow) ─────────────────────
+const DEACTIVATION_KEYWORDS = [
+  'salir', 'exit', 'hablar con persona', 'agente', 'humano', 'operador',
+  'persona real', 'quiero hablar', 'no entiendo', 'basta', 'stop', 'parar',
+  'chau', 'adios', 'bye'
+];
+
+function isActivationMessage(text) {
+  if (!text) return false;
+  const normalized = normalizeText(text);
+  return ACTIVATION_KEYWORDS.some(kw => normalized === normalizeText(kw) || normalized.startsWith(normalizeText(kw) + ' '));
+}
 
 // ─── Config cache (per-user, short TTL) ──────────────────────────────────────
 const configCache = new Map();
@@ -360,6 +381,53 @@ async function markHumanIntervention(userId, contactPhone) {
      WHERE user_id = $1 AND contact_phone = $2`,
     [userId, contactPhone]
   );
+}
+
+// ─── Bot pause/resume for inbox human intervention ──────────────────────────
+async function pauseBotForContact(userId, contactPhone) {
+  await ensureChatbotTables();
+  await pg.query(
+    `INSERT INTO chatbot_conversations (user_id, contact_phone, bot_paused, is_active)
+     VALUES ($1, $2, true, true)
+     ON CONFLICT (user_id, contact_phone) DO UPDATE
+       SET bot_paused = true, updated_at = NOW()`,
+    [userId, contactPhone]
+  );
+  logger.info({ userId, contactPhone }, 'Bot paused for contact');
+}
+
+async function resumeBotForContact(userId, contactPhone) {
+  await ensureChatbotTables();
+  await pg.query(
+    `UPDATE chatbot_conversations
+     SET bot_paused = false, last_human_intervention_at = NULL, updated_at = NOW()
+     WHERE user_id = $1 AND contact_phone = $2`,
+    [userId, contactPhone]
+  );
+  logger.info({ userId, contactPhone }, 'Bot resumed for contact');
+}
+
+async function getBotStatusForContact(userId, contactPhone) {
+  await ensureChatbotTables();
+  const result = await pg.query(
+    `SELECT bot_paused, is_active, last_human_intervention_at, current_node_id
+     FROM chatbot_conversations
+     WHERE user_id = $1 AND contact_phone = $2 LIMIT 1`,
+    [userId, contactPhone]
+  );
+  const conv = result.rows[0];
+  if (!conv) return { bot_paused: false, is_active: true, human_intervention: false };
+
+  const humanRecent = conv.last_human_intervention_at
+    ? (Date.now() - new Date(conv.last_human_intervention_at).getTime()) < 30 * 60_000
+    : false;
+
+  return {
+    bot_paused: !!conv.bot_paused,
+    is_active: !!conv.is_active,
+    human_intervention: humanRecent,
+    current_node_id: conv.current_node_id,
+  };
 }
 
 // ─── Message logging ─────────────────────────────────────────────────────────
@@ -608,10 +676,10 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
     // 5. Get or create conversation
     const conversation = await getOrCreateConversation(userId, contactPhone);
 
-    // 6. Check deactivation keywords
+    // 6. Check deactivation keywords (accent-insensitive)
     if (messageInfo.text) {
-      const lowerText = messageInfo.text.trim().toLowerCase();
-      if (DEACTIVATION_KEYWORDS.some(kw => lowerText === kw || lowerText.includes(kw))) {
+      const normalizedInput = normalizeText(messageInfo.text);
+      if (DEACTIVATION_KEYWORDS.some(kw => normalizedInput === normalizeText(kw) || normalizedInput.includes(normalizeText(kw)))) {
         await deactivateConversation(userId, contactPhone);
         const deactivationMsg = 'Un agente te atenderá pronto. Gracias por tu paciencia.';
         const jid = `${contactPhone}@s.whatsapp.net`;
@@ -626,7 +694,12 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
       return { responded: false, reason: 'conversation_inactive' };
     }
 
-    // 8. Check human intervention (bot stays quiet for 30 min after owner manually replies)
+    // 8. Check if bot is explicitly paused for this contact
+    if (conversation.bot_paused) {
+      return { responded: false, reason: 'bot_paused' };
+    }
+
+    // 8b. Check human intervention (bot stays quiet for 30 min after owner manually replies)
     if (isHumanInterventionRecent(conversation)) {
       return { responded: false, reason: 'human_intervention' };
     }
@@ -666,6 +739,12 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
     let shouldReset = false;
 
     if (!currentNodeId) {
+      // No active flow — check if message is an activation keyword
+      if (!isActivationMessage(messageInfo.text)) {
+        logger.info({ userId, contactPhone, text: messageInfo.text?.substring(0, 50) }, 'Message ignored — not an activation keyword');
+        return { responded: false, reason: 'not_activation_keyword' };
+      }
+
       // First interaction — send welcome message + first node (e.g. menu)
       const welcomeText = config.welcome_message ? replaceVariables(config.welcome_message, contactData) : null;
 
@@ -792,6 +871,8 @@ async function recordOutgoingMessage(userId, contactPhone, messageText) {
   try {
     await ensureChatbotTables();
     await markHumanIntervention(userId, contactPhone);
+    // Auto-pause bot when owner sends a manual reply from inbox
+    await pauseBotForContact(userId, contactPhone);
     await logMessage(userId, contactPhone, null, messageText, 'text', false, false, null);
   } catch (err) {
     logger.error({ err: err?.message, userId, contactPhone }, 'Failed to record outgoing message');
@@ -809,4 +890,7 @@ module.exports = {
   markHumanIntervention,
   deactivateConversation,
   resetConversation,
+  pauseBotForContact,
+  resumeBotForContact,
+  getBotStatusForContact,
 };

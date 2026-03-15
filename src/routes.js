@@ -2629,6 +2629,45 @@ function buildRoutes() {
     }
   });
 
+  // GET /messages/inbox/:phone/bot-status — get bot status for a contact
+  router.get('/messages/inbox/:phone/bot-status', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.uid || 'default';
+      const { phone } = req.params;
+      const status = await chatbotEngine.getBotStatusForContact(userId, phone);
+      return res.json(status);
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en GET /messages/inbox/:phone/bot-status');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // PUT /messages/inbox/:phone/pause-bot — pause bot for a contact
+  router.put('/messages/inbox/:phone/pause-bot', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.uid || 'default';
+      const { phone } = req.params;
+      await chatbotEngine.pauseBotForContact(userId, phone);
+      return res.json({ success: true, bot_paused: true });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en PUT /messages/inbox/:phone/pause-bot');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // PUT /messages/inbox/:phone/resume-bot — resume bot for a contact
+  router.put('/messages/inbox/:phone/resume-bot', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth?.uid || 'default';
+      const { phone } = req.params;
+      await chatbotEngine.resumeBotForContact(userId, phone);
+      return res.json({ success: true, bot_paused: false });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en PUT /messages/inbox/:phone/resume-bot');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
   // DELETE /messages/inbox/:phone — delete chat history from DB (not from WhatsApp)
   router.delete('/messages/inbox/:phone', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
     try {
