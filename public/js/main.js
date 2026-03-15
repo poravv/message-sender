@@ -4,7 +4,10 @@
 
 document.addEventListener('DOMContentLoaded', async () => {
   console.log('🚀 Iniciando WhatsApp Sender Pro...');
-  
+
+  // Wait for Firebase config to load before anything else
+  await firebaseConfigReady;
+
   // Initialize authentication
   const authSuccess = await initFirebaseAuth();
 

@@ -2,19 +2,23 @@
  * Core - Firebase Authentication, Utils, and Base Functions
  */
 
-// Firebase configuration
-const firebaseConfig = {
-  apiKey: "AIzaSyDpY5e473wovRQDTFfBCG7Wfv57ZydAaNI",
-  authDomain: "whatsapp-sender-d0f81.firebaseapp.com",
-  projectId: "whatsapp-sender-d0f81",
-  storageBucket: "whatsapp-sender-d0f81.firebasestorage.app",
-  messagingSenderId: "54385260165",
-  appId: "1:54385260165:web:e660c8a97932ac1c14dbec",
-  measurementId: "G-XR2QGFXV30"
-};
-
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
+// Firebase configuration — loaded from backend
+var firebaseConfigReady = fetch('/config/firebase')
+  .then(function(res) {
+    if (!res.ok) throw new Error('Failed to load Firebase config');
+    return res.json();
+  })
+  .then(function(config) {
+    firebase.initializeApp(config);
+    return config;
+  })
+  .catch(function(err) {
+    console.error('Could not load Firebase config:', err);
+    document.body.innerHTML =
+      '<div style="display:flex;align-items:center;justify-content:center;height:100vh;color:#f87171;font-family:sans-serif;text-align:center;padding:2rem;">' +
+      '<div><h2>Error de configuracion</h2><p>No se pudo cargar la configuracion de Firebase. Recarga la pagina o contacta al administrador.</p></div></div>';
+    throw err;
+  });
 
 // Authentication state
 var currentUser = null;

@@ -414,26 +414,40 @@
   <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 
   <script>
-    // Firebase configuration
-    var firebaseConfig = {
-      apiKey: "AIzaSyDpY5e473wovRQDTFfBCG7Wfv57ZydAaNI",
-      authDomain: "whatsapp-sender-d0f81.firebaseapp.com",
-      projectId: "whatsapp-sender-d0f81",
-      storageBucket: "whatsapp-sender-d0f81.firebasestorage.app",
-      messagingSenderId: "54385260165",
-      appId: "1:54385260165:web:e660c8a97932ac1c14dbec",
-      measurementId: "G-XR2QGFXV30"
-    };
-
-    firebase.initializeApp(firebaseConfig);
-
     // State
     var isRegisterMode = false;
     var isSubmitting = false;
 
-    // Apply saved theme
+    // Load Firebase config from backend before initializing
+    (function() {
+      fetch('/config/firebase')
+        .then(function(res) {
+          if (!res.ok) throw new Error('Failed to load Firebase config');
+          return res.json();
+        })
+        .then(function(config) {
+          firebase.initializeApp(config);
+          initLoginPage();
+        })
+        .catch(function(err) {
+          console.error('Could not load Firebase config:', err);
+          var card = document.querySelector('.login-card');
+          if (card) {
+            card.innerHTML =
+              '<div class="login-logo">' +
+                '<i class="bi bi-exclamation-triangle" style="color: var(--danger);"></i>' +
+                '<h1>Error de configuracion</h1>' +
+                '<p>No se pudo cargar la configuracion de Firebase. Recarga la pagina o contacta al administrador.</p>' +
+              '</div>';
+          }
+        });
+    })();
+
+    // Apply saved theme (before Firebase loads)
     var savedTheme = localStorage.getItem('theme') || 'dark';
     document.documentElement.setAttribute('data-theme', savedTheme);
+
+    function initLoginPage() {
 
     // If already logged in, check verification then redirect
     firebase.auth().onAuthStateChanged(function(user) {
@@ -730,6 +744,10 @@
           }
         });
     });
+
+    // Expose toggleAuthMode globally (used by inline onclick in HTML)
+    window.toggleAuthMode = toggleAuthMode;
+    } // end initLoginPage
   </script>
 </body>
 </html>
