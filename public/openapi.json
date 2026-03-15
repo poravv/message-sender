@@ -33,6 +33,10 @@
     {
       "name": "Webhooks",
       "description": "Registrar URLs para recibir notificaciones de eventos"
+    },
+    {
+      "name": "Configuration",
+      "description": "Consultar configuracion disponible para el envio de mensajes"
     }
   ],
   "paths": {
@@ -148,6 +152,13 @@
                     "enum": ["image", "audio"],
                     "description": "Tipo de media adjunta (requerido si mediaUrl esta presente)",
                     "example": "image"
+                  },
+                  "messageInterval": {
+                    "type": "integer",
+                    "enum": [3, 5, 8, 12, 15],
+                    "description": "Interval in seconds between messages. Allowed values: 3, 5, 8, 12, 15. Default: 5. The 3s option requires Professional plan or higher.",
+                    "default": 5,
+                    "example": 5
                   }
                 }
               }
@@ -178,6 +189,11 @@
                     "status": {
                       "type": "string",
                       "example": "queued"
+                    },
+                    "messageInterval": {
+                      "type": "integer",
+                      "description": "Intervalo aplicado entre mensajes (en segundos)",
+                      "example": 5
                     }
                   }
                 }
@@ -277,6 +293,13 @@
                     "type": "string",
                     "description": "Nombre descriptivo para la campana (opcional)",
                     "example": "Promo Marzo 2026"
+                  },
+                  "messageInterval": {
+                    "type": "integer",
+                    "enum": [3, 5, 8, 12, 15],
+                    "description": "Interval in seconds between messages. Allowed values: 3, 5, 8, 12, 15. Default: 5. The 3s option requires Professional plan or higher.",
+                    "default": 5,
+                    "example": 5
                   }
                 }
               }
@@ -308,6 +331,11 @@
                     "status": {
                       "type": "string",
                       "example": "processing"
+                    },
+                    "messageInterval": {
+                      "type": "integer",
+                      "description": "Intervalo aplicado entre mensajes (en segundos)",
+                      "example": 5
                     }
                   }
                 }
@@ -618,6 +646,71 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/config/intervals": {
+      "get": {
+        "tags": ["Configuration"],
+        "summary": "Obtener intervalos de envio disponibles",
+        "description": "Retorna los intervalos de envio disponibles para configurar la velocidad de envio de mensajes en campanas.",
+        "responses": {
+          "200": {
+            "description": "Lista de intervalos disponibles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "intervals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "integer",
+                            "description": "Valor del intervalo en segundos",
+                            "example": 5
+                          },
+                          "label": {
+                            "type": "string",
+                            "description": "Etiqueta descriptiva",
+                            "example": "Normal (5s)"
+                          },
+                          "restricted": {
+                            "type": "boolean",
+                            "description": "true si requiere plan Professional o superior",
+                            "example": false
+                          },
+                          "default": {
+                            "type": "boolean",
+                            "description": "true si es el intervalo por defecto",
+                            "example": true
+                          }
+                        }
+                      }
+                    },
+                    "defaultInterval": {
+                      "type": "integer",
+                      "description": "Valor del intervalo por defecto",
+                      "example": 5
+                    },
+                    "allowedValues": {
+                      "type": "array",
+                      "items": {
+                        "type": "integer"
+                      },
+                      "description": "Lista de valores permitidos",
+                      "example": [3, 5, 8, 12, 15]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
           }
         }
       }

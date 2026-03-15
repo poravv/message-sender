@@ -9,6 +9,7 @@ const logger = require('./logger');
 const { normalizeNumber } = require('./phoneValidator');
 const metricsStore = require('./metricsStore');
 const redisQueue = require('./queueRedis');
+const { ALLOWED_INTERVALS, DEFAULT_INTERVAL } = require('./queueRedis');
 const sessionManager = require('./sessionManager');
 
 // In-memory token store: token → { uid, createdAt, expiresAt }
@@ -153,7 +154,7 @@ function buildApiV1Routes() {
   // ══════════════════════════════════════════
   router.post('/messages/send', apiAuth, async (req, res) => {
     try {
-      const { phone, message, mediaUrl, mediaType } = req.body;
+      const { phone, message, mediaUrl, mediaType, messageInterval: rawInterval } = req.body;
       const uid = req.auth.uid;
 
       if (!phone) {
@@ -164,6 +165,18 @@ function buildApiV1Routes() {
       }
       if (mediaUrl && !mediaType) {
         return res.status(400).json({ error: 'mediaType is required when mediaUrl is provided' });
+      }
+
+      // Validate messageInterval
+      let messageInterval = DEFAULT_INTERVAL;
+      if (rawInterval !== undefined) {
+        const parsed = Number(rawInterval);
+        if (!ALLOWED_INTERVALS.includes(parsed)) {
+          return res.status(400).json({
+            error: `Invalid messageInterval. Allowed values: ${ALLOWED_INTERVALS.join(', ')}`,
+          });
+        }
+        messageInterval = parsed;
       }
 
       // Normalize phone number
@@ -195,16 +208,17 @@ function buildApiV1Routes() {
       await metricsStore.initCampaignRecipients(uid, campaign.id, numbers);
 
       // Enqueue via existing infrastructure
-      await redisQueue.enqueueCampaign(uid, numbers, [message], null, null, null, { campaignId: campaign.id });
+      await redisQueue.enqueueCampaign(uid, numbers, [message], null, null, null, { campaignId: campaign.id, messageInterval });
 
-      logger.info({ uid, phone: phoneResult.normalized, messageId, campaignId: campaign.id }, 'API single message queued');
+      logger.info({ uid, phone: phoneResult.normalized, messageId, campaignId: campaign.id, messageInterval }, 'API single message queued');
 
       return res.json({
         success: true,
         messageId,
         phone: phoneResult.normalized,
         status: 'queued',
-        campaignId: campaign.id
+        campaignId: campaign.id,
+        messageInterval
       });
     } catch (error) {
       logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error in POST /api/v1/messages/send');
@@ -217,7 +231,7 @@ function buildApiV1Routes() {
   // ══════════════════════════════════════════
   router.post('/messages/bulk', apiAuth, async (req, res) => {
     try {
-      const { recipients, template, mediaUrl, campaignName } = req.body;
+      const { recipients, template, mediaUrl, campaignName, messageInterval: rawInterval } = req.body;
       const uid = req.auth.uid;
 
       if (!recipients || !Array.isArray(recipients) || recipients.length === 0) {
@@ -228,6 +242,18 @@ function buildApiV1Routes() {
       }
       if (recipients.length > 10000) {
         return res.status(400).json({ error: 'Maximum 10,000 recipients per request' });
+      }
+
+      // Validate messageInterval
+      let messageInterval = DEFAULT_INTERVAL;
+      if (rawInterval !== undefined) {
+        const parsed = Number(rawInterval);
+        if (!ALLOWED_INTERVALS.includes(parsed)) {
+          return res.status(400).json({
+            error: `Invalid messageInterval. Allowed values: ${ALLOWED_INTERVALS.join(', ')}`,
+          });
+        }
+        messageInterval = parsed;
       }
 
       // Check WhatsApp connection
@@ -274,16 +300,17 @@ function buildApiV1Routes() {
       await metricsStore.initCampaignRecipients(uid, campaign.id, numbers);
 
       // Enqueue
-      await redisQueue.enqueueCampaign(uid, numbers, [template], null, null, null, { campaignId: campaign.id });
+      await redisQueue.enqueueCampaign(uid, numbers, [template], null, null, null, { campaignId: campaign.id, messageInterval });
 
-      logger.info({ uid, campaignId: campaign.id, totalRecipients: numbers.length }, 'API bulk campaign queued');
+      logger.info({ uid, campaignId: campaign.id, totalRecipients: numbers.length, messageInterval }, 'API bulk campaign queued');
 
       return res.json({
         success: true,
         campaignId: campaign.id,
         totalRecipients: numbers.length,
         invalidCount: invalidPhones.length,
-        status: 'processing'
+        status: 'processing',
+        messageInterval
       });
     } catch (error) {
       logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error in POST /api/v1/messages/bulk');
@@ -444,6 +471,28 @@ function buildApiV1Routes() {
       logger.error({ err: error?.message, uid: req.auth?.uid }, 'Error in DELETE /api/v1/webhooks');
       return res.status(500).json({ error: 'Internal server error' });
     }
+  });
+
+  // ══════════════════════════════════════════
+  // GET /api/v1/config/intervals
+  // ══════════════════════════════════════════
+  router.get('/config/intervals', apiAuth, (req, res) => {
+    const intervals = ALLOWED_INTERVALS.map(value => ({
+      value,
+      label: value === 3 ? 'Fast (3s)' :
+             value === 5 ? 'Normal (5s)' :
+             value === 8 ? 'Safe (8s)' :
+             value === 12 ? 'Very safe (12s)' :
+             'Ultra safe (15s)',
+      restricted: value === 3,
+      default: value === DEFAULT_INTERVAL
+    }));
+
+    return res.json({
+      intervals,
+      defaultInterval: DEFAULT_INTERVAL,
+      allowedValues: ALLOWED_INTERVALS
+    });
   });
 
   // Periodic cleanup of expired tokens

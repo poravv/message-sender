@@ -65,8 +65,10 @@ function loadAdmin(forceRefresh) {
   if (container) {
     container.innerHTML =
       '<div class="admin-empty-state">' +
-        '<i class="bi bi-arrow-clockwise spin" style="font-size:1.5rem; color:var(--text-muted);"></i>' +
-        '<p style="color:var(--text-muted);">Cargando usuarios...</p>' +
+        '<div class="admin-empty-icon">' +
+          '<i class="bi bi-arrow-clockwise spin"></i>' +
+        '</div>' +
+        '<p class="admin-empty-text">Cargando usuarios...</p>' +
       '</div>';
   }
 
@@ -86,8 +88,11 @@ function loadAdmin(forceRefresh) {
       if (container) {
         container.innerHTML =
           '<div class="admin-empty-state">' +
-            '<i class="bi bi-exclamation-triangle" style="font-size:1.5rem; color:var(--danger);"></i>' +
-            '<p style="color:var(--danger);">Error al cargar usuarios</p>' +
+            '<div class="admin-empty-icon" style="background:rgba(248,113,113,0.12);">' +
+              '<i class="bi bi-exclamation-triangle" style="color:var(--danger);"></i>' +
+            '</div>' +
+            '<p class="admin-empty-text" style="color:var(--danger);">Error al cargar usuarios</p>' +
+            '<p class="admin-empty-subtext">Verifica la conexion e intenta de nuevo</p>' +
           '</div>';
       }
     });
@@ -160,8 +165,11 @@ function renderUsersCards(users) {
   if (users.length === 0) {
     container.innerHTML =
       '<div class="admin-empty-state">' +
-        '<i class="bi bi-search" style="font-size:1.5rem; color:var(--text-muted);"></i>' +
-        '<p style="color:var(--text-muted);">No se encontraron usuarios</p>' +
+        '<div class="admin-empty-icon">' +
+          '<i class="bi bi-person-slash"></i>' +
+        '</div>' +
+        '<p class="admin-empty-text">No se encontraron usuarios</p>' +
+        '<p class="admin-empty-subtext">Intenta ajustar los filtros de busqueda</p>' +
       '</div>';
     return;
   }

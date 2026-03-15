@@ -1218,83 +1218,84 @@
 
       <!-- Tab: Admin -->
       <section id="admin" class="tab-pane">
-        <header class="section-header">
-          <h1><i class="bi bi-shield-lock"></i> Administracion</h1>
-          <p>Gestion de usuarios y configuracion del sistema</p>
-        </header>
-
-        <!-- Stats Summary -->
-        <div class="stats-grid" id="admin-stats">
-          <div class="stat-card">
-            <div class="stat-icon"><i class="bi bi-people"></i></div>
-            <div class="stat-data">
-              <div class="stat-value" id="admin-stat-total">0</div>
-              <div class="stat-label">Total usuarios</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i class="bi bi-check-circle"></i></div>
-            <div class="stat-data">
-              <div class="stat-value" id="admin-stat-active">0</div>
-              <div class="stat-label">Activos</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i class="bi bi-pause-circle"></i></div>
-            <div class="stat-data">
-              <div class="stat-value" id="admin-stat-suspended">0</div>
-              <div class="stat-label">Suspendidos</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i class="bi bi-clock"></i></div>
-            <div class="stat-data">
-              <div class="stat-value" id="admin-stat-trial">0</div>
-              <div class="stat-label">En prueba</div>
-            </div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-icon"><i class="bi bi-credit-card"></i></div>
-            <div class="stat-data">
-              <div class="stat-value" id="admin-stat-paid">0</div>
-              <div class="stat-label">Pagos</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Filters -->
-        <div class="card" style="margin-top: var(--space-lg);">
-          <div style="display: flex; gap: var(--space-md); flex-wrap: wrap; align-items: center;">
-            <div style="flex: 1; min-width: 200px;">
-              <input type="text" id="admin-search" class="form-control" placeholder="Buscar por email o nombre...">
-            </div>
+        <header class="section-header admin-header">
+          <div class="admin-header-top">
             <div>
-              <select id="admin-filter-status" class="form-control" style="min-width: 150px;">
-                <option value="">Todos los estados</option>
-                <option value="active">Activos</option>
-                <option value="suspended">Suspendidos</option>
-                <option value="disabled">Deshabilitados</option>
-              </select>
-            </div>
-            <div>
-              <select id="admin-filter-plan" class="form-control" style="min-width: 150px;">
-                <option value="">Todos los planes</option>
-                <option value="trial">Trial</option>
-                <option value="active">Activo</option>
-                <option value="expired">Expirado</option>
-              </select>
+              <h1><i class="bi bi-shield-lock-fill"></i> Administracion</h1>
+              <p class="admin-subtitle">Gestion de usuarios y configuracion del sistema</p>
             </div>
             <button class="btn-primary" id="admin-refresh-btn">
               <i class="bi bi-arrow-clockwise"></i> Actualizar
             </button>
           </div>
+        </header>
+
+        <!-- Stats Summary -->
+        <div class="admin-stats-grid" id="admin-stats">
+          <div class="dash-stat-card dash-stat-blue">
+            <div class="dash-stat-icon"><i class="bi bi-people-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Total usuarios</span>
+              <span class="dash-stat-value" id="admin-stat-total">0</span>
+            </div>
+          </div>
+          <div class="dash-stat-card dash-stat-green">
+            <div class="dash-stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Activos</span>
+              <span class="dash-stat-value" id="admin-stat-active">0</span>
+            </div>
+          </div>
+          <div class="dash-stat-card dash-stat-amber">
+            <div class="dash-stat-icon"><i class="bi bi-pause-circle-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Suspendidos</span>
+              <span class="dash-stat-value" id="admin-stat-suspended">0</span>
+            </div>
+          </div>
+          <div class="dash-stat-card dash-stat-purple">
+            <div class="dash-stat-icon"><i class="bi bi-clock-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">En prueba</span>
+              <span class="dash-stat-value" id="admin-stat-trial">0</span>
+            </div>
+          </div>
+          <div class="dash-stat-card dash-stat-emerald">
+            <div class="dash-stat-icon"><i class="bi bi-credit-card-fill"></i></div>
+            <div class="dash-stat-body">
+              <span class="dash-stat-label">Pagos</span>
+              <span class="dash-stat-value" id="admin-stat-paid">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="admin-filters-bar">
+          <div class="admin-search-wrap">
+            <i class="bi bi-search admin-search-icon"></i>
+            <input type="text" id="admin-search" class="form-control admin-search-input" placeholder="Buscar por email o nombre...">
+          </div>
+          <select id="admin-filter-status" class="form-control admin-filter-select">
+            <option value="">Todos los estados</option>
+            <option value="active">Activos</option>
+            <option value="suspended">Suspendidos</option>
+            <option value="disabled">Deshabilitados</option>
+          </select>
+          <select id="admin-filter-plan" class="form-control admin-filter-select">
+            <option value="">Todos los planes</option>
+            <option value="trial">Trial</option>
+            <option value="active">Activo</option>
+            <option value="expired">Expirado</option>
+          </select>
         </div>
 
         <!-- Users List -->
-        <div id="admin-users-list" class="admin-users-grid" style="margin-top: var(--space-lg);">
+        <div id="admin-users-list" class="admin-users-grid">
           <div class="admin-empty-state">
-            <i class="bi bi-arrow-clockwise spin" style="font-size: 1.5rem; color: var(--text-muted);"></i>
-            <p style="color: var(--text-muted);">Cargando usuarios...</p>
+            <div class="admin-empty-icon">
+              <i class="bi bi-arrow-clockwise spin"></i>
+            </div>
+            <p class="admin-empty-text">Cargando usuarios...</p>
           </div>
         </div>
       </section>
