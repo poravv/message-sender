@@ -2494,16 +2494,19 @@ function buildRoutes() {
 
       const result = await pgClient.query(
         `SELECT
-           contact_phone,
-           MAX(contact_name) AS contact_name,
-           MAX(created_at) AS last_message_at,
+           im.contact_phone,
+           COALESCE(c.nombre, MAX(im.contact_name)) AS contact_name,
+           c.sustantivo AS tratamiento,
+           c.grupo,
+           MAX(im.created_at) AS last_message_at,
            COUNT(*) AS message_count,
-           COUNT(*) FILTER (WHERE read = false AND is_from_contact = true) AS unread_count,
-           (array_agg(message_text ORDER BY created_at DESC))[1] AS last_message
-         FROM incoming_messages
-         WHERE user_id = $1
-         GROUP BY contact_phone
-         ORDER BY MAX(created_at) DESC
+           COUNT(*) FILTER (WHERE im.read = false AND im.is_from_contact = true) AS unread_count,
+           (array_agg(im.message_text ORDER BY im.created_at DESC))[1] AS last_message
+         FROM incoming_messages im
+         LEFT JOIN contacts c ON c.user_id = im.user_id AND c.phone = im.contact_phone
+         WHERE im.user_id = $1
+         GROUP BY im.contact_phone, c.nombre, c.sustantivo, c.grupo
+         ORDER BY MAX(im.created_at) DESC
          LIMIT $2 OFFSET $3`,
         [userId, limit, offset]
       );

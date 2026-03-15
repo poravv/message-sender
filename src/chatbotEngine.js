@@ -297,11 +297,18 @@ async function markHumanIntervention(userId, contactPhone) {
 // ─── Message logging ─────────────────────────────────────────────────────────
 async function logMessage(userId, contactPhone, contactName, text, messageType, isFromContact, isBotReply, mediaUrl) {
   try {
+    // Skip logging protocol messages with no meaningful content
+    const hasText = text !== undefined && text !== null && text !== '';
+    const hasMedia = !!mediaUrl || (messageType && messageType !== 'text');
+    if (!hasText && !hasMedia && !isBotReply) {
+      return; // Nothing meaningful to store
+    }
+
     await pg.query(
       `INSERT INTO incoming_messages
        (user_id, contact_phone, contact_name, message_text, message_type, media_url, is_from_contact, is_bot_reply)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-      [userId, contactPhone, contactName || null, text || null, messageType || 'text', mediaUrl || null, isFromContact, isBotReply]
+      [userId, contactPhone, contactName || null, hasText ? text : null, messageType || 'text', mediaUrl || null, isFromContact, isBotReply]
     );
   } catch (err) {
     logger.error({ err: err?.message, userId, contactPhone }, 'Failed to log incoming message');

@@ -579,12 +579,48 @@ class WhatsAppManager {
             const contactPhone = msg.key.remoteJid.split('@')[0];
             if (!contactPhone) continue;
 
-            // Extract message content
-            const messageContent = msg.message;
+            // Extract message content — unwrap common Baileys containers
+            let messageContent = msg.message;
+
+            // Skip protocol-only messages (no user-visible content)
+            if (messageContent.protocolMessage && Object.keys(messageContent).length === 1) continue;
+            if (messageContent.reactionMessage && Object.keys(messageContent).length === 1) continue;
+            if (messageContent.senderKeyDistributionMessage && Object.keys(messageContent).length === 1) continue;
+
+            // Strip senderKeyDistributionMessage wrapper — actual message is alongside it
+            if (messageContent.senderKeyDistributionMessage && Object.keys(messageContent).length > 1) {
+              // The real message fields coexist with senderKeyDistributionMessage; no unwrapping needed
+              // but we ensure we don't treat senderKeyDistributionMessage as content
+            }
+
+            // Unwrap ephemeral (disappearing) messages
+            if (messageContent.ephemeralMessage?.message) {
+              messageContent = messageContent.ephemeralMessage.message;
+            }
+
+            // Unwrap viewOnce messages
+            if (messageContent.viewOnceMessage?.message) {
+              messageContent = messageContent.viewOnceMessage.message;
+            }
+            if (messageContent.viewOnceMessageV2?.message) {
+              messageContent = messageContent.viewOnceMessageV2.message;
+            }
+
+            // Unwrap edited messages
+            if (messageContent.editedMessage?.message) {
+              messageContent = messageContent.editedMessage.message;
+            }
+
+            // Unwrap documentWithCaption
+            if (messageContent.documentWithCaptionMessage?.message) {
+              messageContent = messageContent.documentWithCaptionMessage.message;
+            }
+
             let text = messageContent.conversation
               || messageContent.extendedTextMessage?.text
               || messageContent.imageMessage?.caption
               || messageContent.videoMessage?.caption
+              || messageContent.documentMessage?.caption
               || '';
             let messageType = 'text';
             let mediaUrl = null;
@@ -593,6 +629,10 @@ class WhatsAppManager {
             else if (messageContent.videoMessage) messageType = 'video';
             else if (messageContent.audioMessage) messageType = 'audio';
             else if (messageContent.documentMessage) messageType = 'document';
+            else if (messageContent.stickerMessage) messageType = 'sticker';
+
+            // Skip protocol messages that have no meaningful user content
+            if (messageType === 'text' && !text) continue;
 
             const contactName = msg.pushName || '';
             const userId = this._getScopedUserId();

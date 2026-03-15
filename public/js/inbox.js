@@ -10,7 +10,9 @@ var inboxState = {
   unreadCount: 0,
   searchTerm: '',
   isMobileView: false,
-  showingChat: false
+  showingChat: false,
+  _lastConvJson: '',
+  _lastMsgJson: ''
 };
 
 function initInbox() {
@@ -82,7 +84,11 @@ async function fetchConversations(silent) {
       return;
     }
     var data = await res.json();
-    inboxState.conversations = data.conversations || [];
+    var newConversations = data.conversations || [];
+    var newJson = JSON.stringify(newConversations);
+    if (silent && newJson === inboxState._lastConvJson) return; // no changes, skip re-render
+    inboxState._lastConvJson = newJson;
+    inboxState.conversations = newConversations;
     renderConversationList();
   } catch (e) {
     if (!silent) showAlert('Error al cargar bandeja', 'danger');
@@ -98,7 +104,11 @@ async function fetchMessages(phone, silent) {
     }
     var data = await res.json();
     // Messages come DESC, reverse for chronological
-    inboxState.messages = (data.messages || []).reverse();
+    var newMessages = (data.messages || []).reverse();
+    var newMsgJson = JSON.stringify(newMessages);
+    if (silent && newMsgJson === inboxState._lastMsgJson) return; // no changes, skip re-render
+    inboxState._lastMsgJson = newMsgJson;
+    inboxState.messages = newMessages;
     renderChatMessages();
     // Update unread count after reading
     pollUnreadCount();
@@ -192,7 +202,8 @@ function renderConversationList() {
     var term = inboxState.searchTerm.toLowerCase();
     filtered = filtered.filter(function(c) {
       return (c.contact_phone || '').toLowerCase().includes(term) ||
-             (c.contact_name || '').toLowerCase().includes(term);
+             (c.contact_name || '').toLowerCase().includes(term) ||
+             (c.grupo || '').toLowerCase().includes(term);
     });
   }
 
@@ -209,6 +220,8 @@ function renderConversationList() {
   filtered.forEach(function(conv) {
     var isActive = conv.contact_phone === inboxState.activePhone;
     var name = conv.contact_name || conv.contact_phone;
+    var subtitle = conv.contact_name ? formatPhoneDisplay(conv.contact_phone) : '';
+    var grupoBadge = conv.grupo ? '<span class="badge bg-info bg-opacity-25 text-info ms-1" style="font-size:0.65em;vertical-align:middle;">' + escapeHtml(conv.grupo) + '</span>' : '';
     var preview = conv.last_message || '';
     if (preview.length > 50) preview = preview.substring(0, 50) + '...';
     var timeStr = timeAgo(conv.last_message_at);
@@ -221,9 +234,10 @@ function renderConversationList() {
         '</div>' +
         '<div class="inbox-conv-info">' +
           '<div class="inbox-conv-header">' +
-            '<span class="inbox-conv-name">' + escapeHtml(name) + '</span>' +
+            '<span class="inbox-conv-name">' + escapeHtml(name) + grupoBadge + '</span>' +
             '<span class="inbox-conv-time">' + timeStr + '</span>' +
           '</div>' +
+          (subtitle ? '<div class="inbox-conv-phone" style="font-size:0.75em;color:var(--text-muted,#888);">' + escapeHtml(subtitle) + '</div>' : '') +
           '<div class="inbox-conv-preview">' +
             '<span class="inbox-conv-text">' + escapeHtml(preview) + '</span>' +
             (unread > 0 ? '<span class="inbox-unread-dot">' + unread + '</span>' : '') +
@@ -243,7 +257,8 @@ function renderChatMessages() {
   // Update header
   if (headerName && inboxState.activePhone) {
     var conv = inboxState.conversations.find(function(c) { return c.contact_phone === inboxState.activePhone; });
-    headerName.textContent = (conv && conv.contact_name) ? conv.contact_name : inboxState.activePhone;
+    var displayName = (conv && conv.contact_name) ? conv.contact_name : formatPhoneDisplay(inboxState.activePhone);
+    headerName.textContent = displayName;
   }
 
   if (inboxState.messages.length === 0) {
@@ -311,6 +326,15 @@ function escapeHtml(str) {
   var div = document.createElement('div');
   div.textContent = str;
   return div.innerHTML;
+}
+
+function formatPhoneDisplay(phone) {
+  if (!phone) return '';
+  // Format 595XXXXXXXXX as +595 XXX XXX XXX
+  if (phone.length === 12 && phone.startsWith('595')) {
+    return '+' + phone.slice(0, 3) + ' ' + phone.slice(3, 6) + ' ' + phone.slice(6, 9) + ' ' + phone.slice(9);
+  }
+  return phone;
 }
 
 function handleInboxSearch(value) {
