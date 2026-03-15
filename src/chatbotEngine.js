@@ -631,13 +631,14 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
       return { responded: false, reason: 'human_intervention' };
     }
 
-    // 9. Check cooldown
-    if (!isCooldownElapsed(conversation, config.cooldown_minutes)) {
+    // 9. Check cooldown — only for NEW conversations (no active flow node)
+    // If user is in the middle of a flow (has current_node_id), skip cooldown
+    if (!conversation.current_node_id && !isCooldownElapsed(conversation, config.cooldown_minutes)) {
       return { responded: false, reason: 'cooldown' };
     }
 
-    // 10. Check max responses per day
-    if (isMaxResponsesReached(conversation, config.max_responses_per_contact)) {
+    // 10. Check max responses per day — only for new conversations (not mid-flow)
+    if (!conversation.current_node_id && isMaxResponsesReached(conversation, config.max_responses_per_contact)) {
       // Send a one-time message that an agent will attend
       if (conversation.responses_today === config.max_responses_per_contact) {
         const maxMsg = 'Un agente te atenderá pronto. Gracias por tu paciencia.';
