@@ -174,6 +174,24 @@ function closeChat() {
   renderInboxLayout();
 }
 
+async function deleteInboxChat() {
+  if (!inboxState.activePhone) return;
+  if (!confirm('¿Borrar esta conversación de la bandeja? Los mensajes se eliminan solo de la base de datos, no de WhatsApp.')) return;
+  try {
+    var res = await authFetch('/messages/inbox/' + encodeURIComponent(inboxState.activePhone), { method: 'DELETE' });
+    if (res && res.ok) {
+      showAlert('Conversación eliminada', 'success');
+      closeChat();
+      fetchConversations();
+    } else {
+      showAlert('Error al borrar', 'danger');
+    }
+  } catch (e) {
+    showAlert('Error al borrar', 'danger');
+  }
+}
+window.deleteInboxChat = deleteInboxChat;
+
 function renderInboxLayout() {
   var listPanel = document.getElementById('inbox-list-panel');
   var chatPanel = document.getElementById('inbox-chat-panel');

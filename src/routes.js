@@ -2629,6 +2629,36 @@ function buildRoutes() {
     }
   });
 
+  // DELETE /messages/inbox/:phone — delete chat history from DB (not from WhatsApp)
+  router.delete('/messages/inbox/:phone', conditionalAuth, conditionalRole('sender_api'), async (req, res) => {
+    try {
+      const userId = req.auth.uid;
+      const phone = req.params.phone;
+      if (!phone) return res.status(400).json({ error: 'Phone required' });
+
+      const chatbotEngine = require('./chatbotEngine');
+      await chatbotEngine.ensureChatbotTables();
+
+      // Delete messages
+      const msgResult = await pool.query(
+        'DELETE FROM incoming_messages WHERE user_id = $1 AND contact_phone = $2',
+        [userId, phone]
+      );
+
+      // Delete conversation state
+      await pool.query(
+        'DELETE FROM chatbot_conversations WHERE user_id = $1 AND contact_phone = $2',
+        [userId, phone]
+      );
+
+      logger.info({ userId, phone, deletedMessages: msgResult.rowCount }, 'Inbox chat deleted');
+      return res.json({ success: true, deletedMessages: msgResult.rowCount });
+    } catch (error) {
+      logger.error({ err: error?.message, userId: req.auth?.uid }, 'Error en DELETE /messages/inbox/:phone');
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
   return router;
 }
 

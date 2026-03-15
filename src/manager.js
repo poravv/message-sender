@@ -564,18 +564,30 @@ class WhatsAppManager {
 
       // ── Chatbot: listen for incoming messages ──
       this.sock.ev.on('messages.upsert', async ({ messages: msgs, type }) => {
+        // Log ALL upsert events for debugging
+        logger.info({ type, count: msgs?.length, jids: msgs?.map(m => m.key?.remoteJid).slice(0, 3) }, 'messages.upsert event');
+
         if (type !== 'notify') return;
         for (const msg of msgs) {
           try {
+            const jid = msg.key?.remoteJid || '';
+            const fromMe = msg.key?.fromMe;
+
             // Skip messages from self, status broadcasts, and protocol messages
-            if (msg.key.fromMe) continue;
-            if (msg.key.remoteJid === 'status@broadcast') continue;
+            if (fromMe) continue;
+            if (jid === 'status@broadcast') continue;
             if (!msg.message) continue;
 
             // Only handle individual chats on s.whatsapp.net (not groups, not LIDs)
-            if (msg.key.remoteJid.endsWith('@g.us')) continue;
-            if (msg.key.remoteJid.endsWith('@lid')) continue; // Skip Linked IDs (internal WhatsApp identifiers, not real phone numbers)
-            if (!msg.key.remoteJid.endsWith('@s.whatsapp.net')) continue; // Only process real phone JIDs
+            if (jid.endsWith('@g.us')) continue;
+            if (jid.endsWith('@lid')) {
+              logger.debug({ jid }, 'Skipping LID message');
+              continue;
+            }
+            if (!jid.endsWith('@s.whatsapp.net')) {
+              logger.debug({ jid }, 'Skipping non-s.whatsapp.net message');
+              continue;
+            }
 
             // Extract phone from JID
             const contactPhone = msg.key.remoteJid.split('@')[0].split(':')[0]; // Remove device suffix if present
