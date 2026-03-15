@@ -827,8 +827,12 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
         }
       }
 
-      // Check max responses for AI mode (each message counts)
-      if (conversation.current_node_id === 'ai_mode' && isMaxResponsesReached(conversation, config.max_responses_per_contact)) {
+      // Check max responses for AI mode — use higher limit (AI conversations are naturally longer)
+      const aiMaxResponses = Math.max(config.max_responses_per_contact || 5, 50);
+      if (conversation.current_node_id === 'ai_mode' && conversation.responses_today >= aiMaxResponses) {
+        const maxMsg = config.deactivation_message || 'Has alcanzado el límite de mensajes por hoy. Un agente te atenderá pronto.';
+        await sendFn(jid, { text: maxMsg });
+        await logMessage(userId, contactPhone, contactName, maxMsg, 'text', false, true, null);
         return { responded: false, reason: 'max_responses' };
       }
 
@@ -856,11 +860,8 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
         content: m.message_text
       }));
 
-      // Prepare welcome message for first interaction
-      let welcomePrefix = '';
-      if (isFirstMessage && config.welcome_message) {
-        welcomePrefix = replaceVariables(config.welcome_message, contactData);
-      }
+      // In AI mode, let the AI handle greetings naturally (no manual welcome prefix)
+      // The system prompt should instruct the AI how to greet
 
       // Call AI with system prompt + conversation history
       const aiResponse = await callAI(
@@ -872,7 +873,7 @@ async function handleIncomingMessage(userId, messageInfo, contactPhone, contactN
 
       let responseText;
       if (aiResponse) {
-        responseText = welcomePrefix ? welcomePrefix + '\n\n' + aiResponse : aiResponse;
+        responseText = aiResponse;
       } else {
         // AI failed — send fallback
         const fallback = config.fallback_message || 'Lo siento, no pude procesar tu mensaje. Un agente te atenderá pronto.';
