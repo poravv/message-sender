@@ -138,6 +138,14 @@ jobs:
           --from-literal=MINIO_BUCKET="${{ secrets.MINIO_BUCKET }}" \
           --from-literal=MINIO_FORCE_PATH_STYLE="${{ secrets.MINIO_FORCE_PATH_STYLE }}" \
           --from-literal=MINIO_DELETE_AFTER_SEND="${{ secrets.MINIO_DELETE_AFTER_SEND }}" \
+          --from-literal=FIREBASE_API_KEY="${{ secrets.FIREBASE_API_KEY }}" \
+          --from-literal=FIREBASE_AUTH_DOMAIN="${{ secrets.FIREBASE_AUTH_DOMAIN }}" \
+          --from-literal=FIREBASE_PROJECT_ID="${{ secrets.FIREBASE_PROJECT_ID }}" \
+          --from-literal=FIREBASE_STORAGE_BUCKET="${{ secrets.FIREBASE_STORAGE_BUCKET }}" \
+          --from-literal=FIREBASE_MESSAGING_SENDER_ID="${{ secrets.FIREBASE_MESSAGING_SENDER_ID }}" \
+          --from-literal=FIREBASE_APP_ID="${{ secrets.FIREBASE_APP_ID }}" \
+          --from-literal=FIREBASE_MEASUREMENT_ID="${{ secrets.FIREBASE_MEASUREMENT_ID }}" \
+          --from-literal=CHATBOT_ENCRYPTION_KEY="${{ secrets.CHATBOT_ENCRYPTION_KEY }}" \
           --dry-run=client -o yaml | kubectl apply -f -
 
     - name: Create PostgreSQL secrets
