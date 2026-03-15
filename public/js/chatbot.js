@@ -93,7 +93,9 @@ function renderConfigForm(config) {
   setVal('cb-deactivation-message', c.deactivation_message || 'Un agente te atenderá pronto. Gracias por tu paciencia.');
 
   // Start node selector — populate after nodes are loaded
-  chatbotConfig._pendingStartNode = c.start_node_id || '';
+  if (chatbotConfig) {
+    chatbotConfig._pendingStartNode = c.start_node_id || '';
+  }
 
   // Keywords
   var defaultActivation = 'hola, hi, hello, hey, buenos dias, buenas tardes, buenas noches, buen dia, buenas, ola, hla, holaa, menu, menú, inicio, info, informacion, información, ayuda, help, start';
