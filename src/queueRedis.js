@@ -382,7 +382,10 @@ async function cleanupUserData(userId, options = {}) {
       eventsKey(userId),         // ms:events:{userId}
       heartbeatKey(userId),      // ms:hb:{userId}
       campaignLockKey(userId),   // ms:lock:campaign:{userId}
-      `ms:session:${userId}`,    // session token
+      // NOTE: ms:session:{userId} is NOT cleaned here intentionally.
+      // The browser session token must only be cleared via explicit logout
+      // (POST /auth/logout-session). Cleaning it here would invalidate the
+      // user's browser session on WhatsApp disconnects, job failures, etc.
       `ms:contacts:${userId}`,   // contacts cache
       `ms:contacts:idmap:${userId}`, // contacts ID map
       `ms:campaigns:${userId}`,  // campaigns cache

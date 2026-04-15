@@ -77,8 +77,17 @@ async function sessionGuard(req, res, next) {
 
     // Client sent a token
     if (!stored) {
-      // Session expired or cleared — create a new one
-      await createSession(userId, req, res);
+      // Session expired or cleared — re-adopt the client's token instead of
+      // generating a new one. This prevents race conditions when multiple
+      // concurrent requests fire: all of them will re-store the same token.
+      const sessionData = JSON.stringify({
+        token: clientToken,
+        createdAt: new Date().toISOString(),
+        userAgent: req.headers['user-agent'] || 'unknown',
+        ip: req.ip || req.connection.remoteAddress || 'unknown'
+      });
+      await redis.set(`${SESSION_PREFIX}${userId}`, sessionData, 'EX', SESSION_TTL);
+      logger.info({ uid: userId }, 'sessionGuard: re-adopted client token (no stored session)');
       return next();
     }
 

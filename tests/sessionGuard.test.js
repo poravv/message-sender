@@ -214,6 +214,26 @@ describe('sessionGuard middleware', () => {
       expect.stringContaining('corrupt')
     );
   });
+
+  test('client token with no stored session re-adopts client token (no new UUID)', async () => {
+    const clientToken = 'existing-client-token-12345';
+    mockRedis.get.mockResolvedValue(null); // no stored session
+
+    const req = makeReq({ headers: { 'x-session-token': clientToken, 'user-agent': 'TestAgent' } });
+    const res = makeRes();
+    const next = jest.fn();
+
+    await sessionGuard(req, res, next);
+
+    expect(next).toHaveBeenCalled();
+    // Should re-adopt the client's token, not generate a new UUID
+    expect(mockRedis.set).toHaveBeenCalled();
+    const storedJson = mockRedis.set.mock.calls[0][1];
+    const stored = JSON.parse(storedJson);
+    expect(stored.token).toBe(clientToken); // client's token, NOT MOCK_UUID
+    // Should NOT set a new X-Session-Token header (client already has the right one)
+    expect(res.setHeader).not.toHaveBeenCalled();
+  });
 });
 
 // ─── createSession ───

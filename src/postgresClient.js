@@ -33,6 +33,30 @@ function getPool() {
   return pool;
 }
 
+// Connection-level errors that warrant a retry with a fresh pool
+const RETRYABLE_ERRORS = [
+  'Connection terminated',
+  'Connection is closed',
+  'connection is closed',
+  'Client has encountered a connection error',
+  'terminating connection due to administrator command',
+  'server closed the connection unexpectedly',
+  'ECONNREFUSED',
+  'ECONNRESET',
+  'ETIMEDOUT',
+];
+
+function isRetryableError(err) {
+  if (!err) return false;
+  const msg = String(err.message || '');
+  const code = String(err.code || '');
+  return RETRYABLE_ERRORS.some(e => msg.includes(e)) ||
+         code === '57P01' || // admin shutdown
+         code === '57P03' || // cannot connect now
+         code === 'ECONNREFUSED' ||
+         code === 'ECONNRESET';
+}
+
 async function query(text, params) {
   const start = Date.now();
   const p = getPool();
@@ -44,6 +68,18 @@ async function query(text, params) {
     }
     return result;
   } catch (err) {
+    if (isRetryableError(err)) {
+      logger.warn({ err: err.message, query: text.slice(0, 100) }, 'PostgreSQL connection error, retrying with fresh pool');
+      // Destroy the stale pool and create a fresh one
+      try { await pool.end(); } catch { /* ignore */ }
+      pool = null;
+      // Retry once with fresh pool
+      const freshPool = getPool();
+      const result = await freshPool.query(text, params);
+      const duration = Date.now() - start;
+      logger.info({ duration, query: text.slice(0, 100) }, 'PostgreSQL retry succeeded');
+      return result;
+    }
     logger.error({ err, query: text.slice(0, 200) }, 'PostgreSQL query error');
     throw err;
   }
