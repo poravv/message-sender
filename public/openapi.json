@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "WhatsApp Sender Pro API",
-    "description": "API publica para enviar mensajes de WhatsApp, gestionar campanas y recibir webhooks de estado. Disponible para planes Professional y Enterprise.\n\n## Autenticacion\nTodas las llamadas requieren un Bearer token obtenido desde `POST /api/v1/auth/token` usando tu API Key.\n\n## Rate Limiting\nWhatsApp impone un limite de **15 mensajes por minuto** por linea conectada. Las solicitudes que excedan este limite seran encoladas automaticamente.\n\n## Errores\nTodos los errores siguen un formato consistente con `error` y opcionalmente `details`.",
+    "description": "API publica para enviar mensajes de WhatsApp, gestionar campanas y recibir webhooks de estado. Disponible para planes Profesional, Premium y Enterprise.\n\n## Autenticacion\nTodas las llamadas requieren un Bearer token obtenido desde `POST /api/v1/auth/token` usando tu API Key.\n\n## Rate Limiting\nWhatsApp impone un limite de **15 mensajes por minuto** por linea conectada. Las solicitudes que excedan este limite seran encoladas automaticamente.\n\n## Errores\nTodos los errores siguen un formato consistente con `error` y opcionalmente `details`.",
     "version": "1.0.0",
     "contact": {
       "name": "WhatsApp Sender Pro",
@@ -172,7 +172,7 @@
                   "messageInterval": {
                     "type": "integer",
                     "enum": [3, 5, 8, 12, 15],
-                    "description": "Interval in seconds between messages. Allowed values: 3, 5, 8, 12, 15. Default: 5. The 3s option requires Professional plan or higher.",
+                    "description": "Interval in seconds between messages. Allowed values: 3, 5, 8, 12, 15. Default: 5. The 3s option requires Profesional plan or higher.",
                     "default": 5,
                     "example": 5
                   }
@@ -313,7 +313,7 @@
                   "messageInterval": {
                     "type": "integer",
                     "enum": [3, 5, 8, 12, 15],
-                    "description": "Interval in seconds between messages. Allowed values: 3, 5, 8, 12, 15. Default: 5. The 3s option requires Professional plan or higher.",
+                    "description": "Interval in seconds between messages. Allowed values: 3, 5, 8, 12, 15. Default: 5. The 3s option requires Profesional plan or higher.",
                     "default": 5,
                     "example": 5
                   }
@@ -696,7 +696,7 @@
                           },
                           "restricted": {
                             "type": "boolean",
-                            "description": "true si requiere plan Professional o superior",
+                            "description": "true si requiere plan Profesional o superior",
                             "example": false
                           },
                           "default": {
@@ -2070,14 +2070,14 @@
         }
       },
       "Forbidden": {
-        "description": "Plan no permite acceso a la API (requiere Professional o Enterprise)",
+        "description": "Plan no permite acceso a la API (requiere Profesional, Premium o Enterprise)",
         "content": {
           "application/json": {
             "schema": {
               "$ref": "#/components/schemas/Error"
             },
             "example": {
-              "error": "API access requires Professional or Enterprise plan"
+              "error": "API access requires Profesional, Premium or Enterprise plan"
             }
           }
         }

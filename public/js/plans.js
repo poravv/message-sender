@@ -33,11 +33,19 @@ function renderPlanStatus(profile) {
 
   var html = '';
 
+  var paidPlanNames = {
+    active: 'Plan Activo',
+    basico: 'Basico',
+    profesional: 'Profesional',
+    premium: 'Premium',
+    enterprise: 'Enterprise'
+  };
+
   if (profile.role === 'admin') {
     html = '<i class="bi bi-shield-check"></i> Tu plan actual: <strong>Administrador</strong>';
     statusEl.className = 'plans-current-status plans-status-active';
-  } else if (profile.plan === 'active') {
-    html = '<i class="bi bi-check-circle"></i> Tu plan actual: <strong>Plan Activo</strong>';
+  } else if (paidPlanNames[profile.plan]) {
+    html = '<i class="bi bi-check-circle"></i> Tu plan actual: <strong>' + paidPlanNames[profile.plan] + '</strong>';
     statusEl.className = 'plans-current-status plans-status-active';
   } else if (profile.plan === 'trial' && profile.trialDaysLeft > 0) {
     html = '<i class="bi bi-clock"></i> Tu plan actual: <strong>Trial gratuito</strong> (' + profile.trialDaysLeft + ' dias restantes)';

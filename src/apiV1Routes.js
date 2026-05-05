@@ -1,5 +1,5 @@
 /**
- * API v1 Routes — Public API for Professional and Enterprise plan users.
+ * API v1 Routes — Public API for Profesional, Premium and Enterprise plan users.
  * Authentication via API Key → Bearer token (separate from Firebase JWT).
  */
 const express = require('express');
@@ -11,6 +11,7 @@ const metricsStore = require('./metricsStore');
 const redisQueue = require('./queueRedis');
 const { ALLOWED_INTERVALS, DEFAULT_INTERVAL } = require('./queueRedis');
 const sessionManager = require('./sessionManager');
+const { canUseProfessionalFeatures } = require('./middleware/planGate');
 
 // In-memory token store: token → { uid, createdAt, expiresAt }
 // In production this should be Redis-backed; good enough for MVP.
@@ -58,11 +59,9 @@ async function requireApiPlan(uid) {
   const plan = profile.plan;
   const role = profile.role;
 
-  // Admins and active plans with Professional/Enterprise access
-  if (role === 'admin') return null;
-  if (plan === 'active') return null;
+  if (canUseProfessionalFeatures(plan, role)) return null;
 
-  return 'API access requires Professional or Enterprise plan';
+  return 'API access requires Profesional, Premium or Enterprise plan';
 }
 
 // ────────────────────────────────────────────

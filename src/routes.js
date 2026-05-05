@@ -16,7 +16,7 @@ const { checkTrial } = require('./middleware/checkTrial');
 const { sessionGuard, createSession, clearSession } = require('./middleware/sessionGuard');
 const { ensureEmailVerified } = require('./middleware/ensureEmailVerified');
 const { admin, db, auth } = require('./firebaseAdmin');
-const { requireFeature, requireLimit, getPlanFeatures, PLAN_FEATURES } = require('./middleware/planGate');
+const { requireFeature, requireLimit, getPlanFeatures, canUseProfessionalFeatures } = require('./middleware/planGate');
 
 // Map para rastrear operaciones de refresh-qr en progreso por usuario
 const qrRefreshInProgress = new Map();
@@ -207,7 +207,7 @@ function buildRoutes() {
   router.get('/config/intervals', conditionalAuth, (req, res) => {
     const userRole = req.userProfile?.role;
     const userPlan = req.userProfile?.plan;
-    const canUseFast = userRole === 'admin' || userPlan === 'pro' || userPlan === 'professional';
+    const canUseFast = canUseProfessionalFeatures(userPlan, userRole);
 
     const intervals = [
       { value: 3,  label: 'Rapido (3s)', badge: '\u26A0\uFE0F', color: 'warning', restricted: true,  available: canUseFast },
@@ -340,11 +340,11 @@ function buildRoutes() {
       if (!allowedIntervals.includes(messageInterval)) {
         messageInterval = defaultInterval;
       }
-      // 3s interval restricted to admin or pro plan users
+      // 3s interval restricted to Profesional plans and above.
       if (messageInterval === 3) {
         const userRole = req.userProfile?.role;
         const userPlan = req.userProfile?.plan;
-        const isAllowed = userRole === 'admin' || userPlan === 'pro' || userPlan === 'professional';
+        const isAllowed = canUseProfessionalFeatures(userPlan, userRole);
         if (!isAllowed) {
           messageInterval = defaultInterval;
         }
@@ -1534,7 +1534,7 @@ function buildRoutes() {
   });
 
   // ---------------------------
-  // User: API Key management (Professional/Enterprise only)
+  // User: API Key management (Profesional, Premium and Enterprise only)
   // ---------------------------
   router.post('/user/api-key', conditionalAuth, requireFeature('api'), async (req, res) => {
     try {

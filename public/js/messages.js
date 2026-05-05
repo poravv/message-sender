@@ -98,7 +98,7 @@ function renderIntervalPills() {
     }
     if (!opt.available && opt.restricted) {
       pill.innerHTML = '<i class="bi bi-lock-fill"></i> ' + labelText;
-      pill.title = 'Disponible en plan Pro';
+      pill.title = 'Disponible en plan Profesional o superior';
     } else {
       pill.innerHTML = labelText;
     }

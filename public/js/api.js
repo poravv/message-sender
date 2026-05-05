@@ -53,7 +53,8 @@ function checkApiPlanAccess() {
     return;
   }
 
-  var hasAccess = profile.role === 'admin' || profile.plan === 'active';
+  var hasAccess = profile.role === 'admin' ||
+    (window.planFeatures && window.planFeatures.features && window.planFeatures.features.api === true);
 
   if (hasAccess) {
     gateEl.classList.add('d-none');

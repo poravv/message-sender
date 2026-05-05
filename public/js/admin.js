@@ -110,7 +110,7 @@ function updateAdminStats() {
     if (status === 'active') active++;
     if (status === 'suspended') suspended++;
     if (u.plan === 'trial') trial++;
-    if (u.plan === 'active') paid++;
+    if (['active', 'basico', 'profesional', 'premium', 'enterprise'].indexOf(u.plan) !== -1) paid++;
   });
 
   var el;
@@ -246,6 +246,10 @@ function renderUsersCards(users) {
       html += '<select class="admin-plan-select" onchange="adminChangePlan(\'' + user.uid + '\', this.value)" title="Cambiar plan">';
       html += '<option value="">Plan...</option>';
       html += '<option value="trial"' + (user.plan === 'trial' ? ' selected' : '') + '>Trial</option>';
+      html += '<option value="basico"' + (user.plan === 'basico' ? ' selected' : '') + '>Basico</option>';
+      html += '<option value="profesional"' + (user.plan === 'profesional' ? ' selected' : '') + '>Profesional</option>';
+      html += '<option value="premium"' + (user.plan === 'premium' ? ' selected' : '') + '>Premium</option>';
+      html += '<option value="enterprise"' + (user.plan === 'enterprise' ? ' selected' : '') + '>Enterprise</option>';
       html += '<option value="active"' + (user.plan === 'active' ? ' selected' : '') + '>Activo</option>';
       html += '<option value="expired"' + (user.plan === 'expired' ? ' selected' : '') + '>Expirado</option>';
       html += '</select>';
@@ -360,15 +364,31 @@ function getPlanBadge(plan, role) {
   }
   var classes = {
     active: 'admin-plan-active',
+    basico: 'admin-plan-active',
+    profesional: 'admin-plan-active',
+    premium: 'admin-plan-active',
+    enterprise: 'admin-plan-active',
     trial: 'admin-plan-trial',
     expired: 'admin-plan-expired'
   };
   var icons = {
     active: 'bi-check-circle-fill',
+    basico: 'bi-check-circle-fill',
+    profesional: 'bi-check-circle-fill',
+    premium: 'bi-stars',
+    enterprise: 'bi-building-check',
     trial: 'bi-clock-fill',
     expired: 'bi-x-circle-fill'
   };
-  var labels = { active: 'Activo', trial: 'Trial', expired: 'Expirado' };
+  var labels = {
+    active: 'Activo',
+    basico: 'Basico',
+    profesional: 'Profesional',
+    premium: 'Premium',
+    enterprise: 'Enterprise',
+    trial: 'Trial',
+    expired: 'Expirado'
+  };
   var cls = classes[plan] || '';
   var icon = icons[plan] || 'bi-question-circle';
   var label = labels[plan] || plan || '-';

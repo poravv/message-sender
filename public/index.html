@@ -910,7 +910,7 @@
             <ul class="pricing-features">
               <li><i class="bi bi-check-circle-fill"></i> Hasta 1,000 mensajes/mes</li>
               <li><i class="bi bi-check-circle-fill"></i> 1 linea WhatsApp</li>
-              <li><i class="bi bi-check-circle-fill"></i> Templates ilimitados</li>
+              <li><i class="bi bi-check-circle-fill"></i> Hasta 10 templates</li>
               <li><i class="bi bi-check-circle-fill"></i> Soporte por email</li>
               <li><i class="bi bi-check-circle-fill"></i> Envio de texto + imagenes + audio</li>
             </ul>
@@ -980,18 +980,20 @@
               <p class="pricing-target">Grandes empresas con necesidades especiales</p>
             </div>
             <div class="pricing-price">
-              <span class="pricing-amount pricing-amount-custom">Contactar</span>
+              <span class="pricing-currency">Gs.</span>
+              <span class="pricing-amount">3.500.000</span>
+              <span class="pricing-period">+/mes</span>
             </div>
             <ul class="pricing-features">
               <li><i class="bi bi-check-circle-fill"></i> Mensajes ilimitados</li>
-              <li><i class="bi bi-check-circle-fill"></i> Multiples lineas WhatsApp</li>
+              <li><i class="bi bi-check-circle-fill"></i> Desde 10 usuarios o lineas WhatsApp</li>
               <li><i class="bi bi-check-circle-fill"></i> API completa + webhooks</li>
               <li><i class="bi bi-check-circle-fill"></i> SLA garantizado</li>
               <li><i class="bi bi-check-circle-fill"></i> Soporte dedicado</li>
               <li><i class="bi bi-check-circle-fill"></i> Personalizacion a medida</li>
             </ul>
-            <p class="pricing-enterprise-note">Contactanos para una cotizacion personalizada</p>
-            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Enterprise.%20Quisiera%20una%20cotizaci%C3%B3n%20personalizada." target="_blank" class="pricing-cta">
+            <p class="pricing-enterprise-note">Cotizacion final segun usuarios, volumen y soporte requerido</p>
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Enterprise%20desde%20Gs.%203.500.000%2Fmes.%20Quisiera%20una%20cotizaci%C3%B3n%20personalizada." target="_blank" class="pricing-cta">
               <i class="bi bi-whatsapp"></i> Contactar
             </a>
           </div>
@@ -1420,7 +1422,7 @@ REGLAS:
         <!-- Plan check banner -->
         <div id="api-plan-gate" class="card d-none" style="text-align:center; padding: var(--space-xl);">
           <i class="bi bi-lock-fill" style="font-size: 2.5rem; color: var(--text-muted);"></i>
-          <h3 style="margin-top: var(--space-md);">API disponible en planes Professional y Enterprise</h3>
+          <h3 style="margin-top: var(--space-md);">API disponible en planes Profesional, Premium y Enterprise</h3>
           <p style="color: var(--text-secondary);">Actualiza tu plan para acceder a la API de envio de mensajes, webhooks y mas.</p>
           <button class="btn-primary" onclick="showTab('plans')" style="margin-top: var(--space-md);">
             <i class="bi bi-arrow-up-circle"></i> Ver planes
@@ -1762,6 +1764,10 @@ REGLAS:
           <select id="admin-filter-plan" class="form-control admin-filter-select">
             <option value="">Todos los planes</option>
             <option value="trial">Trial</option>
+            <option value="basico">Basico</option>
+            <option value="profesional">Profesional</option>
+            <option value="premium">Premium</option>
+            <option value="enterprise">Enterprise</option>
             <option value="active">Activo</option>
             <option value="expired">Expirado</option>
           </select>

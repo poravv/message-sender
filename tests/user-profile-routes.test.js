@@ -295,7 +295,7 @@ describe('PUT /admin/users/:userId/plan', () => {
 
   test('validates plan values — rejects invalid plan', async () => {
     // Dev mode user is admin, so auth passes
-    const result = await request(app, 'PUT', '/admin/users/target-user-2/plan', { plan: 'premium' });
+    const result = await request(app, 'PUT', '/admin/users/target-user-2/plan', { plan: 'gold' });
 
     expect(result.status).toBe(400);
     expect(result.body.error).toContain('Invalid plan');
@@ -317,8 +317,8 @@ describe('PUT /admin/users/:userId/plan', () => {
     expect(result.body.error).toBe('User not found');
   });
 
-  test('accepts valid plan values: active, trial, expired', async () => {
-    for (const plan of ['active', 'trial', 'expired']) {
+  test('accepts valid plan values: paid plans, active, trial, expired', async () => {
+    for (const plan of ['active', 'trial', 'expired', 'basico', 'profesional', 'premium', 'enterprise']) {
       mockGet.mockResolvedValueOnce({ exists: true });
       mockUpdate.mockResolvedValueOnce(undefined);
       mockGet.mockResolvedValueOnce({

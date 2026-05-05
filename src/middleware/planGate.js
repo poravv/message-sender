@@ -3,7 +3,7 @@ const logger = require('../logger');
 
 const PLAN_FEATURES = {
   expired:     { send: 0,     contacts: 0,   templates: 0,  chatbot: false, chatbotAi: false, inbox: false, api: false, campaigns: false },
-  trial:       { send: 100,   contacts: 50,  templates: 5,  chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true },
+  trial:       { send: 100,   contacts: 50,  templates: 5,  chatbot: true,  chatbotAi: true,  inbox: true,  api: false, campaigns: true },
   basico:      { send: 1000,  contacts: 500, templates: 10, chatbot: false, chatbotAi: false, inbox: false, api: false, campaigns: true },
   profesional: { send: 10000, contacts: -1,  templates: -1, chatbot: false, chatbotAi: false, inbox: true,  api: true,  campaigns: true },
   premium:     { send: 10000, contacts: -1,  templates: -1, chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true },
@@ -12,9 +12,30 @@ const PLAN_FEATURES = {
 };
 // -1 = unlimited
 
+const PLAN_ALIASES = {
+  basic: 'basico',
+  pro: 'profesional',
+  professional: 'profesional',
+};
+
+function normalizePlan(plan) {
+  const key = String(plan || 'expired').toLowerCase();
+  return PLAN_ALIASES[key] || key;
+}
+
 function getPlanFeatures(plan, role) {
   if (role === 'admin') return PLAN_FEATURES.enterprise;
-  return PLAN_FEATURES[plan] || PLAN_FEATURES.expired;
+  return PLAN_FEATURES[normalizePlan(plan)] || PLAN_FEATURES.expired;
+}
+
+function planHasFeature(plan, role, featureName) {
+  const features = getPlanFeatures(plan, role);
+  return !!features[featureName];
+}
+
+function canUseProfessionalFeatures(plan, role) {
+  if (role === 'admin') return true;
+  return planHasFeature(plan, role, 'api');
 }
 
 /**
@@ -23,7 +44,7 @@ function getPlanFeatures(plan, role) {
  */
 function requireFeature(featureName) {
   return (req, res, next) => {
-    const plan = req.userProfile?.plan || 'expired';
+    const plan = normalizePlan(req.userProfile?.plan || 'expired');
     const role = req.userProfile?.role;
     const features = getPlanFeatures(plan, role);
 
@@ -48,7 +69,7 @@ function requireFeature(featureName) {
  */
 function requireLimit(limitName) {
   return (req, res, next) => {
-    const plan = req.userProfile?.plan || 'expired';
+    const plan = normalizePlan(req.userProfile?.plan || 'expired');
     const role = req.userProfile?.role;
     const features = getPlanFeatures(plan, role);
     const limit = features[limitName];
@@ -68,4 +89,12 @@ function requireLimit(limitName) {
   };
 }
 
-module.exports = { requireFeature, requireLimit, getPlanFeatures, PLAN_FEATURES };
+module.exports = {
+  requireFeature,
+  requireLimit,
+  getPlanFeatures,
+  planHasFeature,
+  canUseProfessionalFeatures,
+  normalizePlan,
+  PLAN_FEATURES
+};
