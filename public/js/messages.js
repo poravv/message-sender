@@ -153,14 +153,17 @@ function setupMediaChips() {
       chips.forEach(c => c.classList.remove('active'));
       Object.values(sections).forEach(s => s?.classList.add('d-none'));
 
+      const textarea1 = document.getElementById('message1');
       if (isActive) {
         // Toggle off
         if (hiddenInput) hiddenInput.value = 'none';
+        if (textarea1) textarea1.required = true;
       } else {
         // Activate this chip
         chip.classList.add('active');
         if (hiddenInput) hiddenInput.value = media;
         if (sections[media]) sections[media].classList.remove('d-none');
+        if (textarea1) textarea1.required = (media !== 'audio');
       }
     });
   });
@@ -584,7 +587,7 @@ async function sendMessages() {
     if (msg.trim()) templates.push(msg.trim());
   }
 
-  if (templates.length === 0) {
+  if (templates.length === 0 && messageType !== 'audio') {
     showAlert('Debes escribir al menos un mensaje', 'warning');
     return;
   }

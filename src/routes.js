@@ -468,7 +468,7 @@ function buildRoutes() {
           .filter((tpl) => typeof tpl === 'string' && tpl.length > 0);
       }
 
-      if (!templates || !Array.isArray(templates) || templates.length === 0) {
+      if (!audioFile && (!templates || !Array.isArray(templates) || templates.length === 0)) {
         return res.status(400).json({ error: 'Debes proporcionar al menos un template de mensaje' });
       }
 
