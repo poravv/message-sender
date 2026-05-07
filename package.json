@@ -17,6 +17,7 @@
         "prod:start": "./start-prod.sh",
         "prod:stop": "docker-compose down",
         "prod:logs": "docker-compose logs -f audio-sender",
+        "postinstall": "patch-package",
         "test": "jest --verbose --forceExit"
     },
     "keywords": [
@@ -29,7 +30,7 @@
         "@aws-sdk/client-s3": "^3.701.0",
         "@ffmpeg-installer/ffmpeg": "^1.1.0",
         "@hapi/boom": "^10.0.1",
-        "@whiskeysockets/baileys": "7.0.0-rc.9",
+        "@whiskeysockets/baileys": "^7.0.0-rc10",
         "bullmq": "^4.12.2",
         "cors": "^2.8.5",
         "csv-parser": "^3.2.0",
@@ -48,7 +49,8 @@
     "devDependencies": {
         "jest": "^30.3.0",
         "jest-environment-jsdom": "^30.3.0",
-        "nodemon": "^3.1.9"
+        "nodemon": "^3.1.9",
+        "patch-package": "^8.0.1"
     },
     "author": "Andres Vera",
     "license": "ISC"
