@@ -7,7 +7,7 @@ const {
   DisconnectReason,
 } = require('@whiskeysockets/baileys');
 const pino = require('pino');
-const { isAuthorizedPhone, publicDir } = require('./config');
+const { publicDir } = require('./config');
 const { MessageQueue } = require('./queue');
 const logger = require('./logger');
 const { getAuthState } = require('./auth');
@@ -371,43 +371,6 @@ class WhatsAppManager {
               jid: this.sock.user.id,
             };
             logger.info({ userInfo: this.userInfo }, 'Información del usuario obtenida');
-
-            // Autorización de número
-            if (!isAuthorizedPhone(phoneNumber)) {
-              const alert = `¡ALERTA! Número no autorizado: ${phoneNumber}`;
-              logger.warn({ phoneNumber }, 'Número no autorizado, desconectando...');
-              this.securityAlert = {
-                timestamp: Date.now(),
-                messages: [alert, 'Desconectando...'],
-                phoneNumber,
-              };
-
-              try {
-                await this.sock.sendMessage(this.sock.user.id, {
-                  text: 'Número no autorizado. Se cerrará la sesión.',
-                });
-              } catch {
-                /* noop */
-              }
-
-              this.isReady = false;
-              this.connectionState = 'unauthorized';
-
-              setTimeout(async () => {
-                try {
-                  await this.sock?.logout();
-                  this.sock = null;
-                  await this._deleteSessionFilesCompletely();
-                  setTimeout(() => this.safeInitialize(), 8_000);
-                } catch {
-                  /* noop */
-                }
-              }, 3_000);
-              return;
-            }
-
-            // OK
-            logger.info({ phoneNumber }, 'Número autorizado');
 
             // Task 4.2: Check phone uniqueness before allowing connection
             const phoneOk = await this._handlePhoneRegistration(phoneNumber);

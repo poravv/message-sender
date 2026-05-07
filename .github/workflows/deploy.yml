@@ -112,7 +112,6 @@ jobs:
           --from-literal=NODE_ENV="${{ secrets.NODE_ENV }}" \
           --from-literal=FIREBASE_SERVICE_ACCOUNT="${{ secrets.FIREBASE_SERVICE_ACCOUNT }}" \
           --from-literal=SESSION_STORE="${{ secrets.SESSION_STORE }}" \
-          --from-literal=AUTHORIZED_PHONES="${{ secrets.AUTHORIZED_PHONES }}" \
           --from-literal=FILE_RETENTION_HOURS="${{ secrets.FILE_RETENTION_HOURS }}" \
           --from-literal=MESSAGE_DELAY_MS="${{ secrets.MESSAGE_DELAY_MS }}" \
           --from-literal=LOG_LEVEL="${{ secrets.LOG_LEVEL }}" \

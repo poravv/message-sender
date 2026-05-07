@@ -12,19 +12,8 @@ const retentionHours = Number(process.env.FILE_RETENTION_HOURS || 24);
 
 const messageDelay = Number(process.env.MESSAGE_DELAY_MS || 600);
 
-const authorizedPhoneNumbers = process.env.AUTHORIZED_PHONES
-  ? process.env.AUTHORIZED_PHONES.split(',').map(p => p.trim())
-  : ['595992756462', '595985381901'];
-
-const isAuthorizedPhone = (phoneNumber) => {
-  const normalized = String(phoneNumber).replace(/[\s\-\+]/g, '');
-  return authorizedPhoneNumbers.some(p => normalized === p);
-};
-
 module.exports = {
   ROOT, tempDir, uploadsDir, publicDir,
   retentionHours,
   messageDelay,
-  authorizedPhoneNumbers,
-  isAuthorizedPhone
 };
