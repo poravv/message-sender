@@ -304,9 +304,9 @@ class WhatsAppManager {
         auth: state,
         printQRInTerminal: false,
         logger: pino({ level: 'silent' }),
-        browser: ['Mac OS', 'Chrome', '14.4.1'],
-        // Platform.WEB sigue rechazado por WhatsApp (405). browser Mac OS activa
-        // webSubPlatform=DARWIN. Version actualizada a rc10 default.
+        // 'Desktop' → companion_platform_id=ELECTRON(7) y DeviceProps=DESKTOP(7),
+        // idéntico a WhatsApp Desktop app. Android WA acepta Desktop; rechaza Chrome(web).
+        browser: ['Mac OS', 'Desktop', '14.4.1'],
         version: [2, 3000, 1035194821],
         syncFullHistory: false,
         connectTimeoutMs: Math.max(20000, Number(process.env.WA_CONNECT_TIMEOUT_MS || 30000)),
