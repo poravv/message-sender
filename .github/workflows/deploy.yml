@@ -116,14 +116,6 @@ jobs:
           --from-literal=FILE_RETENTION_HOURS="${{ secrets.FILE_RETENTION_HOURS }}" \
           --from-literal=MESSAGE_DELAY_MS="${{ secrets.MESSAGE_DELAY_MS }}" \
           --from-literal=LOG_LEVEL="${{ secrets.LOG_LEVEL }}" \
-          --from-literal=REDIS_URL="${{ secrets.REDIS_URL }}" \
-          --from-literal=REDIS_HOST="${{ secrets.REDIS_HOST }}" \
-          --from-literal=REDIS_PORT="${{ secrets.REDIS_PORT }}" \
-          --from-literal=REDIS_DB="${{ secrets.REDIS_DB }}" \
-          --from-literal=REDIS_TLS="${{ secrets.REDIS_TLS }}" \
-          --from-literal=REDIS_TTL_SECONDS="${{ secrets.REDIS_TTL_SECONDS }}" \
-          --from-literal=REDIS_QR_TTL_SECONDS="${{ secrets.REDIS_QR_TTL_SECONDS }}" \
-          --from-literal=REDIS_PASSWORD="${{ secrets.REDIS_PASSWORD }}" \
           --from-literal=POSTGRES_HOST="${{ secrets.POSTGRES_HOST }}" \
           --from-literal=POSTGRES_PORT="${{ secrets.POSTGRES_PORT }}" \
           --from-literal=POSTGRES_USER="${{ secrets.POSTGRES_USER }}" \
@@ -147,6 +139,17 @@ jobs:
           --from-literal=FIREBASE_MEASUREMENT_ID="${{ secrets.FIREBASE_MEASUREMENT_ID }}" \
           --from-literal=CHATBOT_ENCRYPTION_KEY="${{ secrets.CHATBOT_ENCRYPTION_KEY }}" \
           --dry-run=client -o yaml | kubectl apply -f -
+
+    - name: Deploy Redis
+      run: |
+        echo "🟥 Deploying redis-sender with Longhorn persistence..."
+        kubectl apply -f k8s/redis.yaml
+        echo "⏳ Waiting for redis-sender to be ready..."
+        kubectl wait --for=condition=available --timeout=120s deployment/redis-sender -n ${{ env.NAMESPACE }} || {
+          echo "⚠️ redis-sender deployment timed out, checking status..."
+          kubectl describe deployment/redis-sender -n ${{ env.NAMESPACE }}
+          kubectl get pods -n ${{ env.NAMESPACE }} -l app=redis-sender
+        }
 
     - name: Create PostgreSQL secrets
       run: |
