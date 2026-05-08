@@ -1352,7 +1352,7 @@ function showPlanUpgradeModal(feature, message, currentPlan) {
     chatbotAi: 'Chatbot con IA',
     inbox: 'Bandeja de entrada',
     api: 'API v1',
-    campaigns: 'Historial de campanas',
+    campaigns: 'Historial de campañas',
     send: 'Envio de mensajes',
     contacts: 'Contactos',
     templates: 'Plantillas'

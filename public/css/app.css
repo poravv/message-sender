@@ -3963,6 +3963,25 @@ a.btn-link:hover {
   flex-shrink: 0;
 }
 
+.interval-info-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(37, 211, 102, 0.07);
+  border: 1px solid rgba(37, 211, 102, 0.22);
+  color: var(--text-secondary, #6c757d);
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.interval-info-note i {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
 @media (max-width: 480px) {
   .interval-pills {
     gap: 6px;

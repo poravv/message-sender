@@ -531,7 +531,7 @@
         <li>Creacion y uso de plantillas de mensajes</li>
         <li>Envio de mensajes de texto, imagenes y archivos de audio</li>
         <li>Panel de control con estadisticas de envio</li>
-        <li>Programacion y gestion de campanas de mensajeria</li>
+        <li>Programacion y gestion de campañas de mensajeria</li>
         <li>Chatbot y sistema de respuestas automatizadas con flujos personalizables</li>
         <li>Integracion opcional con proveedores de inteligencia artificial (OpenAI y otros)</li>
         <li>Bandeja de entrada para visualizar y responder mensajes recibidos de contactos</li>
@@ -750,7 +750,7 @@
       <ul>
         <li><strong>Datos de registro:</strong> Nombre, direccion de correo electronico</li>
         <li><strong>Datos de conexion:</strong> Numero de telefono de WhatsApp vinculado</li>
-        <li><strong>Datos de uso:</strong> Contactos importados, plantillas de mensajes creadas, metadatos de campanas (nombre, fecha, numero de destinatarios)</li>
+        <li><strong>Datos de uso:</strong> Contactos importados, plantillas de mensajes creadas, metadatos de campañas (nombre, fecha, numero de destinatarios)</li>
         <li><strong>Datos de chatbot:</strong> Configuracion de flujos de chatbot, mensajes de bienvenida, prompts del sistema de IA</li>
         <li><strong>Claves de API de IA:</strong> Almacenadas de forma cifrada (AES-256) para la integracion con proveedores de IA</li>
         <li><strong>Mensajes entrantes:</strong> Mensajes recibidos de contactos de WhatsApp para la funcionalidad de bandeja de entrada</li>
@@ -776,7 +776,7 @@
       <ul>
         <li><strong>Autenticacion:</strong> Gestionada a traves de Firebase Authentication (Google). Las credenciales son procesadas y almacenadas por Google segun sus propias politicas de seguridad.</li>
         <li><strong>Perfiles de usuario:</strong> Almacenados en Google Cloud Firestore, con las medidas de seguridad proporcionadas por Google Cloud Platform.</li>
-        <li><strong>Contactos y metadatos de campanas:</strong> Almacenados en bases de datos PostgreSQL protegidas, con acceso restringido y cifrado en transito.</li>
+        <li><strong>Contactos y metadatos de campañas:</strong> Almacenados en bases de datos PostgreSQL protegidas, con acceso restringido y cifrado en transito.</li>
         <li><strong>Sesiones de WhatsApp:</strong> Los datos de sesion se almacenan temporalmente en Redis con cifrado y se eliminan al desconectarse.</li>
         <li><strong>Configuracion de chatbot:</strong> Los flujos, nodos y configuraciones del chatbot se almacenan en PostgreSQL asociados a la cuenta del usuario.</li>
         <li><strong>Claves de API de IA:</strong> Las claves de API de proveedores de IA se almacenan cifradas con AES-256 en PostgreSQL. Solo se descifran en memoria al momento de realizar llamadas al proveedor de IA.</li>

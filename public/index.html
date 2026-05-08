@@ -1,17 +1,19 @@
 <!DOCTYPE html>
 <html lang="es" data-theme="dark">
+
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>WhatsApp Sender Pro</title>
   <meta name="description" content="Plataforma profesional para envío masivo de mensajes de WhatsApp">
-  
-  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2325D366'/><text x='50%' y='50%' text-anchor='middle' dy='.35em' font-size='50'>📱</text></svg>">
 
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"/>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css"/>
+  <link rel="icon" type="image/svg+xml"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%2325D366'/><text x='50%' y='50%' text-anchor='middle' dy='.35em' font-size='50'>📱</text></svg>">
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/css/app.css"/>
+  <link rel="stylesheet" href="/css/app.css" />
 </head>
 
 <body>
@@ -31,7 +33,7 @@
         <i class="bi bi-whatsapp"></i>
         <span>WhatsApp Sender Pro</span>
       </a>
-      
+
       <div class="navbar-end">
         <div id="trial-badge" class="trial-badge d-none"></div>
         <div id="user-info" class="user-info d-none">
@@ -75,12 +77,12 @@
             </div>
           </div>
         </div>
-        
+
         <div id="connection-status" class="connection-badge disconnected">
           <span class="status-dot"></span>
           <span class="status-text">Desconectado</span>
         </div>
-        
+
         <div class="theme-toggle">
           <input type="checkbox" id="themeSwitch">
           <label for="themeSwitch">
@@ -139,7 +141,7 @@
               <i class="bi bi-chat-square-text"></i> Plantillas
             </button>
             <button class="tab-more-item" data-tab="campaigns">
-              <i class="bi bi-megaphone"></i> Campanas
+              <i class="bi bi-megaphone"></i> Campañas
             </button>
             <button class="tab-more-item" data-tab="plans">
               <i class="bi bi-credit-card"></i> Planes
@@ -182,7 +184,8 @@
             <span class="dash-conn-label" id="dashConnLabel">WhatsApp</span>
             <span class="dash-conn-status" id="dashConnStatus">Verificando...</span>
           </div>
-          <button class="dash-conn-action" id="dashConnAction" style="display:none" onclick="document.querySelector('[data-tab=whatsapp]')?.click()">
+          <button class="dash-conn-action" id="dashConnAction" style="display:none"
+            onclick="document.querySelector('[data-tab=whatsapp]')?.click()">
             Conectar <i class="bi bi-arrow-right"></i>
           </button>
         </div>
@@ -249,7 +252,8 @@
               <i class="bi bi-file-earmark-text"></i>
               <span>Crear plantilla</span>
             </button>
-            <button class="dash-action-btn dash-action-wa" id="dashQuickConnectBtn" onclick="document.querySelector('[data-tab=whatsapp]')?.click()">
+            <button class="dash-action-btn dash-action-wa" id="dashQuickConnectBtn"
+              onclick="document.querySelector('[data-tab=whatsapp]')?.click()">
               <i class="bi bi-whatsapp"></i>
               <span>Conectar WhatsApp</span>
             </button>
@@ -386,7 +390,7 @@
                 <span>Escanea el código QR</span>
               </div>
             </div>
-            
+
             <div class="qr-display">
               <div class="qr-wrapper">
                 <img id="qrImage" alt="Código QR" class="qr-image">
@@ -510,15 +514,19 @@
                   <div class="selector-toolbar">
                     <div class="selector-search">
                       <i class="bi bi-search"></i>
-                      <input type="text" id="contactSelectorSearch" placeholder="Buscar por nombre, telefono o grupo...">
-                      <span class="selector-search-clear d-none" id="contactSearchClear"><i class="bi bi-x-lg"></i></span>
+                      <input type="text" id="contactSelectorSearch"
+                        placeholder="Buscar por nombre, telefono o grupo...">
+                      <span class="selector-search-clear d-none" id="contactSearchClear"><i
+                          class="bi bi-x-lg"></i></span>
                     </div>
                     <div class="selector-actions">
-                      <button type="button" class="selector-action-btn" id="selectAllContactsBtn" title="Seleccionar todos">
+                      <button type="button" class="selector-action-btn" id="selectAllContactsBtn"
+                        title="Seleccionar todos">
                         <i class="bi bi-check-all"></i>
                         <span>Todos</span>
                       </button>
-                      <button type="button" class="selector-action-btn selector-action-clear" id="clearSelectedContactsBtn" title="Limpiar seleccion">
+                      <button type="button" class="selector-action-btn selector-action-clear"
+                        id="clearSelectedContactsBtn" title="Limpiar seleccion">
                         <i class="bi bi-x-circle"></i>
                         <span>Limpiar</span>
                       </button>
@@ -580,7 +588,8 @@
                     </div>
                     <span class="csv-drop-title">Arrastra un archivo aqui</span>
                     <span class="csv-drop-subtitle">o haz clic para seleccionar</span>
-                    <small class="csv-drop-hint">Formatos: CSV, TXT &mdash; Columnas: numero, tratamiento, nombre, grupo</small>
+                    <small class="csv-drop-hint">Formatos: CSV, TXT &mdash; Columnas: numero, tratamiento, nombre,
+                      grupo</small>
                   </div>
                   <div id="csvFileInfo" class="csv-file-result d-none">
                     <div class="csv-file-icon"><i class="bi bi-file-earmark-check-fill"></i></div>
@@ -680,7 +689,8 @@
                     <i class="bi bi-images"></i> Seleccionar imagenes
                   </label>
                   <div id="multipleImagesInfo" class="file-info"></div>
-                  <button type="button" class="media-clear-btn" data-clear="multiple"><i class="bi bi-x-lg"></i></button>
+                  <button type="button" class="media-clear-btn" data-clear="multiple"><i
+                      class="bi bi-x-lg"></i></button>
                 </div>
               </div>
 
@@ -713,14 +723,21 @@
                 <i class="bi bi-exclamation-triangle-fill"></i>
                 <span>Intervalo rapido: mayor riesgo de deteccion de spam por WhatsApp</span>
               </div>
+              <div class="interval-info-note">
+                <i class="bi bi-info-circle"></i>
+                <span>El sistema aplica <strong>variacion aleatoria (±30%)</strong> sobre el intervalo seleccionado para
+                  parecer mas humano. El intervalo se aplica entre cada destinatario y entre cada parte del mensaje
+                  (imagenes, audios, texto).</span>
+              </div>
             </div>
           </div>
 
           <!-- Campaign name + Submit -->
           <div class="send-bottom">
             <div class="campaign-input-row">
-              <label for="campaignName"><i class="bi bi-tag"></i> Campana</label>
-              <input type="text" id="campaignName" class="form-control" maxlength="120" placeholder="Nombre de campana (opcional)">
+              <label for="campaignName"><i class="bi bi-tag"></i> Campaña</label>
+              <input type="text" id="campaignName" class="form-control" maxlength="120"
+                placeholder="Nombre de campaña (opcional)">
             </div>
             <div class="send-bottom-actions">
               <button type="button" id="previewMessageBtn" class="btn-secondary btn-lg">
@@ -842,11 +859,15 @@
           <div class="form-group">
             <label for="templateContent">Mensaje</label>
             <div class="variable-chips">
-              <button type="button" class="variable-chip" data-var="{nombre}"><i class="bi bi-person"></i> {nombre}</button>
-              <button type="button" class="variable-chip" data-var="{tratamiento}"><i class="bi bi-award"></i> {tratamiento}</button>
-              <button type="button" class="variable-chip" data-var="{grupo}"><i class="bi bi-people"></i> {grupo}</button>
+              <button type="button" class="variable-chip" data-var="{nombre}"><i class="bi bi-person"></i>
+                {nombre}</button>
+              <button type="button" class="variable-chip" data-var="{tratamiento}"><i class="bi bi-award"></i>
+                {tratamiento}</button>
+              <button type="button" class="variable-chip" data-var="{grupo}"><i class="bi bi-people"></i>
+                {grupo}</button>
             </div>
-            <textarea id="templateContent" class="form-control" rows="5" placeholder="Escribe tu plantilla... Usa {nombre}, {tratamiento}, {grupo} como variables"></textarea>
+            <textarea id="templateContent" class="form-control" rows="5"
+              placeholder="Escribe tu plantilla... Usa {nombre}, {tratamiento}, {grupo} como variables"></textarea>
             <div class="template-char-count" id="templateCharCount">0 caracteres</div>
           </div>
           <div class="form-group">
@@ -914,7 +935,8 @@
               <li><i class="bi bi-check-circle-fill"></i> Soporte por email</li>
               <li><i class="bi bi-check-circle-fill"></i> Envio de texto + imagenes + audio</li>
             </ul>
-            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20B%C3%A1sico%20%28Gs.%20199.000%2Fmes%29" target="_blank" class="pricing-cta">
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20B%C3%A1sico%20%28Gs.%20199.000%2Fmes%29"
+              target="_blank" class="pricing-cta">
               <i class="bi bi-whatsapp"></i> Solicitar Plan
             </a>
           </div>
@@ -942,7 +964,8 @@
               <li><i class="bi bi-check-circle-fill"></i> Webhooks de estado de entrega</li>
               <li><i class="bi bi-check-circle-fill"></i> Dashboard analytics avanzado</li>
             </ul>
-            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Profesional%20%28Gs.%20499.000%2Fmes%29" target="_blank" class="pricing-cta pricing-cta-accent">
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Profesional%20%28Gs.%20499.000%2Fmes%29"
+              target="_blank" class="pricing-cta pricing-cta-accent">
               <i class="bi bi-whatsapp"></i> Solicitar Plan
             </a>
           </div>
@@ -962,13 +985,16 @@
             <ul class="pricing-features">
               <li><i class="bi bi-check-circle-fill"></i> Todo lo del plan Profesional +</li>
               <li class="pricing-feature-highlight"><i class="bi bi-stars"></i> Chatbot/Auto-responder inteligente</li>
-              <li class="pricing-feature-highlight"><i class="bi bi-stars"></i> Bandeja de entrada (recibir y responder mensajes)</li>
-              <li class="pricing-feature-highlight"><i class="bi bi-stars"></i> Integracion con IA (OpenAI, Anthropic, Groq)</li>
-              <li><i class="bi bi-check-circle-fill"></i> Historial completo de campanas con analytics</li>
-              <li><i class="bi bi-check-circle-fill"></i> Respuestas de clientes vinculadas a campanas</li>
+              <li class="pricing-feature-highlight"><i class="bi bi-stars"></i> Bandeja de entrada (recibir y responder
+                mensajes)</li>
+              <li class="pricing-feature-highlight"><i class="bi bi-stars"></i> Integracion con IA (OpenAI, Anthropic,
+                Groq)</li>
+              <li><i class="bi bi-check-circle-fill"></i> Historial completo de campañas con analytics</li>
+              <li><i class="bi bi-check-circle-fill"></i> Respuestas de clientes vinculadas a campañas</li>
               <li><i class="bi bi-check-circle-fill"></i> Soporte prioritario 24/7</li>
             </ul>
-            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Premium%20%28Gs.%20699.000%2Fmes%29" target="_blank" class="pricing-cta pricing-cta-premium">
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Premium%20%28Gs.%20699.000%2Fmes%29"
+              target="_blank" class="pricing-cta pricing-cta-premium">
               <i class="bi bi-whatsapp"></i> Solicitar Plan
             </a>
           </div>
@@ -993,7 +1019,8 @@
               <li><i class="bi bi-check-circle-fill"></i> Personalizacion a medida</li>
             </ul>
             <p class="pricing-enterprise-note">Cotizacion final segun usuarios, volumen y soporte requerido</p>
-            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Enterprise%20desde%20Gs.%203.500.000%2Fmes.%20Quisiera%20una%20cotizaci%C3%B3n%20personalizada." target="_blank" class="pricing-cta">
+            <a href="https://wa.me/595992756462?text=Hola%2C%20me%20interesa%20el%20Plan%20Enterprise%20desde%20Gs.%203.500.000%2Fmes.%20Quisiera%20una%20cotizaci%C3%B3n%20personalizada."
+              target="_blank" class="pricing-cta">
               <i class="bi bi-whatsapp"></i> Contactar
             </a>
           </div>
@@ -1041,7 +1068,9 @@
               <input type="file" id="csvFileInput" accept=".csv,.txt" hidden>
               <div class="upload-content" id="csvUploadContent">
                 <i class="bi bi-cloud-upload"></i>
-                <p>Arrastra tu archivo CSV aquí o <a href="#" class="btn-link" onclick="event.preventDefault(); document.getElementById('csvFileInput').click()">selecciona un archivo</a></p>
+                <p>Arrastra tu archivo CSV aquí o <a href="#" class="btn-link"
+                    onclick="event.preventDefault(); document.getElementById('csvFileInput').click()">selecciona un
+                    archivo</a></p>
                 <small>Formato: phone, nombre, tratamiento, grupo (encabezado opcional)</small>
               </div>
               <div id="importProgress" class="import-progress d-none">
@@ -1152,7 +1181,8 @@
           <h3 class="cb-section-title"><i class="bi bi-toggles"></i> Modo del Bot</h3>
           <div class="cb-mode-selector">
             <label class="cb-mode-option">
-              <input type="radio" name="cb-bot-mode" id="cb-mode-flow" value="flow" checked onchange="switchBotMode('flow')">
+              <input type="radio" name="cb-bot-mode" id="cb-mode-flow" value="flow" checked
+                onchange="switchBotMode('flow')">
               <span class="cb-mode-label">
                 <i class="bi bi-diagram-3"></i>
                 <strong>Flujo Manual</strong>
@@ -1222,42 +1252,54 @@
             <select class="form-control" id="cb-start-node">
               <option value="">Automatico (primer menu encontrado)</option>
             </select>
-            <small class="text-muted">Selecciona que nodo se muestra primero cuando un contacto inicia conversacion</small>
+            <small class="text-muted">Selecciona que nodo se muestra primero cuando un contacto inicia
+              conversacion</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Palabras que activan el bot</label>
-            <input class="form-control" id="cb-activation-keywords" type="text" placeholder="hola, menu, ayuda, buenas, hi, hello, info, inicio">
-            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna de estas, el bot se activa. Si esta vacio usa las predeterminadas.</small>
+            <input class="form-control" id="cb-activation-keywords" type="text"
+              placeholder="hola, menu, ayuda, buenas, hi, hello, info, inicio">
+            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna de estas, el bot se activa.
+              Si esta vacio usa las predeterminadas.</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Palabras que desactivan el bot</label>
-            <input class="form-control" id="cb-deactivation-keywords" type="text" placeholder="agente, humano, persona real, quiero hablar">
-            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna fuera del menu, el bot se desactiva. "Salir" dentro del menu siempre funciona.</small>
+            <input class="form-control" id="cb-deactivation-keywords" type="text"
+              placeholder="agente, humano, persona real, quiero hablar">
+            <small class="text-muted">Separadas por coma. Cuando un contacto escribe alguna fuera del menu, el bot se
+              desactiva. "Salir" dentro del menu siempre funciona.</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Mensaje de bienvenida</label>
-            <textarea class="form-control" id="cb-welcome" rows="3" placeholder="Hola {nombre}! Soy el asistente de..."></textarea>
+            <textarea class="form-control" id="cb-welcome" rows="3"
+              placeholder="Hola {nombre}! Soy el asistente de..."></textarea>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Mensaje cuando no reconoce la opcion / fallo de IA</label>
-            <textarea class="form-control" id="cb-fallback" rows="2" placeholder="No reconozco esa opcion. Por favor elige un numero del menu:"></textarea>
-            <small class="text-muted">En modo Flujo: cuando no coincide con opciones del menu. En modo IA: cuando falla la API de IA.</small>
+            <textarea class="form-control" id="cb-fallback" rows="2"
+              placeholder="No reconozco esa opcion. Por favor elige un numero del menu:"></textarea>
+            <small class="text-muted">En modo Flujo: cuando no coincide con opciones del menu. En modo IA: cuando falla
+              la API de IA.</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Mensaje al salir del menu</label>
-            <textarea class="form-control" id="cb-exit-message" rows="2" placeholder="Has salido del menu. Escribe *menu* cuando quieras volver a empezar."></textarea>
-            <small class="text-muted">Se muestra cuando el contacto elige "Salir" dentro del menu (salida amigable, puede volver)</small>
+            <textarea class="form-control" id="cb-exit-message" rows="2"
+              placeholder="Has salido del menu. Escribe *menu* cuando quieras volver a empezar."></textarea>
+            <small class="text-muted">Se muestra cuando el contacto elige "Salir" dentro del menu (salida amigable,
+              puede volver)</small>
           </div>
 
           <div class="cb-form-group" style="margin-top: var(--space-md);">
             <label>Mensaje al desactivar el bot</label>
-            <textarea class="form-control" id="cb-deactivation-message" rows="2" placeholder="Un agente te atendera pronto. Gracias por tu paciencia."></textarea>
-            <small class="text-muted">Se muestra cuando el contacto escribe "agente", "humano", etc. fuera del menu (desactiva el bot hasta que escriba "hola" de nuevo)</small>
+            <textarea class="form-control" id="cb-deactivation-message" rows="2"
+              placeholder="Un agente te atendera pronto. Gracias por tu paciencia."></textarea>
+            <small class="text-muted">Se muestra cuando el contacto escribe "agente", "humano", etc. fuera del menu
+              (desactiva el bot hasta que escriba "hola" de nuevo)</small>
           </div>
 
           <button class="btn-primary" onclick="saveChatbotConfig()" style="margin-top: var(--space-lg);">
@@ -1268,7 +1310,8 @@
         <!-- AI Full Mode Config (shown when mode=ai) -->
         <div class="card" id="cb-ai-full-section" style="display: none;">
           <h3 class="cb-section-title"><i class="bi bi-stars"></i> Configuracion de Inteligencia Artificial</h3>
-          <p class="text-muted" style="margin-bottom: var(--space-md);">La IA generara todas las respuestas usando el prompt del sistema como base de conocimiento.</p>
+          <p class="text-muted" style="margin-bottom: var(--space-md);">La IA generara todas las respuestas usando el
+            prompt del sistema como base de conocimiento.</p>
 
           <div class="cb-form-group">
             <label class="cb-checkbox-label">
@@ -1323,7 +1366,8 @@ REGLAS:
 - Si no sabes la respuesta, di que un agente se pondra en contacto
 - No inventes informacion que no este aqui
 - Respuestas cortas y claras (maximo 3-4 lineas)"></textarea>
-            <small class="text-muted">Aqui describes tu negocio, productos, precios, horarios, reglas de atencion, etc. La IA usara esto como base para todas las respuestas.</small>
+            <small class="text-muted">Aqui describes tu negocio, productos, precios, horarios, reglas de atencion, etc.
+              La IA usara esto como base para todas las respuestas.</small>
           </div>
 
           <button class="btn-primary" onclick="saveAiConfig()" style="margin-top: var(--space-lg);">
@@ -1356,7 +1400,8 @@ REGLAS:
           <!-- AI Node Config (for flow mode — optional per-node AI) -->
           <div class="card" id="cb-ai-node-section">
             <h3 class="cb-section-title"><i class="bi bi-stars"></i> Integracion IA para Nodos (Opcional)</h3>
-            <p class="text-muted" style="margin-bottom: var(--space-md);">Configura la IA para usar en nodos de tipo "IA" dentro del flujo manual.</p>
+            <p class="text-muted" style="margin-bottom: var(--space-md);">Configura la IA para usar en nodos de tipo
+              "IA" dentro del flujo manual.</p>
 
             <div class="cb-form-group">
               <label class="cb-checkbox-label">
@@ -1394,7 +1439,8 @@ REGLAS:
 
             <div class="cb-form-group" style="margin-top: var(--space-md);">
               <label>Prompt del sistema (por defecto para nodos IA)</label>
-              <textarea class="form-control" id="cb-ai-prompt-flow" rows="4" placeholder="Eres un asistente de atencion al cliente..."></textarea>
+              <textarea class="form-control" id="cb-ai-prompt-flow" rows="4"
+                placeholder="Eres un asistente de atencion al cliente..."></textarea>
             </div>
 
             <button class="btn-primary" onclick="saveAiConfigFlow()" style="margin-top: var(--space-lg);">
@@ -1423,7 +1469,8 @@ REGLAS:
         <div id="api-plan-gate" class="card d-none" style="text-align:center; padding: var(--space-xl);">
           <i class="bi bi-lock-fill" style="font-size: 2.5rem; color: var(--text-muted);"></i>
           <h3 style="margin-top: var(--space-md);">API disponible en planes Profesional, Premium y Enterprise</h3>
-          <p style="color: var(--text-secondary);">Actualiza tu plan para acceder a la API de envio de mensajes, webhooks y mas.</p>
+          <p style="color: var(--text-secondary);">Actualiza tu plan para acceder a la API de envio de mensajes,
+            webhooks y mas.</p>
           <button class="btn-primary" onclick="showTab('plans')" style="margin-top: var(--space-md);">
             <i class="bi bi-arrow-up-circle"></i> Ver planes
           </button>
@@ -1438,8 +1485,10 @@ REGLAS:
               Tu API Key es necesaria para autenticarte con la API. Guardala en un lugar seguro.
             </p>
             <div id="api-key-display" class="d-none" style="margin-bottom: var(--space-md);">
-              <div style="display:flex; align-items:center; gap: var(--space-sm); background: var(--bg-tertiary); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                <code id="api-key-value" style="flex:1; font-size: 0.9rem; word-break: break-all; color: var(--accent);"></code>
+              <div
+                style="display:flex; align-items:center; gap: var(--space-sm); background: var(--bg-tertiary); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                <code id="api-key-value"
+                  style="flex:1; font-size: 0.9rem; word-break: break-all; color: var(--accent);"></code>
                 <button class="btn-icon" id="copyApiKeyBtn" title="Copiar">
                   <i class="bi bi-clipboard"></i>
                 </button>
@@ -1467,14 +1516,16 @@ REGLAS:
 
             <div style="margin-bottom: var(--space-lg);">
               <h4 style="color: var(--text-primary); margin-bottom: var(--space-sm);">1. Obtener token de acceso</h4>
-              <pre style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/auth/token \
+              <pre
+                style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/auth/token \
   -H "Content-Type: application/json" \
   -d '{"apiKey": "TU_API_KEY"}'</code></pre>
             </div>
 
             <div style="margin-bottom: var(--space-lg);">
               <h4 style="color: var(--text-primary); margin-bottom: var(--space-sm);">2. Enviar un mensaje</h4>
-              <pre style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/messages/send \
+              <pre
+                style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/messages/send \
   -H "Authorization: Bearer TU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1485,7 +1536,8 @@ REGLAS:
 
             <div style="margin-bottom: var(--space-lg);">
               <h4 style="color: var(--text-primary); margin-bottom: var(--space-sm);">3. Envio masivo</h4>
-              <pre style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/messages/bulk \
+              <pre
+                style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X POST /api/v1/messages/bulk \
   -H "Authorization: Bearer TU_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -1500,7 +1552,8 @@ REGLAS:
 
             <div>
               <h4 style="color: var(--text-primary); margin-bottom: var(--space-sm);">4. Consultar estado</h4>
-              <pre style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X GET /api/v1/messages/status/CAMPAIGN_ID \
+              <pre
+                style="background: var(--bg-tertiary); padding: var(--space-md); border-radius: var(--radius-sm); overflow-x: auto; border: 1px solid var(--border-color);"><code style="color: var(--success); font-size: 0.85rem;">curl -X GET /api/v1/messages/status/CAMPAIGN_ID \
   -H "Authorization: Bearer TU_TOKEN"</code></pre>
             </div>
           </div>
@@ -1519,37 +1572,51 @@ REGLAS:
                 </thead>
                 <tbody>
                   <tr>
-                    <td><span style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span></td>
+                    <td><span
+                        style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span>
+                    </td>
                     <td><code>/api/v1/auth/token</code></td>
                     <td>Obtener token de acceso</td>
                   </tr>
                   <tr>
-                    <td><span style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span></td>
+                    <td><span
+                        style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span>
+                    </td>
                     <td><code>/api/v1/messages/send</code></td>
                     <td>Enviar mensaje individual</td>
                   </tr>
                   <tr>
-                    <td><span style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span></td>
+                    <td><span
+                        style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span>
+                    </td>
                     <td><code>/api/v1/messages/bulk</code></td>
                     <td>Envio masivo de mensajes</td>
                   </tr>
                   <tr>
-                    <td><span style="background: var(--info); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">GET</span></td>
+                    <td><span
+                        style="background: var(--info); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">GET</span>
+                    </td>
                     <td><code>/api/v1/messages/status/:id</code></td>
-                    <td>Estado de campana</td>
+                    <td>Estado de campaña</td>
                   </tr>
                   <tr>
-                    <td><span style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span></td>
+                    <td><span
+                        style="background: var(--accent); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">POST</span>
+                    </td>
                     <td><code>/api/v1/webhooks</code></td>
                     <td>Registrar webhook</td>
                   </tr>
                   <tr>
-                    <td><span style="background: var(--info); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">GET</span></td>
+                    <td><span
+                        style="background: var(--info); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">GET</span>
+                    </td>
                     <td><code>/api/v1/webhooks</code></td>
                     <td>Listar webhooks</td>
                   </tr>
                   <tr>
-                    <td><span style="background: var(--danger); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">DELETE</span></td>
+                    <td><span
+                        style="background: var(--danger); color: #fff; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">DELETE</span>
+                    </td>
                     <td><code>/api/v1/webhooks</code></td>
                     <td>Eliminar webhook</td>
                   </tr>
@@ -1564,7 +1631,8 @@ REGLAS:
             <p style="color: var(--text-secondary); margin-bottom: var(--space-md);">
               Explora la documentacion interactiva con esquemas, ejemplos y la posibilidad de probar endpoints.
             </p>
-            <a href="/api-docs.html" target="_blank" class="btn-primary" style="display: inline-flex; align-items: center; gap: var(--space-sm); text-decoration: none; padding: 0.6rem 1.5rem;">
+            <a href="/api-docs.html" target="_blank" class="btn-primary"
+              style="display: inline-flex; align-items: center; gap: var(--space-sm); text-decoration: none; padding: 0.6rem 1.5rem;">
               <i class="bi bi-box-arrow-up-right"></i> Abrir Swagger UI
             </a>
           </div>
@@ -1574,7 +1642,8 @@ REGLAS:
             <h3><i class="bi bi-speedometer"></i> Limites</h3>
             <ul style="color: var(--text-secondary); list-style: none; padding: 0;">
               <li style="padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-color);">
-                <strong style="color: var(--text-primary);">Rate limit WhatsApp:</strong> 15 mensajes/minuto por linea conectada
+                <strong style="color: var(--text-primary);">Rate limit WhatsApp:</strong> 15 mensajes/minuto por linea
+                conectada
               </li>
               <li style="padding: var(--space-sm) 0; border-bottom: 1px solid var(--border-color);">
                 <strong style="color: var(--text-primary);">Token expiracion:</strong> 24 horas
@@ -1583,7 +1652,8 @@ REGLAS:
                 <strong style="color: var(--text-primary);">Bulk max:</strong> 10,000 destinatarios por solicitud
               </li>
               <li style="padding: var(--space-sm) 0;">
-                <strong style="color: var(--text-primary);">Webhook eventos:</strong> message.sent, message.failed, message.delivered, campaign.completed
+                <strong style="color: var(--text-primary);">Webhook eventos:</strong> message.sent, message.failed,
+                message.delivered, campaign.completed
               </li>
             </ul>
           </div>
@@ -1602,7 +1672,8 @@ REGLAS:
           <div class="inbox-panel inbox-list-panel" id="inbox-list-panel">
             <div class="inbox-search-bar">
               <i class="bi bi-search inbox-search-icon"></i>
-              <input type="text" class="form-control inbox-search-input" placeholder="Buscar conversacion..." oninput="handleInboxSearch(this.value)">
+              <input type="text" class="form-control inbox-search-input" placeholder="Buscar conversacion..."
+                oninput="handleInboxSearch(this.value)">
             </div>
             <div class="inbox-conv-list" id="inbox-conv-list">
               <div class="inbox-empty">
@@ -1621,11 +1692,13 @@ REGLAS:
               <div class="inbox-chat-avatar"><i class="bi bi-person-circle"></i></div>
               <span class="inbox-chat-name" id="inbox-chat-name">Selecciona una conversacion</span>
               <div class="inbox-header-actions">
-                <button class="btn-icon inbox-bot-toggle-btn" id="inbox-bot-toggle-btn" onclick="toggleBotPause()" title="Pausar/Reactivar Bot" style="display:none;">
+                <button class="btn-icon inbox-bot-toggle-btn" id="inbox-bot-toggle-btn" onclick="toggleBotPause()"
+                  title="Pausar/Reactivar Bot" style="display:none;">
                   <i class="bi bi-robot"></i>
                   <span class="inbox-bot-toggle-label" id="inbox-bot-toggle-label">Pausar Bot</span>
                 </button>
-                <button class="btn-icon inbox-delete-chat-btn" id="inbox-delete-chat-btn" onclick="deleteInboxChat()" title="Borrar conversacion">
+                <button class="btn-icon inbox-delete-chat-btn" id="inbox-delete-chat-btn" onclick="deleteInboxChat()"
+                  title="Borrar conversacion">
                   <i class="bi bi-trash3"></i>
                 </button>
               </div>
@@ -1640,7 +1713,8 @@ REGLAS:
               </div>
             </div>
             <div class="inbox-reply-bar" id="inbox-reply-bar">
-              <textarea class="form-control inbox-reply-input" id="inbox-reply-input" placeholder="Escribe tu respuesta..." rows="1" onkeydown="handleReplyKeypress(event)"></textarea>
+              <textarea class="form-control inbox-reply-input" id="inbox-reply-input"
+                placeholder="Escribe tu respuesta..." rows="1" onkeydown="handleReplyKeypress(event)"></textarea>
               <button class="btn-primary inbox-send-btn" id="inbox-send-btn" onclick="handleSendClick()">
                 <i class="bi bi-send-fill"></i>
               </button>
@@ -1652,7 +1726,7 @@ REGLAS:
       <!-- Tab: Campaigns -->
       <section id="campaigns" class="tab-pane">
         <header class="section-header">
-          <h1><i class="bi bi-megaphone"></i> Historial de Campanas</h1>
+          <h1><i class="bi bi-megaphone"></i> Historial de Campañas</h1>
           <p>Revisa el rendimiento de tus envios masivos</p>
         </header>
 
@@ -1660,7 +1734,8 @@ REGLAS:
         <div class="camp-filters">
           <div class="camp-search-wrap">
             <i class="bi bi-search camp-search-icon"></i>
-            <input type="text" id="campaign-search" class="form-control camp-search-input" placeholder="Buscar campana...">
+            <input type="text" id="campaign-search" class="form-control camp-search-input"
+              placeholder="Buscar campaña...">
           </div>
           <input type="date" id="campaign-date-from" class="form-control camp-date-input" title="Desde">
           <input type="date" id="campaign-date-to" class="form-control camp-date-input" title="Hasta">
@@ -1673,7 +1748,7 @@ REGLAS:
         <div id="campaigns-list" class="campaigns-list">
           <div class="campaigns-empty">
             <div class="campaigns-empty-icon"><i class="bi bi-megaphone"></i></div>
-            <p>Cargando campanas...</p>
+            <p>Cargando campañas...</p>
           </div>
         </div>
 
@@ -1686,7 +1761,7 @@ REGLAS:
         <div class="app-modal-backdrop" onclick="closeCampaignModal()"></div>
         <div class="app-modal-card app-modal-lg" role="document">
           <div class="app-modal-header">
-            <h3>Detalle de Campana</h3>
+            <h3>Detalle de Campaña</h3>
             <button type="button" class="btn-icon app-modal-close" onclick="closeCampaignModal()" aria-label="Cerrar">
               <i class="bi bi-x-lg"></i>
             </button>
@@ -1753,7 +1828,8 @@ REGLAS:
         <div class="admin-filters-bar">
           <div class="admin-search-wrap">
             <i class="bi bi-search admin-search-icon"></i>
-            <input type="text" id="admin-search" class="form-control admin-search-input" placeholder="Buscar por email o nombre...">
+            <input type="text" id="admin-search" class="form-control admin-search-input"
+              placeholder="Buscar por email o nombre...">
           </div>
           <select id="admin-filter-status" class="form-control admin-filter-select">
             <option value="">Todos los estados</option>
@@ -1788,7 +1864,8 @@ REGLAS:
   </main>
 
   <!-- Edit Contact Modal -->
-  <div id="editContactModal" class="app-modal d-none" role="dialog" aria-modal="true" aria-labelledby="editContactTitle">
+  <div id="editContactModal" class="app-modal d-none" role="dialog" aria-modal="true"
+    aria-labelledby="editContactTitle">
     <div class="app-modal-backdrop" data-modal-close="true"></div>
     <div class="app-modal-card" role="document">
       <div class="app-modal-header">
@@ -1864,4 +1941,5 @@ REGLAS:
   <script src="/js/admin.js"></script>
   <script src="/js/main.js"></script>
 </body>
+
 </html>

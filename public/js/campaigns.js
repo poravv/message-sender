@@ -34,7 +34,7 @@ async function fetchCampaigns(page) {
   try {
     var res = await authFetch('/campaigns' + params);
     if (!res || !res.ok) {
-      showAlert('Error al cargar campanas', 'danger');
+      showAlert('Error al cargar campañas', 'danger');
       return;
     }
     var data = await res.json();
@@ -44,7 +44,7 @@ async function fetchCampaigns(page) {
     campaignsState.pageSize = data.pageSize || 20;
     renderCampaignList();
   } catch (e) {
-    showAlert('Error al cargar campanas', 'danger');
+    showAlert('Error al cargar campañas', 'danger');
   }
 }
 
@@ -56,8 +56,8 @@ function renderCampaignList() {
     container.innerHTML =
       '<div class="campaigns-empty">' +
         '<div class="campaigns-empty-icon"><i class="bi bi-megaphone"></i></div>' +
-        '<p>No hay campanas registradas</p>' +
-        '<p class="text-muted">Las campanas que envies apareceran aqui</p>' +
+        '<p>No hay campañas registradas</p>' +
+        '<p class="text-muted">Las campañas que envies apareceran aqui</p>' +
       '</div>';
     return;
   }
