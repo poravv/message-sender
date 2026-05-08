@@ -4,7 +4,8 @@
 
 let statusPollingInterval = null;
 let isConnected = false;
-let hasQRDisplayed = false; // Evita refrescar QR mientras el usuario lo escanea
+let hasQRDisplayed = false;
+let qrRefreshTimer = null; // Auto-resets hasQRDisplayed so QR never stays stale
 
 // Format phone number for display using country-aware formatter from core.js
 function formatPhoneDisplay(phone) {
@@ -51,10 +52,12 @@ function updateConnectionStatus(data) {
   // Si pasó de conectado a desconectado, resetear QR para cargar uno nuevo
   if (wasConnected && !isConnected) {
     hasQRDisplayed = false;
+    if (qrRefreshTimer) { clearTimeout(qrRefreshTimer); qrRefreshTimer = null; }
   }
   // Si se conectó, ya no necesitamos el QR
   if (isConnected) {
     hasQRDisplayed = false;
+    if (qrRefreshTimer) { clearTimeout(qrRefreshTimer); qrRefreshTimer = null; }
     // Refresh profile to get the newly linked phone
     if (typeof loadUserProfile === 'function') {
       loadUserProfile();
@@ -132,20 +135,27 @@ function updateConnectionStatus(data) {
   }
 }
 
+// Schedule auto-refresh before the server-side QR expires (~20s for rotations)
+function scheduleQrRefresh() {
+  if (qrRefreshTimer) clearTimeout(qrRefreshTimer);
+  qrRefreshTimer = setTimeout(() => {
+    hasQRDisplayed = false;
+    qrRefreshTimer = null;
+    loadQR();
+  }, 18000);
+}
+
 // Load QR Code
 async function loadQR() {
   const qrImage = document.getElementById('qrImage');
   if (!qrImage) return;
 
-  // Si ya hay un QR visible, no refrescar — el usuario podría estar escaneándolo.
-  // Solo se refresca manualmente con el botón "Refrescar código".
   if (hasQRDisplayed) return;
 
   try {
     const res = await authFetch('/qr');
     if (!res.ok) {
       if (res.status === 204 || res.status === 400) {
-        // Already authenticated
         hasQRDisplayed = false;
         checkWhatsAppStatus();
         return;
@@ -167,6 +177,7 @@ async function loadQR() {
       qrImage.src = imageUrl;
       qrImage.style.display = 'block';
       hasQRDisplayed = true;
+      scheduleQrRefresh();
     } else {
       // Fallback for JSON response
       const data = await res.json();
@@ -174,6 +185,7 @@ async function loadQR() {
         qrImage.src = data.qr;
         qrImage.style.display = 'block';
         hasQRDisplayed = true;
+        scheduleQrRefresh();
       }
     }
   } catch (error) {
@@ -189,7 +201,8 @@ async function refreshQR() {
     btn.innerHTML = '<i class="bi bi-arrow-clockwise spin"></i> Cargando...';
   }
 
-  hasQRDisplayed = false; // Permitir nueva carga
+  if (qrRefreshTimer) { clearTimeout(qrRefreshTimer); qrRefreshTimer = null; }
+  hasQRDisplayed = false;
   await loadQR();
 
   if (btn) {
