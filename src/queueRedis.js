@@ -51,12 +51,19 @@ const metricsStore = require('./metricsStore');
 const s3 = require('./storage/s3');
 
 const delayFactor = Math.max(0.5, Number(process.env.MESSAGE_DELAY_FACTOR || 1));
-const BASE_DELAY = Math.max(800, Math.floor(messageDelay * delayFactor));
+// Minimum 2000ms between messages to reduce suspension risk.
+const BASE_DELAY = Math.max(2000, Math.floor(messageDelay * delayFactor));
 const LOOP_IDLE_MS = BASE_DELAY;
 const SEND_BETWEEN_MS = BASE_DELAY;
 const WORKER_CONCURRENCY = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 3));
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Add ±30% random jitter to a delay value so sending looks more human.
+function jitter(ms) {
+  const variance = Math.floor(ms * 0.3);
+  return ms + Math.floor(Math.random() * variance * 2) - variance;
+}
 
 const connection = getRedisConnectionOptions();
 const QUEUE_NAME = 'ms:messages';
@@ -842,7 +849,7 @@ async function processCampaign(job) {
             // PTT requiere solo audio y ptt:true, sin mimetype ni fileName
             await client.sendMessage(jid, { audio: buf, ptt: true });
             if (processedMessage) {
-              await sleep(sendBetween);
+              await sleep(jitter(sendBetween));
               await client.sendMessage(jid, { text: processedMessage });
             }
           } else if (singleImage) {
@@ -853,7 +860,7 @@ async function processCampaign(job) {
               const img = images[k];
               const buf = await getImageBufferCached(imageCache, img);
               await client.sendMessage(jid, { image: buf, caption: k === 0 ? (processedMessage || '') : '' });
-              if (k < images.length - 1) await sleep(sendBetween);
+              if (k < images.length - 1) await sleep(jitter(sendBetween));
             }
           } else if (processedMessage) {
             await client.sendMessage(jid, { text: processedMessage });
@@ -913,7 +920,7 @@ async function processCampaign(job) {
         }
       }
 
-      await sleep(sendBetween);
+      await sleep(jitter(sendBetween));
     }
 
     if (await isCanceled(userId)) {

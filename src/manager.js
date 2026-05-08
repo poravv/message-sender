@@ -43,6 +43,9 @@ class WhatsAppManager {
     this.userInfo = null;
     this.securityAlert = null;
 
+    // Watchdog
+    this._watchdogTimer = null;
+
     // Rate limiting y conflictos
     this.lastMessageTime = 0;
     this.messageCount = 0;
@@ -246,6 +249,24 @@ class WhatsAppManager {
     }
   }
 
+  // ========= Connection watchdog =========
+
+  _startConnectionWatchdog() {
+    if (this._watchdogTimer) clearInterval(this._watchdogTimer);
+    this._watchdogTimer = setInterval(() => {
+      // If we have a socket, it has its own keepAlive — nothing to do.
+      if (this.sock) return;
+      // If we're actively connecting, in cooldown, or waiting for QR scan, skip.
+      if (this.isConnecting || this.isInCooldown || this.connectionState === 'qr_ready') return;
+      // If we were connected before (had auth) and are now disconnected without a
+      // pending reconnect, kick off a fresh attempt so the session self-heals.
+      if (!this.isReady && this.connectionState === 'disconnected') {
+        logger.info({ userId: this._getScopedUserId() }, 'Watchdog: sesión desconectada sin socket, reintentando...');
+        this.safeInitialize().catch(() => {});
+      }
+    }, 45_000);
+  }
+
   // ========= Inicialización =========
 
   async safeInitialize() {
@@ -309,9 +330,14 @@ class WhatsAppManager {
         browser: ['Mac OS', 'Desktop', '14.4.1'],
         version: [2, 3000, 1035194821],
         syncFullHistory: false,
+        keepAliveIntervalMs: 25_000,
         connectTimeoutMs: Math.max(20000, Number(process.env.WA_CONNECT_TIMEOUT_MS || 30000)),
         defaultQueryTimeoutMs: Math.max(30000, Number(process.env.WA_QUERY_TIMEOUT_MS || 60000)),
       });
+
+      // Watchdog: if we're supposed to be connected but the socket dies without
+      // firing a close event (e.g. silent TCP hang in K8s), detect and recover.
+      this._startConnectionWatchdog();
 
       // expose manager to queue via socket reference
       this.sock.manager = this;
@@ -693,6 +719,7 @@ class WhatsAppManager {
     }
 
     // 2. Reset completo de estado
+    if (this._watchdogTimer) { clearInterval(this._watchdogTimer); this._watchdogTimer = null; }
     this.isConnecting = false;
     this.connectionPromise = null;
     this.isReady = false;
