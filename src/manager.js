@@ -437,7 +437,10 @@ class WhatsAppManager {
           this.isConnecting = false;
 
           // Si fue logout/desvinculado, limpiar datos de Redis
-          if (statusCode === DisconnectReason.loggedOut) {
+          // Skip if reason is a conflict — those are temporary disconnects, not real logouts.
+          // Cleaning auth on conflict wipes the session and forces a new QR scan.
+          const isConflict = reason && reason.toLowerCase().includes('conflict');
+          if (statusCode === DisconnectReason.loggedOut && !isConflict) {
             logger.info({ userId: this.userId }, 'Dispositivo desvinculado, limpiando datos de Redis...');
             try {
               const { cleanupUserData } = require('./queueRedis');
