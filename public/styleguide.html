@@ -1,0 +1,734 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Design System — WhatsApp Sender Pro</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+  <link rel="stylesheet" href="/css/app.css">
+  <link rel="stylesheet" href="/css/tw.css">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+
+    .sg-preview {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1.5rem;
+    }
+    .sg-code {
+      font-family: 'Fira Code', 'Consolas', monospace;
+      font-size: 0.78rem;
+      line-height: 1.65;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      color: var(--text-secondary);
+      white-space: pre;
+    }
+    .sg-nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: var(--radius-sm);
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.8rem;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      border-left: 2px solid transparent;
+      margin-left: -2px;
+    }
+    .sg-nav-link:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+    .sg-nav-link.active { background: rgba(37,211,102,.08); color: var(--accent); border-left-color: var(--accent); }
+    .sg-section { scroll-margin-top: 1.5rem; }
+
+    .sg-btn { display: inline-flex; align-items: center; gap: 0.5rem; border: none; font-family: inherit; cursor: pointer; transition: all 0.15s ease; font-weight: 500; }
+    .sg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .sg-btn-sm  { padding: 0.3rem 0.75rem;  border-radius: var(--radius-sm); font-size: 0.75rem; }
+    .sg-btn-md  { padding: 0.5rem 1rem;     border-radius: var(--radius-md); font-size: 0.875rem; }
+    .sg-btn-lg  { padding: 0.65rem 1.25rem; border-radius: var(--radius-md); font-size: 1rem; }
+    .sg-btn-icon{ justify-content: center; }
+    .sg-btn-icon.sg-btn-md { padding: 0; width: 2.25rem; height: 2.25rem; }
+    .sg-btn-icon.sg-btn-sm { padding: 0; width: 1.75rem; height: 1.75rem; }
+
+    .sg-btn-default     { background: var(--accent);      color: #fff; }
+    .sg-btn-default:hover:not(:disabled) { background: var(--accent-hover); }
+    .sg-btn-secondary   { background: var(--bg-tertiary); color: var(--text-primary); }
+    .sg-btn-secondary:hover:not(:disabled) { background: var(--border-light); }
+    .sg-btn-outline     { background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); }
+    .sg-btn-outline:hover:not(:disabled) { background: var(--bg-tertiary); }
+    .sg-btn-ghost       { background: transparent; color: var(--text-secondary); }
+    .sg-btn-ghost:hover:not(:disabled) { background: var(--bg-tertiary); color: var(--text-primary); }
+    .sg-btn-destructive { background: var(--danger); color: #fff; }
+    .sg-btn-destructive:hover:not(:disabled) { opacity: 0.88; }
+
+    .sg-badge { display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.2rem 0.6rem; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
+    .sg-badge-neutral     { background: var(--bg-tertiary); color: var(--text-secondary); }
+    .sg-badge-success     { background: rgba(74,222,128,.12);  color: var(--success);  border: 1px solid rgba(74,222,128,.2); }
+    .sg-badge-warning     { background: rgba(251,191,36,.12);  color: var(--warning);  border: 1px solid rgba(251,191,36,.2); }
+    .sg-badge-danger      { background: rgba(248,113,113,.12); color: var(--danger);   border: 1px solid rgba(248,113,113,.2); }
+    .sg-badge-info        { background: rgba(96,165,250,.12);  color: var(--info);     border: 1px solid rgba(96,165,250,.2); }
+    .sg-badge-accent      { background: rgba(37,211,102,.12);  color: var(--accent);   border: 1px solid rgba(37,211,102,.2); }
+    .sg-badge-dot::before { content: ''; display: inline-block; width: 0.4rem; height: 0.4rem; border-radius: 50%; background: currentColor; }
+
+    .sg-input {
+      width: 100%; padding: 0.5rem 0.75rem; border-radius: var(--radius-md);
+      background: var(--bg-tertiary); color: var(--text-primary);
+      border: 1px solid var(--border-color); font-size: 0.875rem; font-family: inherit;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .sg-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(37,211,102,.15); }
+    .sg-input.error { border-color: var(--danger); }
+    .sg-input.error:focus { box-shadow: 0 0 0 3px rgba(248,113,113,.15); }
+    .sg-input::placeholder { color: var(--text-muted); }
+
+    .sg-tr:hover { background: rgba(36,43,51,.5); }
+    [data-theme="light"] .sg-tr:hover { background: rgba(0,0,0,.04); }
+
+    .sg-progress { height: 6px; border-radius: 999px; background: var(--bg-tertiary); overflow: hidden; }
+    .sg-progress-bar { height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.4s ease; }
+
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--border-light); }
+
+    *, *::before, *::after { box-sizing: border-box; }
+  </style>
+</head>
+<body class="tw-bg-bg-primary tw-text-text-primary tw-min-h-screen">
+
+<div class="tw-flex tw-min-h-screen">
+
+  <!-- SIDEBAR -->
+  <aside class="tw-w-60 tw-shrink-0 tw-sticky tw-top-0 tw-h-screen tw-overflow-y-auto tw-flex tw-flex-col tw-bg-bg-secondary tw-border-r tw-border-border-base">
+    <div class="tw-flex tw-items-center tw-gap-2.5 tw-px-4 tw-py-4 tw-border-b tw-border-border-base">
+      <div class="tw-w-8 tw-h-8 tw-rounded-lg tw-flex tw-items-center tw-justify-center tw-shrink-0" style="background:var(--accent)">
+        <i class="bi bi-whatsapp tw-text-white" style="font-size:.9rem"></i>
+      </div>
+      <div>
+        <div class="tw-text-sm tw-font-semibold tw-text-text-primary">Design System</div>
+        <div class="tw-text-xs tw-text-text-muted">Sender Pro</div>
+      </div>
+    </div>
+
+    <nav class="tw-flex-1 tw-p-3 tw-space-y-0.5">
+      <div class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-px-3 tw-py-2">Primitivos</div>
+      <a class="sg-nav-link active" href="#buttons"><i class="bi bi-square-fill" style="font-size:.65rem"></i> Buttons</a>
+      <a class="sg-nav-link" href="#badges"><i class="bi bi-circle-fill" style="font-size:.65rem"></i> Badges</a>
+      <a class="sg-nav-link" href="#inputs"><i class="bi bi-input-cursor-text" style="font-size:.8rem"></i> Inputs</a>
+
+      <div class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-px-3 tw-py-2 tw-mt-3">Componentes</div>
+      <a class="sg-nav-link" href="#cards"><i class="bi bi-card-heading" style="font-size:.8rem"></i> Cards</a>
+      <a class="sg-nav-link" href="#stat-cards"><i class="bi bi-bar-chart-fill" style="font-size:.8rem"></i> Stat Cards</a>
+      <a class="sg-nav-link" href="#table"><i class="bi bi-table" style="font-size:.8rem"></i> Data Table</a>
+
+      <div class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-px-3 tw-py-2 tw-mt-3">Shell</div>
+      <a class="sg-nav-link" href="#sidebar-preview"><i class="bi bi-layout-sidebar" style="font-size:.8rem"></i> Sidebar Nav</a>
+      <a class="sg-nav-link" href="#topbar"><i class="bi bi-layout-text-window-reverse" style="font-size:.8rem"></i> Topbar</a>
+
+      <div class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-px-3 tw-py-2 tw-mt-3">Tokens</div>
+      <a class="sg-nav-link" href="#colors"><i class="bi bi-palette-fill" style="font-size:.8rem"></i> Colors</a>
+      <a class="sg-nav-link" href="#typography"><i class="bi bi-type" style="font-size:.8rem"></i> Typography</a>
+    </nav>
+
+    <div class="tw-p-3 tw-border-t tw-border-border-base">
+      <button onclick="toggleTheme()" class="sg-btn sg-btn-secondary sg-btn-md tw-w-full tw-justify-center tw-gap-2">
+        <i class="bi bi-moon-fill" id="themeIcon"></i>
+        <span id="themeLabel">Tema oscuro</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="tw-flex-1 tw-overflow-y-auto">
+    <div class="tw-max-w-4xl tw-mx-auto tw-px-8 tw-py-10 tw-space-y-16">
+
+      <header class="tw-pb-8 tw-border-b tw-border-border-base">
+        <h1 class="tw-text-3xl tw-font-bold tw-text-text-primary tw-mb-2">Design System</h1>
+        <p class="tw-text-text-secondary tw-text-sm tw-leading-relaxed">Componentes shadcn-style · Tailwind v3 prefix <code style="font-size:.85em;background:var(--bg-tertiary);padding:.1em .4em;border-radius:4px;color:var(--accent)">tw-</code> · Bootstrap Icons · Paleta mapeada a CSS vars</p>
+      </header>
+
+      <!-- ══════════ BUTTONS ══════════ -->
+      <section id="buttons" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Button</h2>
+          <p class="tw-text-sm tw-text-text-secondary">5 variantes · 3 tamaños · estados disabled e icon-only.</p>
+        </div>
+
+        <div>
+          <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Variantes</p>
+          <div class="sg-preview tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+            <button class="sg-btn sg-btn-default sg-btn-md"><i class="bi bi-check2"></i> Default</button>
+            <button class="sg-btn sg-btn-secondary sg-btn-md">Secondary</button>
+            <button class="sg-btn sg-btn-outline sg-btn-md">Outline</button>
+            <button class="sg-btn sg-btn-ghost sg-btn-md">Ghost</button>
+            <button class="sg-btn sg-btn-destructive sg-btn-md"><i class="bi bi-trash3"></i> Destructive</button>
+          </div>
+        </div>
+
+        <div>
+          <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Tamaños</p>
+          <div class="sg-preview tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+            <button class="sg-btn sg-btn-default sg-btn-sm">sm</button>
+            <button class="sg-btn sg-btn-default sg-btn-md">md (default)</button>
+            <button class="sg-btn sg-btn-default sg-btn-lg">lg</button>
+          </div>
+        </div>
+
+        <div>
+          <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Con iconos · Disabled · Icon-only</p>
+          <div class="sg-preview tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+            <button class="sg-btn sg-btn-default sg-btn-md"><i class="bi bi-send-fill"></i> Enviar campaña</button>
+            <button class="sg-btn sg-btn-outline sg-btn-md"><i class="bi bi-download"></i> Exportar CSV</button>
+            <button class="sg-btn sg-btn-default sg-btn-md" disabled>Deshabilitado</button>
+            <button class="sg-btn sg-btn-ghost sg-btn-md sg-btn-icon" aria-label="Editar"><i class="bi bi-pencil" style="font-size:.9rem"></i></button>
+            <button class="sg-btn sg-btn-ghost sg-btn-md sg-btn-icon" aria-label="Copiar"><i class="bi bi-copy" style="font-size:.9rem"></i></button>
+            <button class="sg-btn sg-btn-ghost sg-btn-md sg-btn-icon" style="color:var(--danger)" aria-label="Eliminar"><i class="bi bi-trash3" style="font-size:.9rem"></i></button>
+          </div>
+        </div>
+
+        <details>
+          <summary class="tw-text-xs tw-text-text-muted tw-cursor-pointer tw-select-none">Ver código</summary>
+          <pre class="sg-code tw-mt-2">&lt;button class="sg-btn sg-btn-default sg-btn-md"&gt;
+  &lt;i class="bi bi-send-fill"&gt;&lt;/i&gt; Enviar
+&lt;/button&gt;
+
+/* CSS en &lt;style&gt; — no Bootstrap, solo CSS vars + clases sg-* */
+.sg-btn-default     { background: var(--accent); color: #fff; }
+.sg-btn-default:hover { background: var(--accent-hover); }
+.sg-btn-md  { padding: .5rem 1rem; border-radius: var(--radius-md); font-size: .875rem; }
+.sg-btn     { display: inline-flex; align-items: center; gap: .5rem; border: none;
+              font-family: inherit; cursor: pointer; font-weight: 500; transition: all .15s; }</pre>
+        </details>
+      </section>
+
+      <!-- ══════════ BADGES ══════════ -->
+      <section id="badges" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Badge</h2>
+          <p class="tw-text-sm tw-text-text-secondary">Estados de campañas, conexión y planes.</p>
+        </div>
+
+        <div>
+          <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Status</p>
+          <div class="sg-preview tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+            <span class="sg-badge sg-badge-neutral sg-badge-dot">Neutral</span>
+            <span class="sg-badge sg-badge-success sg-badge-dot">Entregado</span>
+            <span class="sg-badge sg-badge-warning sg-badge-dot">Pendiente</span>
+            <span class="sg-badge sg-badge-danger sg-badge-dot">Fallido</span>
+            <span class="sg-badge sg-badge-info sg-badge-dot">En proceso</span>
+          </div>
+        </div>
+
+        <div>
+          <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Planes</p>
+          <div class="sg-preview tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+            <span class="sg-badge sg-badge-neutral">Trial</span>
+            <span class="sg-badge sg-badge-accent"><i class="bi bi-lightning-fill" style="font-size:.65rem"></i> Básico</span>
+            <span class="sg-badge sg-badge-info">Profesional</span>
+            <span class="sg-badge sg-badge-warning">Premium ✦</span>
+            <span class="sg-badge sg-badge-neutral" style="opacity:.5">Expirado</span>
+          </div>
+        </div>
+
+        <div>
+          <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Conexión WhatsApp</p>
+          <div class="sg-preview tw-flex tw-flex-wrap tw-items-center tw-gap-3">
+            <span class="sg-badge sg-badge-success sg-badge-dot">Conectado</span>
+            <span class="sg-badge sg-badge-warning sg-badge-dot">Reconectando</span>
+            <span class="sg-badge sg-badge-danger sg-badge-dot">Desconectado</span>
+            <span class="sg-badge sg-badge-neutral sg-badge-dot">Iniciando</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ INPUTS ══════════ -->
+      <section id="inputs" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Input / Form Field</h2>
+          <p class="tw-text-sm tw-text-text-secondary">Normal, focus, error, select, textarea.</p>
+        </div>
+
+        <div class="sg-preview tw-grid tw-gap-5" style="grid-template-columns:1fr 1fr">
+          <div class="tw-flex tw-flex-col tw-gap-1.5">
+            <label class="tw-text-sm tw-font-medium tw-text-text-primary">Nombre</label>
+            <input type="text" placeholder="Ej: Juan García" class="sg-input">
+            <span class="tw-text-xs tw-text-text-muted">Nombre completo del contacto.</span>
+          </div>
+
+          <div class="tw-flex tw-flex-col tw-gap-1.5">
+            <label class="tw-text-sm tw-font-medium tw-text-text-primary">Teléfono <span style="color:var(--danger)">*</span></label>
+            <input type="text" value="abc123" class="sg-input error">
+            <span class="tw-text-xs" style="color:var(--danger)"><i class="bi bi-exclamation-circle"></i> Formato inválido. Usa 595XXXXXXXXX.</span>
+          </div>
+
+          <div class="tw-flex tw-flex-col tw-gap-1.5">
+            <label class="tw-text-sm tw-font-medium tw-text-text-primary">Plan</label>
+            <select class="sg-input" style="appearance:none;background-image:url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 fill=%22%238b98a5%22 viewBox=%220 0 16 16%22><path d=%22M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z%22/></svg>');background-repeat:no-repeat;background-position:right .75rem center;background-size:12px;padding-right:2.5rem">
+              <option>Seleccionar...</option>
+              <option>Básico</option>
+              <option>Profesional</option>
+              <option>Premium</option>
+              <option>Enterprise</option>
+            </select>
+          </div>
+
+          <div class="tw-flex tw-flex-col tw-gap-1.5">
+            <label class="tw-text-sm tw-font-medium tw-text-text-primary">Mensaje</label>
+            <textarea rows="3" placeholder="Hola {nombre}, te contactamos de..." class="sg-input" style="resize:vertical"></textarea>
+            <span class="tw-text-xs tw-text-text-muted">Usa {nombre} para personalizar.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ CARDS ══════════ -->
+      <section id="cards" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Card</h2>
+          <p class="tw-text-sm tw-text-text-secondary">Header + Content + Footer. Composable.</p>
+        </div>
+
+        <div class="sg-preview tw-grid tw-gap-4" style="grid-template-columns:repeat(auto-fit,minmax(270px,1fr))">
+          <!-- Card 1: Stats -->
+          <div class="tw-rounded-lg tw-border tw-border-border-base tw-overflow-hidden tw-bg-bg-card">
+            <div class="tw-px-5 tw-py-4 tw-border-b tw-border-border-base">
+              <h3 class="tw-text-sm tw-font-semibold tw-text-text-primary">Estadísticas del mes</h3>
+              <p class="tw-text-xs tw-text-text-muted tw-mt-0.5">Mayo 2026</p>
+            </div>
+            <div class="tw-px-5 tw-py-4 tw-space-y-3">
+              <div class="tw-flex tw-justify-between tw-items-center">
+                <span class="tw-text-sm tw-text-text-secondary">Mensajes enviados</span>
+                <span class="tw-text-sm tw-font-semibold tw-text-text-primary">8,420</span>
+              </div>
+              <div class="tw-flex tw-justify-between tw-items-center">
+                <span class="tw-text-sm tw-text-text-secondary">Campañas activas</span>
+                <span class="tw-text-sm tw-font-semibold tw-text-text-primary">3</span>
+              </div>
+              <div class="tw-flex tw-justify-between tw-items-center">
+                <span class="tw-text-sm tw-text-text-secondary">Tasa de entrega</span>
+                <span class="tw-text-sm tw-font-semibold" style="color:var(--success)">97.2%</span>
+              </div>
+            </div>
+            <div class="tw-px-5 tw-py-3 tw-border-t tw-border-border-base tw-flex tw-justify-end tw-gap-2">
+              <button class="sg-btn sg-btn-ghost sg-btn-sm">Ver detalles</button>
+              <button class="sg-btn sg-btn-default sg-btn-sm"><i class="bi bi-plus"></i> Campaña</button>
+            </div>
+          </div>
+
+          <!-- Card 2: WhatsApp -->
+          <div class="tw-rounded-lg tw-border tw-border-border-base tw-overflow-hidden tw-bg-bg-card">
+            <div class="tw-px-5 tw-py-4 tw-border-b tw-border-border-base tw-flex tw-items-center tw-justify-between">
+              <div>
+                <h3 class="tw-text-sm tw-font-semibold tw-text-text-primary">Línea WhatsApp</h3>
+                <p class="tw-text-xs tw-text-text-muted tw-mt-0.5">Tu conexión activa</p>
+              </div>
+              <span class="sg-badge sg-badge-success sg-badge-dot">Conectado</span>
+            </div>
+            <div class="tw-px-5 tw-py-4 tw-flex tw-items-center tw-gap-3">
+              <div class="tw-w-10 tw-h-10 tw-rounded-full tw-flex tw-items-center tw-justify-center tw-shrink-0" style="background:rgba(37,211,102,.1)">
+                <i class="bi bi-whatsapp" style="color:var(--accent);font-size:1.1rem"></i>
+              </div>
+              <div>
+                <div class="tw-text-sm tw-font-medium tw-text-text-primary">+595 992 123 456</div>
+                <div class="tw-text-xs tw-text-text-muted">Hace 2 horas</div>
+              </div>
+            </div>
+            <div class="tw-px-5 tw-py-3 tw-border-t tw-border-border-base tw-flex tw-justify-end">
+              <button class="sg-btn sg-btn-outline sg-btn-sm">Desconectar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ STAT CARDS ══════════ -->
+      <section id="stat-cards" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Stat Card</h2>
+          <p class="tw-text-sm tw-text-text-secondary">KPIs del Dashboard: icono + valor + delta.</p>
+        </div>
+
+        <div class="sg-preview tw-grid tw-gap-4" style="grid-template-columns:repeat(auto-fill,minmax(185px,1fr))">
+          <div class="tw-rounded-lg tw-border tw-border-border-base tw-p-5 tw-bg-bg-card">
+            <div class="tw-flex tw-items-start tw-justify-between tw-mb-4">
+              <div class="tw-w-9 tw-h-9 tw-rounded-lg tw-flex tw-items-center tw-justify-center tw-shrink-0" style="background:rgba(37,211,102,.1)">
+                <i class="bi bi-send-fill" style="color:var(--accent)"></i>
+              </div>
+              <span class="tw-text-xs tw-font-bold" style="color:var(--success)">+12.4%</span>
+            </div>
+            <div class="tw-text-2xl tw-font-bold tw-text-text-primary">8,420</div>
+            <div class="tw-text-xs tw-text-text-muted tw-mt-1">Mensajes enviados</div>
+          </div>
+
+          <div class="tw-rounded-lg tw-border tw-border-border-base tw-p-5 tw-bg-bg-card">
+            <div class="tw-flex tw-items-start tw-justify-between tw-mb-4">
+              <div class="tw-w-9 tw-h-9 tw-rounded-lg tw-flex tw-items-center tw-justify-center tw-shrink-0" style="background:rgba(96,165,250,.1)">
+                <i class="bi bi-megaphone-fill" style="color:var(--info)"></i>
+              </div>
+              <span class="tw-text-xs tw-font-bold" style="color:var(--success)">+2</span>
+            </div>
+            <div class="tw-text-2xl tw-font-bold tw-text-text-primary">3</div>
+            <div class="tw-text-xs tw-text-text-muted tw-mt-1">Campañas activas</div>
+          </div>
+
+          <div class="tw-rounded-lg tw-border tw-border-border-base tw-p-5 tw-bg-bg-card">
+            <div class="tw-flex tw-items-start tw-justify-between tw-mb-4">
+              <div class="tw-w-9 tw-h-9 tw-rounded-lg tw-flex tw-items-center tw-justify-center tw-shrink-0" style="background:rgba(251,191,36,.1)">
+                <i class="bi bi-people-fill" style="color:var(--warning)"></i>
+              </div>
+              <span class="tw-text-xs tw-font-bold" style="color:var(--danger)">-1.2%</span>
+            </div>
+            <div class="tw-text-2xl tw-font-bold tw-text-text-primary">1,284</div>
+            <div class="tw-text-xs tw-text-text-muted tw-mt-1">Contactos totales</div>
+          </div>
+
+          <div class="tw-rounded-lg tw-border tw-border-border-base tw-p-5 tw-bg-bg-card">
+            <div class="tw-flex tw-items-start tw-justify-between tw-mb-4">
+              <div class="tw-w-9 tw-h-9 tw-rounded-lg tw-flex tw-items-center tw-justify-center tw-shrink-0" style="background:rgba(74,222,128,.1)">
+                <i class="bi bi-check-circle-fill" style="color:var(--success)"></i>
+              </div>
+              <span class="tw-text-xs tw-font-bold" style="color:var(--success)">+0.8%</span>
+            </div>
+            <div class="tw-text-2xl tw-font-bold tw-text-text-primary">97.2%</div>
+            <div class="tw-text-xs tw-text-text-muted tw-mt-1">Tasa de entrega</div>
+          </div>
+        </div>
+
+        <!-- Plan usage bar -->
+        <div>
+          <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Plan Usage Bar</p>
+          <div class="sg-preview">
+            <div class="tw-flex tw-items-center tw-justify-between tw-mb-2">
+              <span class="tw-text-sm tw-font-medium tw-text-text-primary">Mensajes del mes</span>
+              <span class="tw-text-sm tw-text-text-muted">8,420 / 12,000</span>
+            </div>
+            <div class="sg-progress">
+              <div class="sg-progress-bar" style="width:70.2%"></div>
+            </div>
+            <div class="tw-flex tw-justify-between tw-mt-2">
+              <span class="tw-text-xs tw-text-text-muted">70.2% usado</span>
+              <span class="tw-text-xs" style="color:var(--accent)">3,580 restantes</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ DATA TABLE ══════════ -->
+      <section id="table" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Data Table</h2>
+          <p class="tw-text-sm tw-text-text-secondary">Header con búsqueda · Badges de estado · Acciones por fila · Paginación.</p>
+        </div>
+
+        <div class="sg-preview tw-p-0 tw-overflow-hidden">
+          <div class="tw-flex tw-items-center tw-justify-between tw-px-5 tw-py-4 tw-border-b tw-border-border-base">
+            <div class="tw-relative">
+              <i class="bi bi-search tw-absolute tw-text-text-muted" style="left:.75rem;top:50%;transform:translateY(-50%);font-size:.8rem"></i>
+              <input type="text" placeholder="Buscar contacto..." class="sg-input" style="padding-left:2.25rem;width:220px">
+            </div>
+            <button class="sg-btn sg-btn-default sg-btn-sm"><i class="bi bi-plus"></i> Agregar</button>
+          </div>
+
+          <div class="tw-overflow-x-auto">
+            <table style="width:100%;border-collapse:collapse">
+              <thead>
+                <tr style="background:var(--bg-tertiary)">
+                  <th class="tw-px-5 tw-py-3 tw-text-left tw-text-xs tw-font-semibold tw-text-text-secondary tw-uppercase tw-tracking-wider" style="border-bottom:1px solid var(--border-color)">Nombre</th>
+                  <th class="tw-px-5 tw-py-3 tw-text-left tw-text-xs tw-font-semibold tw-text-text-secondary tw-uppercase tw-tracking-wider" style="border-bottom:1px solid var(--border-color)">Teléfono</th>
+                  <th class="tw-px-5 tw-py-3 tw-text-left tw-text-xs tw-font-semibold tw-text-text-secondary tw-uppercase tw-tracking-wider" style="border-bottom:1px solid var(--border-color)">Estado</th>
+                  <th class="tw-px-5 tw-py-3 tw-text-left tw-text-xs tw-font-semibold tw-text-text-secondary tw-uppercase tw-tracking-wider" style="border-bottom:1px solid var(--border-color)">Campaña</th>
+                  <th class="tw-px-5 tw-py-3 tw-text-right tw-text-xs tw-font-semibold tw-text-text-secondary tw-uppercase tw-tracking-wider" style="border-bottom:1px solid var(--border-color)">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="sg-tr tw-transition-colors" style="border-bottom:1px solid var(--border-color)">
+                  <td class="tw-px-5 tw-py-3.5">
+                    <div class="tw-flex tw-items-center tw-gap-3">
+                      <div class="tw-w-8 tw-h-8 tw-rounded-full tw-flex tw-items-center tw-justify-center tw-text-xs tw-font-bold tw-text-white tw-shrink-0" style="background:var(--accent)">JG</div>
+                      <div>
+                        <div class="tw-text-sm tw-font-medium tw-text-text-primary">Juan García</div>
+                        <div class="tw-text-xs tw-text-text-muted">juan@email.com</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-sm tw-text-text-secondary" style="font-family:monospace">+595 992 123 456</td>
+                  <td class="tw-px-5 tw-py-3.5"><span class="sg-badge sg-badge-success sg-badge-dot">Entregado</span></td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-sm tw-text-text-secondary">Promo Mayo</td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-right">
+                    <div class="tw-inline-flex tw-gap-1">
+                      <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon" aria-label="Editar"><i class="bi bi-pencil" style="font-size:.75rem"></i></button>
+                      <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon" style="color:var(--danger)" aria-label="Eliminar"><i class="bi bi-trash3" style="font-size:.75rem"></i></button>
+                    </div>
+                  </td>
+                </tr>
+                <tr class="sg-tr tw-transition-colors" style="border-bottom:1px solid var(--border-color)">
+                  <td class="tw-px-5 tw-py-3.5">
+                    <div class="tw-flex tw-items-center tw-gap-3">
+                      <div class="tw-w-8 tw-h-8 tw-rounded-full tw-flex tw-items-center tw-justify-center tw-text-xs tw-font-bold tw-text-white tw-shrink-0" style="background:var(--info)">ML</div>
+                      <div>
+                        <div class="tw-text-sm tw-font-medium tw-text-text-primary">María López</div>
+                        <div class="tw-text-xs tw-text-text-muted">maria@negocio.com</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-sm tw-text-text-secondary" style="font-family:monospace">+595 981 654 321</td>
+                  <td class="tw-px-5 tw-py-3.5"><span class="sg-badge sg-badge-warning sg-badge-dot">Pendiente</span></td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-sm tw-text-text-secondary">Newsletter</td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-right">
+                    <div class="tw-inline-flex tw-gap-1">
+                      <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon" aria-label="Editar"><i class="bi bi-pencil" style="font-size:.75rem"></i></button>
+                      <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon" style="color:var(--danger)" aria-label="Eliminar"><i class="bi bi-trash3" style="font-size:.75rem"></i></button>
+                    </div>
+                  </td>
+                </tr>
+                <tr class="sg-tr tw-transition-colors">
+                  <td class="tw-px-5 tw-py-3.5">
+                    <div class="tw-flex tw-items-center tw-gap-3">
+                      <div class="tw-w-8 tw-h-8 tw-rounded-full tw-flex tw-items-center tw-justify-center tw-text-xs tw-font-bold tw-text-white tw-shrink-0" style="background:var(--danger)">CR</div>
+                      <div>
+                        <div class="tw-text-sm tw-font-medium tw-text-text-primary">Carlos Rodríguez</div>
+                        <div class="tw-text-xs tw-text-text-muted">carlos@empresa.py</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-sm tw-text-text-secondary" style="font-family:monospace">+595 971 987 654</td>
+                  <td class="tw-px-5 tw-py-3.5"><span class="sg-badge sg-badge-danger sg-badge-dot">Fallido</span></td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-sm tw-text-text-secondary">Promo Mayo</td>
+                  <td class="tw-px-5 tw-py-3.5 tw-text-right">
+                    <div class="tw-inline-flex tw-gap-1">
+                      <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon" aria-label="Editar"><i class="bi bi-pencil" style="font-size:.75rem"></i></button>
+                      <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon" style="color:var(--danger)" aria-label="Eliminar"><i class="bi bi-trash3" style="font-size:.75rem"></i></button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="tw-flex tw-items-center tw-justify-between tw-px-5 tw-py-3 tw-border-t tw-border-border-base">
+            <span class="tw-text-sm tw-text-text-muted">3 de 1,284 contactos</span>
+            <div class="tw-flex tw-items-center tw-gap-1">
+              <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon"><i class="bi bi-chevron-left" style="font-size:.75rem"></i></button>
+              <button class="sg-btn sg-btn-secondary sg-btn-sm sg-btn-icon" style="font-size:.75rem;font-weight:600">1</button>
+              <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon tw-text-text-muted" style="font-size:.75rem">2</button>
+              <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon"><i class="bi bi-chevron-right" style="font-size:.75rem"></i></button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ SIDEBAR PREVIEW ══════════ -->
+      <section id="sidebar-preview" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Sidebar Nav</h2>
+          <p class="tw-text-sm tw-text-text-secondary">Shell v2 — actívalo con <code style="font-size:.85em;background:var(--bg-tertiary);padding:.1em .4em;border-radius:4px;color:var(--accent)">?shell=v2</code> en la app principal.</p>
+        </div>
+
+        <div class="sg-preview tw-p-0 tw-overflow-hidden tw-rounded-lg" style="height:400px">
+          <div class="tw-flex tw-h-full">
+            <aside class="tw-w-56 tw-shrink-0 tw-flex tw-flex-col tw-h-full tw-overflow-y-auto tw-bg-bg-secondary tw-border-r tw-border-border-base">
+              <div class="tw-flex tw-items-center tw-gap-2.5 tw-px-4 tw-py-3.5 tw-border-b tw-border-border-base">
+                <div class="tw-w-7 tw-h-7 tw-rounded-lg tw-flex tw-items-center tw-justify-center tw-shrink-0" style="background:var(--accent)">
+                  <i class="bi bi-whatsapp tw-text-white" style="font-size:.8rem"></i>
+                </div>
+                <span class="tw-text-sm tw-font-semibold tw-text-text-primary">Sender Pro</span>
+              </div>
+
+              <nav class="tw-flex-1 tw-p-2 tw-space-y-0.5">
+                <a class="tw-flex tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 tw-rounded-md tw-text-sm tw-no-underline tw-cursor-pointer" style="background:rgba(37,211,102,.08);color:var(--accent);border-left:2px solid var(--accent);padding-left:calc(.75rem - 2px)">
+                  <i class="bi bi-speedometer2" style="width:1rem;text-align:center"></i> Dashboard
+                </a>
+                <a class="tw-flex tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 tw-rounded-md tw-text-sm tw-text-text-secondary tw-no-underline tw-cursor-pointer tw-transition-colors" style="border-left:2px solid transparent">
+                  <i class="bi bi-send" style="width:1rem;text-align:center"></i> Mensajes
+                </a>
+                <a class="tw-flex tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 tw-rounded-md tw-text-sm tw-text-text-secondary tw-no-underline tw-cursor-pointer tw-transition-colors" style="border-left:2px solid transparent">
+                  <i class="bi bi-people" style="width:1rem;text-align:center"></i> Contactos
+                </a>
+                <a class="tw-flex tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 tw-rounded-md tw-text-sm tw-text-text-secondary tw-no-underline tw-cursor-pointer tw-transition-colors" style="border-left:2px solid transparent">
+                  <i class="bi bi-megaphone" style="width:1rem;text-align:center"></i> Campañas
+                  <span class="tw-ml-auto tw-text-xs tw-px-1.5 tw-py-0.5 tw-rounded-full tw-font-semibold" style="background:rgba(37,211,102,.12);color:var(--accent)">3</span>
+                </a>
+                <a class="tw-flex tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 tw-rounded-md tw-text-sm tw-text-text-secondary tw-no-underline tw-cursor-pointer tw-transition-colors" style="border-left:2px solid transparent">
+                  <i class="bi bi-card-text" style="width:1rem;text-align:center"></i> Plantillas
+                </a>
+                <div class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-px-3 tw-pt-4 tw-pb-1">Premium</div>
+                <a class="tw-flex tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 tw-rounded-md tw-text-sm tw-text-text-muted tw-no-underline tw-cursor-not-allowed tw-opacity-50" style="border-left:2px solid transparent">
+                  <i class="bi bi-robot" style="width:1rem;text-align:center"></i> Chatbot
+                  <i class="bi bi-lock tw-ml-auto" style="font-size:.7rem"></i>
+                </a>
+                <a class="tw-flex tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 tw-rounded-md tw-text-sm tw-text-text-muted tw-no-underline tw-cursor-not-allowed tw-opacity-50" style="border-left:2px solid transparent">
+                  <i class="bi bi-inbox" style="width:1rem;text-align:center"></i> Bandeja
+                  <i class="bi bi-lock tw-ml-auto" style="font-size:.7rem"></i>
+                </a>
+              </nav>
+
+              <div class="tw-p-2 tw-border-t tw-border-border-base">
+                <div class="tw-flex tw-items-center tw-gap-2.5 tw-px-3 tw-py-2 tw-rounded-md tw-cursor-pointer sg-btn-ghost">
+                  <div class="tw-w-7 tw-h-7 tw-rounded-full tw-flex tw-items-center tw-justify-center tw-text-xs tw-font-bold tw-text-white tw-shrink-0" style="background:var(--info)">AV</div>
+                  <div class="tw-flex-1 tw-min-w-0">
+                    <div class="tw-text-xs tw-font-medium tw-text-text-primary tw-truncate">andyvercha</div>
+                    <div class="tw-text-xs tw-text-text-muted">Básico</div>
+                  </div>
+                  <i class="bi bi-three-dots-vertical tw-text-text-muted" style="font-size:.7rem"></i>
+                </div>
+              </div>
+            </aside>
+
+            <div class="tw-flex-1 tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2 tw-text-center" style="background:var(--bg-primary)">
+              <span style="font-size:2rem;opacity:.2">⬅</span>
+              <p class="tw-text-sm tw-text-text-muted">Contenido principal</p>
+              <p class="tw-text-xs tw-text-text-muted tw-opacity-50">Tab panes existentes sin cambios</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ TOPBAR ══════════ -->
+      <section id="topbar" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Topbar</h2>
+          <p class="tw-text-sm tw-text-text-secondary">Logo · Plan badge · Tema toggle · Avatar con dropdown.</p>
+        </div>
+
+        <div class="sg-preview tw-p-0 tw-overflow-hidden tw-rounded-lg">
+          <div class="tw-flex tw-items-center tw-justify-between tw-px-5 tw-py-3 tw-bg-bg-secondary tw-border-b tw-border-border-base">
+            <div class="tw-flex tw-items-center tw-gap-3">
+              <div class="tw-w-7 tw-h-7 tw-rounded-lg tw-flex tw-items-center tw-justify-center tw-shrink-0" style="background:var(--accent)">
+                <i class="bi bi-whatsapp tw-text-white" style="font-size:.8rem"></i>
+              </div>
+              <span class="tw-font-semibold tw-text-text-primary">Sender Pro</span>
+              <span class="tw-text-text-muted" style="font-size:.75rem">/&nbsp;Dashboard</span>
+            </div>
+            <div class="tw-flex tw-items-center tw-gap-2">
+              <span class="sg-badge sg-badge-accent"><i class="bi bi-lightning-fill" style="font-size:.65rem"></i> Básico</span>
+              <button onclick="toggleTheme()" class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon" aria-label="Tema"><i class="bi bi-sun" style="font-size:.9rem"></i></button>
+              <button class="sg-btn sg-btn-ghost sg-btn-sm sg-btn-icon" style="position:relative" aria-label="Notificaciones">
+                <i class="bi bi-bell" style="font-size:.9rem"></i>
+                <span class="tw-absolute tw-top-1 tw-right-1 tw-w-2 tw-h-2 tw-rounded-full" style="background:var(--danger)"></span>
+              </button>
+              <div class="sg-btn sg-btn-ghost sg-btn-sm tw-flex tw-items-center tw-gap-2 tw-cursor-pointer">
+                <div class="tw-w-7 tw-h-7 tw-rounded-full tw-flex tw-items-center tw-justify-center tw-text-xs tw-font-bold tw-text-white tw-shrink-0" style="background:var(--info)">AV</div>
+                <span class="tw-text-sm tw-font-medium tw-text-text-primary">andyvercha</span>
+                <i class="bi bi-chevron-down tw-text-text-muted" style="font-size:.7rem"></i>
+              </div>
+            </div>
+          </div>
+          <div class="tw-flex tw-items-center tw-justify-center tw-h-24 tw-text-sm tw-text-text-muted" style="background:var(--bg-primary)">
+            Vista principal aquí
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ COLORS ══════════ -->
+      <section id="colors" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Color Tokens</h2>
+          <p class="tw-text-sm tw-text-text-secondary">CSS vars en <code style="font-size:.85em;background:var(--bg-tertiary);padding:.1em .4em;border-radius:4px">app.css</code> · Tema via <code style="font-size:.85em;background:var(--bg-tertiary);padding:.1em .4em;border-radius:4px">data-theme</code> en <code style="font-size:.85em;background:var(--bg-tertiary);padding:.1em .4em;border-radius:4px">&lt;html&gt;</code>.</p>
+        </div>
+
+        <div class="sg-preview tw-grid tw-gap-6" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+          <div>
+            <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Background</p>
+            <div class="tw-space-y-2">
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-border tw-border-border-light tw-shrink-0" style="background:var(--bg-primary)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">bg-primary</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#0f1419</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-border tw-border-border-light tw-shrink-0" style="background:var(--bg-secondary)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">bg-secondary</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#1a1f26</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-border tw-border-border-light tw-shrink-0" style="background:var(--bg-tertiary)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">bg-tertiary</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#242b33</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-border tw-border-border-light tw-shrink-0" style="background:var(--border-color)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">border-color</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#2f3640</p></div></div>
+            </div>
+          </div>
+          <div>
+            <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Semantic</p>
+            <div class="tw-space-y-2">
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-shrink-0" style="background:var(--accent)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">accent / primary</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#25D366</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-shrink-0" style="background:var(--success)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">success</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#4ade80</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-shrink-0" style="background:var(--warning)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">warning</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#fbbf24</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-shrink-0" style="background:var(--danger)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">danger</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#f87171</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-shrink-0" style="background:var(--info)"></div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">info</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#60a5fa</p></div></div>
+            </div>
+          </div>
+          <div>
+            <p class="tw-text-xs tw-font-semibold tw-text-text-muted tw-uppercase tw-tracking-wider tw-mb-3">Text</p>
+            <div class="tw-space-y-2">
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-flex tw-items-center tw-justify-center tw-text-sm tw-font-bold tw-border tw-border-border-base tw-shrink-0" style="background:var(--bg-tertiary);color:var(--text-primary)">A</div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">text-primary</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#e7e9ea</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-flex tw-items-center tw-justify-center tw-text-sm tw-font-bold tw-border tw-border-border-base tw-shrink-0" style="background:var(--bg-tertiary);color:var(--text-secondary)">A</div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">text-secondary</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#8b98a5</p></div></div>
+              <div class="tw-flex tw-items-center tw-gap-3"><div class="tw-w-8 tw-h-8 tw-rounded-md tw-flex tw-items-center tw-justify-center tw-text-sm tw-font-bold tw-border tw-border-border-base tw-shrink-0" style="background:var(--bg-tertiary);color:var(--text-muted)">A</div><div><p class="tw-text-xs tw-font-medium tw-text-text-primary">text-muted</p><p class="tw-text-xs tw-text-text-muted" style="font-family:monospace">#6e7681</p></div></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ══════════ TYPOGRAPHY ══════════ -->
+      <section id="typography" class="sg-section tw-space-y-6">
+        <div>
+          <h2 class="tw-text-xl tw-font-semibold tw-text-text-primary tw-mb-1">Typography</h2>
+          <p class="tw-text-sm tw-text-text-secondary">Inter · Escala Tailwind prefijada con <code style="font-size:.85em;background:var(--bg-tertiary);padding:.1em .4em;border-radius:4px;color:var(--accent)">tw-</code>.</p>
+        </div>
+
+        <div class="sg-preview tw-space-y-4">
+          <div class="tw-flex tw-items-baseline tw-gap-4" style="border-bottom:1px solid var(--border-color);padding-bottom:1rem">
+            <span class="tw-w-36 tw-text-xs tw-text-text-muted tw-shrink-0 tw-leading-none" style="padding-top:.2rem">text-3xl · bold</span>
+            <span class="tw-text-3xl tw-font-bold tw-text-text-primary">Encabezado H1</span>
+          </div>
+          <div class="tw-flex tw-items-baseline tw-gap-4" style="border-bottom:1px solid var(--border-color);padding-bottom:1rem">
+            <span class="tw-w-36 tw-text-xs tw-text-text-muted tw-shrink-0">text-2xl · semibold</span>
+            <span class="tw-text-2xl tw-font-semibold tw-text-text-primary">Encabezado H2</span>
+          </div>
+          <div class="tw-flex tw-items-baseline tw-gap-4" style="border-bottom:1px solid var(--border-color);padding-bottom:1rem">
+            <span class="tw-w-36 tw-text-xs tw-text-text-muted tw-shrink-0">text-xl · semibold</span>
+            <span class="tw-text-xl tw-font-semibold tw-text-text-primary">Encabezado H3</span>
+          </div>
+          <div class="tw-flex tw-items-baseline tw-gap-4" style="border-bottom:1px solid var(--border-color);padding-bottom:1rem">
+            <span class="tw-w-36 tw-text-xs tw-text-text-muted tw-shrink-0">text-base · medium</span>
+            <span class="tw-text-base tw-font-medium tw-text-text-primary">Título de sección</span>
+          </div>
+          <div class="tw-flex tw-items-baseline tw-gap-4" style="border-bottom:1px solid var(--border-color);padding-bottom:1rem">
+            <span class="tw-w-36 tw-text-xs tw-text-text-muted tw-shrink-0">text-sm · normal</span>
+            <span class="tw-text-sm tw-text-text-primary">Texto de cuerpo, descripciones, contenido de tabla.</span>
+          </div>
+          <div class="tw-flex tw-items-baseline tw-gap-4" style="border-bottom:1px solid var(--border-color);padding-bottom:1rem">
+            <span class="tw-w-36 tw-text-xs tw-text-text-muted tw-shrink-0">text-sm · secondary</span>
+            <span class="tw-text-sm tw-text-text-secondary">Metadatos, subtítulos, timestamps, helpers.</span>
+          </div>
+          <div class="tw-flex tw-items-baseline tw-gap-4">
+            <span class="tw-w-36 tw-text-xs tw-text-text-muted tw-shrink-0">text-xs · muted</span>
+            <span class="tw-text-xs tw-text-text-muted">Labels de table headers, badges, placeholders menores.</span>
+          </div>
+        </div>
+      </section>
+
+      <footer class="tw-border-t tw-border-border-base tw-pt-6 tw-pb-12 tw-text-center">
+        <p class="tw-text-xs tw-text-text-muted">WhatsApp Sender Pro · Design System · Tailwind v3 · <span style="color:var(--accent)">tw-</span> prefix · Bootstrap Icons</p>
+      </footer>
+
+    </div>
+  </main>
+</div>
+
+<script>
+  function toggleTheme() {
+    const html = document.documentElement;
+    const dark = html.getAttribute('data-theme') === 'dark';
+    html.setAttribute('data-theme', dark ? 'light' : 'dark');
+    document.getElementById('themeIcon').className = dark ? 'bi bi-sun-fill' : 'bi bi-moon-fill';
+    document.getElementById('themeLabel').textContent = dark ? 'Modo claro' : 'Modo oscuro';
+  }
+
+  // Active nav on scroll
+  const sections = document.querySelectorAll('.sg-section');
+  const navLinks = document.querySelectorAll('.sg-nav-link');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + e.target.id));
+      }
+    });
+  }, { threshold: 0.25, rootMargin: '-15% 0px -60% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>
