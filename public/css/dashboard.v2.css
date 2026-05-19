@@ -73,6 +73,17 @@
 }
 .v2-plan-quota-pct { font-weight: 600; color: var(--text-secondary); }
 
+/* ── Stat cards: remove top color strip, keep flat clean look ── */
+body.shell-v2-active .dash-stat-card::before {
+  display: none;
+}
+/* Slightly larger icon to compensate for removed strip */
+body.shell-v2-active .dash-stat-icon {
+  width: 44px;
+  height: 44px;
+  font-size: 1.25rem;
+}
+
 /* ── Stats grid: adapt for narrower canvas inside shell ── */
 @media (max-width: 1200px) {
   body.shell-v2-active .dash-stats-grid {

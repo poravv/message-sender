@@ -66,10 +66,26 @@
       <button class="v2-theme-btn" id="v2-theme-btn" title="Cambiar tema">
         <i class="bi bi-moon-fill" id="v2-theme-icon"></i>
       </button>
-      <button class="v2-user-chip" id="v2-user-chip" title="Perfil">
-        <i class="bi bi-person-circle"></i>
-        <span id="v2-chip-name">Usuario</span>
-      </button>
+      <div class="v2-user-menu">
+        <button class="v2-user-chip" id="v2-user-chip" title="Perfil">
+          <i class="bi bi-person-circle"></i>
+          <span id="v2-chip-name">Usuario</span>
+          <i class="bi bi-chevron-down" style="font-size:.65rem;margin-left:2px"></i>
+        </button>
+        <div id="v2-user-dropdown">
+          <div class="v2-dropdown-header">
+            <div class="v2-dropdown-name" id="v2-dd-name">Usuario</div>
+            <div class="v2-dropdown-email" id="v2-dd-email"></div>
+            <span class="v2-dropdown-plan" id="v2-dd-plan">—</span>
+          </div>
+          <button class="v2-dropdown-item" id="v2-dd-country">
+            <i class="bi bi-globe2"></i> Cambiar país
+          </button>
+          <button class="v2-dropdown-item danger" id="v2-dd-logout">
+            <i class="bi bi-box-arrow-right"></i> Cerrar sesión
+          </button>
+        </div>
+      </div>
     </header>
     <div id="v2-sidebar-overlay"></div>`;
 
@@ -111,10 +127,31 @@
     syncThemeIcon();
     new MutationObserver(syncThemeIcon).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
-    // User chip → open existing profile dropdown
-    document.getElementById('v2-user-chip').addEventListener('click', () => {
-      const trigger = document.getElementById('profile-menu-trigger');
-      if (trigger) trigger.click();
+    // User chip → toggle own dropdown
+    const userChip = document.getElementById('v2-user-chip');
+    const userDropdown = document.getElementById('v2-user-dropdown');
+    userChip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      userDropdown.classList.toggle('open');
+    });
+    document.addEventListener('click', (e) => {
+      if (!userDropdown.contains(e.target) && e.target !== userChip) {
+        userDropdown.classList.remove('open');
+      }
+    });
+
+    // Logout
+    document.getElementById('v2-dd-logout').addEventListener('click', () => {
+      userDropdown.classList.remove('open');
+      if (typeof window.logout === 'function') window.logout();
+    });
+
+    // Change country → delegate to existing handler
+    document.getElementById('v2-dd-country').addEventListener('click', () => {
+      userDropdown.classList.remove('open');
+      const btn = document.getElementById('profile-change-country') ||
+                  document.getElementById('country-indicator');
+      if (btn) btn.click();
     });
 
     // Sync active tab in sidebar
@@ -131,13 +168,19 @@
 
     // Sync user info (name populated async by main.js)
     function syncUserInfo() {
-      const name = document.getElementById('user-name')?.textContent.trim();
-      const plan = document.getElementById('profile-plan-badge')?.textContent.trim();
+      const name  = document.getElementById('user-name')?.textContent.trim();
+      const email = document.getElementById('profile-display-email')?.textContent.trim();
+      const plan  = document.getElementById('profile-plan-badge')?.textContent.trim();
       if (name) {
         document.getElementById('v2-footer-name').textContent = name;
-        document.getElementById('v2-chip-name').textContent = name;
+        document.getElementById('v2-chip-name').textContent   = name;
+        document.getElementById('v2-dd-name').textContent     = name;
       }
-      if (plan) document.getElementById('v2-footer-plan').textContent = plan;
+      if (email) document.getElementById('v2-dd-email').textContent = email;
+      if (plan) {
+        document.getElementById('v2-footer-plan').textContent = plan;
+        document.getElementById('v2-dd-plan').textContent     = plan;
+      }
     }
     const userInfoEl = document.getElementById('user-info');
     if (userInfoEl) new MutationObserver(syncUserInfo).observe(userInfoEl, { subtree: true, childList: true, characterData: true });
