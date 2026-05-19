@@ -9,7 +9,7 @@
 /* Hide legacy navbar + original tab row, shift content */
 body.shell-v2-active .navbar           { display: none !important; }
 body.shell-v2-active .tabs-nav         { display: none !important; }
-body.shell-v2-active .main             { margin-left: var(--v2-sidebar-w); padding-top: var(--v2-topbar-h); }
+body.shell-v2-active .main             { margin-left: var(--v2-sidebar-w); padding-top: calc(var(--v2-topbar-h) + 1.75rem); }
 body.shell-v2-active .footer           { margin-left: var(--v2-sidebar-w); }
 body.shell-v2-active .alert-container  { left: var(--v2-sidebar-w); top: var(--v2-topbar-h); position: fixed; }
 
