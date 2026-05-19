@@ -1,9 +1,10 @@
 (function () {
-  const PARAM = new URLSearchParams(location.search).get('shell') === 'v2';
-  const FLAG  = localStorage.getItem('shellV2') === '1';
-  if (!PARAM && !FLAG) return;
-
-  if (PARAM) localStorage.setItem('shellV2', '1');
+  // Opt-out: ?shell=v1 or localStorage.shellV2=0 reverts to legacy navbar
+  const PARAM = new URLSearchParams(location.search).get('shell');
+  const FLAG  = localStorage.getItem('shellV2');
+  if (PARAM === 'v1' || FLAG === '0') return;
+  // Persist opt-out if explicitly requested
+  if (PARAM === 'v1') localStorage.setItem('shellV2', '0');
 
   const NAV_ITEMS = [
     { tab: 'dashboard', icon: 'bi-speedometer2',      label: 'Dashboard'  },
