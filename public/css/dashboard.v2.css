@@ -1,0 +1,86 @@
+/* Dashboard v2 — plan quota widget + shell context tweaks */
+/* Active only when body.shell-v2-active */
+
+/* ── Plan quota widget ── */
+.v2-plan-quota {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.v2-plan-quota-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.625rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.v2-plan-quota-title {
+  display: block;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.v2-plan-quota-plan {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: capitalize;
+}
+
+.v2-plan-quota-counts {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.v2-plan-quota-sep { color: var(--text-muted); font-weight: 400; font-size: 0.875rem; }
+.v2-plan-quota-unit { font-size: 0.6875rem; color: var(--text-muted); font-weight: 400; margin-left: 2px; }
+
+.v2-plan-quota-bar-bg {
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: 0.4rem;
+}
+
+.v2-plan-quota-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.5s ease;
+}
+.v2-plan-quota-bar.warn   { background: var(--warning); }
+.v2-plan-quota-bar.danger { background: var(--danger); }
+
+.v2-plan-quota-footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+  color: var(--text-muted);
+}
+.v2-plan-quota-pct { font-weight: 600; color: var(--text-secondary); }
+
+/* ── Stats grid: adapt for narrower canvas inside shell ── */
+@media (max-width: 1200px) {
+  body.shell-v2-active .dash-stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (max-width: 900px) {
+  body.shell-v2-active .dash-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
