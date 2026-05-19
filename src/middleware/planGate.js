@@ -2,13 +2,13 @@
 const logger = require('../logger');
 
 const PLAN_FEATURES = {
-  expired:     { send: 0,     contacts: 0,   templates: 0,  chatbot: false, chatbotAi: false, inbox: false, api: false, campaigns: false },
-  trial:       { send: 100,   contacts: 50,  templates: 5,  chatbot: true,  chatbotAi: true,  inbox: true,  api: false, campaigns: true },
-  basico:      { send: 1000,  contacts: 500, templates: 10, chatbot: false, chatbotAi: false, inbox: false, api: false, campaigns: true },
-  profesional: { send: 10000, contacts: -1,  templates: -1, chatbot: false, chatbotAi: false, inbox: true,  api: true,  campaigns: true },
-  premium:     { send: 10000, contacts: -1,  templates: -1, chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true },
-  enterprise:  { send: -1,    contacts: -1,  templates: -1, chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true },
-  active:      { send: -1,    contacts: -1,  templates: -1, chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true }, // legacy
+  expired:     { send: 0,     contacts: 0,    templates: 0,  chatbot: false, chatbotAi: false, inbox: false, api: false, campaigns: false },
+  trial:       { send: 200,   contacts: 100,  templates: 10, chatbot: true,  chatbotAi: true,  inbox: true,  api: false, campaigns: true },
+  basico:      { send: 12000, contacts: 1000, templates: 20, chatbot: false, chatbotAi: false, inbox: false, api: false, campaigns: true },
+  profesional: { send: 30000, contacts: -1,   templates: -1, chatbot: false, chatbotAi: false, inbox: true,  api: true,  campaigns: true },
+  premium:     { send: 60000, contacts: -1,   templates: -1, chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true },
+  enterprise:  { send: -1,    contacts: -1,   templates: -1, chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true },
+  active:      { send: -1,    contacts: -1,   templates: -1, chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true }, // legacy
 };
 // -1 = unlimited
 
