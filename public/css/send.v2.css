@@ -1,0 +1,90 @@
+/* Send page v2 — compacto, colapsable, responsive */
+
+/* ── Collapsible step ── */
+.send-step.v2-collapsible .send-step-header {
+  cursor: pointer;
+  user-select: none;
+}
+.send-step.v2-collapsible .send-step-header:hover {
+  background: var(--bg-tertiary);
+}
+.v2-step-chevron {
+  margin-left: auto;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.send-step.v2-collapsed .v2-step-chevron {
+  transform: rotate(-90deg);
+}
+.send-step.v2-collapsed .send-step-body {
+  display: none;
+}
+
+/* Transición suave al expandir */
+.send-step-body.v2-expanding {
+  animation: v2StepOpen 0.18s ease;
+}
+@keyframes v2StepOpen {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Layout 2 columnas en desktop: Paso 1 y Paso 2 en paralelo ── */
+@media (min-width: 900px) {
+  .send-steps-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+  }
+  .send-steps-grid .send-step {
+    margin-bottom: 0;
+  }
+}
+
+/* ── Responsive general ── */
+@media (max-width: 768px) {
+  /* Paso body: menos padding */
+  .send-step-body { padding: var(--space-md); }
+
+  /* Pill tabs stack normalmente pero más compactos */
+  .rp-tab { padding: 6px 10px; font-size: 0.8125rem; }
+
+  /* Media chips */
+  .media-chips { gap: 6px; }
+  .media-chip  { padding: 6px 10px; font-size: 0.8125rem; }
+
+  /* Interval pills: wrap en mobile */
+  .interval-pills { flex-wrap: wrap; gap: 6px; }
+
+  /* Botones de envío: full width en mobile */
+  .send-bottom-actions {
+    flex-direction: column;
+  }
+  .send-bottom-actions .btn-primary,
+  .send-bottom-actions .btn-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Campaign row: stack */
+  .campaign-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .campaign-input-row label { margin-bottom: 4px; }
+
+  /* Contacts list: reducir altura máxima */
+  .contacts-list-scroll { max-height: 200px; }
+
+  /* Selector toolbar: stack */
+  .selector-toolbar { flex-direction: column; gap: 6px; }
+  .selector-search  { min-width: 0; }
+}
+
+@media (max-width: 480px) {
+  /* Step header: fuente más pequeña */
+  .send-step-title  { font-size: 0.9375rem; }
+  .send-step-num    { width: 24px; height: 24px; font-size: 0.8125rem; }
+}

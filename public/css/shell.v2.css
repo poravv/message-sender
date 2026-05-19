@@ -276,6 +276,23 @@ body.shell-v2-active .alert-container  { top: calc(var(--v2-topbar-h) + 0.75rem)
   margin-left: auto;
 }
 
+/* ── Footer responsive ── */
+body.shell-v2-active .footer-links {
+  flex-wrap: wrap;
+  gap: 0.375rem 0.625rem;
+}
+/* Hide separator dots between links on narrow viewports */
+@media (max-width: 900px) {
+  body.shell-v2-active .footer-links > span { display: none; }
+  body.shell-v2-active .footer-content { flex-wrap: wrap; gap: 0.5rem; }
+}
+
+/* ── Topbar: hide user chip label on narrow screens ── */
+@media (max-width: 500px) {
+  #v2-chip-name { display: none; }
+  #v2-conn-text { display: none; }
+}
+
 /* ── Mobile ── */
 @media (max-width: 767px) {
   body.shell-v2-active .main    { margin-left: 0; }
