@@ -1,0 +1,24 @@
+/* Campaigns v2 — 2-column grid layout inside shell context */
+
+/* Grid layout for campaign cards when shell is active */
+@media (min-width: 900px) {
+  body.shell-v2-active .campaigns-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-md);
+  }
+  /* Empty state spans both columns */
+  body.shell-v2-active .campaigns-list .campaigns-empty {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Card hover: subtle lift + accent shadow */
+body.shell-v2-active .camp-card {
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+}
+body.shell-v2-active .camp-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(37, 211, 102, 0.1);
+  transform: translateY(-1px);
+}

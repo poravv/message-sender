@@ -1,0 +1,32 @@
+/* Contacts v2 — table enhancements inside shell context */
+
+/* Expand table to use more vertical space when sidebar is present */
+body.shell-v2-active .contacts-table-scroll {
+  max-height: calc(100vh - 340px);
+  min-height: 240px;
+}
+
+/* Smoother row hover */
+body.shell-v2-active .data-table tbody tr {
+  transition: background 0.12s;
+}
+body.shell-v2-active .data-table tbody tr:hover {
+  background: var(--bg-tertiary);
+}
+
+/* Action buttons: dim by default, visible on row hover */
+body.shell-v2-active .data-table tbody tr .actions .btn {
+  opacity: 0.45;
+  transition: opacity 0.15s;
+}
+body.shell-v2-active .data-table tbody tr:hover .actions .btn {
+  opacity: 1;
+}
+
+/* Tighter column padding for wider screens */
+@media (min-width: 1200px) {
+  body.shell-v2-active .data-table th,
+  body.shell-v2-active .data-table td {
+    padding: 0.625rem 0.875rem;
+  }
+}
