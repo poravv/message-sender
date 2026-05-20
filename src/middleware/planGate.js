@@ -3,7 +3,7 @@ const logger = require('../logger');
 
 const PLAN_FEATURES = {
   expired:     { send: 0,     contacts: 0,    templates: 0,  chatbot: false, chatbotAi: false, inbox: false, api: false, campaigns: false },
-  trial:       { send: 200,   contacts: 100,  templates: 10, chatbot: true,  chatbotAi: true,  inbox: true,  api: false, campaigns: true },
+  trial:       { send: 9000,  contacts: 100,  templates: 10, chatbot: true,  chatbotAi: true,  inbox: true,  api: false, campaigns: true },
   basico:      { send: 12000, contacts: 1000, templates: 20, chatbot: false, chatbotAi: false, inbox: false, api: false, campaigns: true },
   profesional: { send: 30000, contacts: -1,   templates: -1, chatbot: false, chatbotAi: false, inbox: true,  api: true,  campaigns: true },
   premium:     { send: 60000, contacts: -1,   templates: -1, chatbot: true,  chatbotAi: true,  inbox: true,  api: true,  campaigns: true },
