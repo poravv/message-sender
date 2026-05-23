@@ -508,15 +508,11 @@ class WhatsAppManager {
               return;
             }
 
-            // Auto-limpieza de Redis para eliminar sesiones fantasma
-            logger.info('Limpiando sesión antigua de Redis antes del cooldown...');
-            this._clearRedisAuth().then((cleaned) => {
-              if (cleaned) {
-                logger.info('Sesión antigua eliminada, reiniciando conexión limpia');
-              }
-            }).catch(err => {
-              logger.error({ err: err?.message }, 'Error en auto-limpieza de Redis');
-            });
+            // NO limpiar Redis en conflict: el 440 significa que otra sesión está activa,
+            // pero las credenciales locales siguen siendo válidas. Si borramos Redis y
+            // generamos un nuevo QR, creamos un device link nuevo sin eliminar el anterior,
+            // lo que garantiza otro 440 en el siguiente intento → loop infinito.
+            // La estrategia correcta es reconectar con las mismas credenciales.
 
             // AJUSTADO: Cooldown reducido - solo en conflictos repetidos SIN campaña
             // Primer conflicto: 30 segundos, luego aumenta
