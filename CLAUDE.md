@@ -79,6 +79,7 @@ PostgreSQL tables: `contacts` (unique per user+phone), `campaigns`, `campaign_re
 - **QR not generated with stale auth**: Baileys never generates QR when stored credentials exist — it tries to reconnect. Method `cleanInitialize()` in `WhatsAppManager` clears Redis auth via `_clearRedisAuth()` and creates a fresh socket. Used by `/qr` endpoint when no socket exists.
 - **Socket close event race condition**: When destroying old socket, MUST call `ev.removeAllListeners()` BEFORE closing, otherwise the close handler destroys the new socket.
 - **`_deleteSessionFilesCompletely` fallback**: Uses `_clearRedisAuth()` when `_clearAuth` is null (session never initialized on current pod).
+- **440 Stream Conflict loop**: statusCode 440 means WhatsApp sees two simultaneous connections for the same linked device. DO NOT clear Redis auth on this error — doing so forces a new QR scan and a new device link without removing the old one, guaranteeing another 440 on the next attempt (infinite loop with escalating cooldowns). The correct response is to reconnect with the existing credentials and wait for the competing session to drop. Recovery for the user: on the phone go to WhatsApp → Linked Devices → remove all, then restart the server. `GET /qr` has a 60 s rate limit on `cleanInitialize()`; call `POST /reset-cooldown` to unblock if stuck.
 
 ## Key Environment Variables
 

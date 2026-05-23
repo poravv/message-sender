@@ -54,7 +54,7 @@ Resumen de cambios por área funcional. Sin detalle de código.
 - Auth state persistido en Redis (soporte multi-pod)
 - Fix para rechazo 401 de Android usando Desktop companion type
 - Fix para login usando plataforma MACOS (parche Baileys)
-- No limpia auth de Redis en desconexiones por conflicto de sesión
+- Fix loop infinito de conflicto 440: el manager ya no borra las credenciales de Redis al recibir un 440 (Stream Conflict). Borrarlas forzaba un QR nuevo y un device link nuevo en WhatsApp sin eliminar el anterior, lo que garantizaba otro 440 en el siguiente intento y cooldowns crecientes de hasta 120 s. La estrategia correcta es reconectar con las mismas credenciales; el conflicto cede cuando la otra sesión activa se cierra.
 
 ---
 
