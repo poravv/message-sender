@@ -24,7 +24,7 @@ metadata:
     app: postgres
     tier: database
 spec:
-  replicas: 1
+  replicas: 0
   strategy:
     type: Recreate  # Required for persistent volume
   selector:
